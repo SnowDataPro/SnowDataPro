@@ -309,6 +309,11 @@ st.markdown(textwrap.dedent("""
         background: #191d1f !important;
     }
 
+    /* Stessa spaziatura verticale usata in Sector G2 Lab */
+    section[data-testid="stSidebar"] > div {
+        padding-top: 1.8rem !important;
+    }
+
     [data-testid="stSidebar"] p,
     [data-testid="stSidebar"] span,
     [data-testid="stSidebar"] label,
@@ -375,15 +380,6 @@ st.markdown(textwrap.dedent("""
 
     [data-testid="stSidebar"] hr {
         border-color: #2b3135 !important;
-    }
-
-    /* Logo SnowDataPro: spostamento reale del contenitore Streamlit */
-    [data-testid="stSidebar"]
-    div[data-testid="stElementContainer"]:has(.snowdata-sidebar-logo) {
-        transform: translateY(-65px) !important;
-        margin-bottom: -65px !important;
-        position: relative !important;
-        z-index: 3 !important;
     }
 
     /* ---------------- TESTI GENERALI ---------------- */
@@ -797,34 +793,25 @@ def cambia_pagina(nome):
 
 
 logo_sidebar_path = os.path.join(BASE_DIR, "snowdatapro_logo_transparent.png")
-if os.path.exists(logo_sidebar_path):
-    with open(logo_sidebar_path, "rb") as file:
-        logo_sidebar_b64 = base64.b64encode(file.read()).decode()
 
+if os.path.exists(logo_sidebar_path):
+    # Stessa struttura di Sector G2 Lab: tre colonne, logo centrato e spacer fisso.
+    col_logo_sx, col_logo, col_logo_dx = st.sidebar.columns([1, 4, 1])
+
+    with col_logo:
+        st.image(
+            logo_sidebar_path,
+            width=250,
+        )
+
+    # Stessa distanza tra logo e Dashboard di Sector G2 Lab.
     st.sidebar.markdown(
-        f"""
-        <div class="snowdata-sidebar-logo" style="
-            padding:24px 18px 24px 18px;
-            text-align:center;
-        ">
-            <img
-                src="data:image/png;base64,{logo_sidebar_b64}"
-                alt="SnowDataPro"
-                style="
-                    width:min(100%, 250px);
-                    height:auto;
-                    display:block;
-                    margin:0 auto;
-                    filter: drop-shadow(0 3px 10px rgba(0,0,0,.18));
-                "
-            >
-        </div>
-        """,
+        '<div style="height: 28px;"></div>',
         unsafe_allow_html=True,
     )
 else:
     st.sidebar.markdown(
-        "<div style='height:32px;'></div>",
+        '<div style="height: 28px;"></div>',
         unsafe_allow_html=True,
     )
 
