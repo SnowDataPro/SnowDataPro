@@ -801,7 +801,7 @@ if os.path.exists(logo_sidebar_path):
     with col_logo:
         st.image(
             logo_sidebar_path,
-            width=250,
+            width=285,
         )
 
     # Stessa distanza tra logo e Dashboard di Sector G2 Lab.
