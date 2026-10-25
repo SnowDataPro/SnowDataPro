@@ -53,10 +53,10 @@ USA_DATABASE_TURSO = bool(TURSO_DATABASE_URL and TURSO_AUTH_TOKEN)
 def apri_connessione_database():
     if USA_DATABASE_TURSO:
         try:
-            import libsql
+            import libsql_experimental as libsql
         except ImportError as exc:
             raise RuntimeError(
-                "Manca il pacchetto 'libsql'. Controlla requirements.txt."
+                "Manca il pacchetto 'libsql-experimental'. Controlla requirements.txt."
             ) from exc
 
         return libsql.connect(
