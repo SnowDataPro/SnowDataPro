@@ -11,7 +11,7 @@ from datetime import datetime, date
 # ============================================================
 
 st.set_page_config(
-    page_title="Ski Material Lab",
+    page_title="SnowDataPro",
     page_icon="🎿",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -176,17 +176,118 @@ inizializza_database()
 
 st.markdown(textwrap.dedent("""
 <style>
-    .stApp {
-        background: #f5f7fa;
+    :root {
+        color-scheme: light;
     }
-    [data-testid="stSidebar"] {
-        background: #eef2f6;
-        border-right: 1px solid #d7dee7;
+
+    html, body, .stApp,
+    [data-testid="stAppViewContainer"],
+    [data-testid="stMain"],
+    [data-testid="stMainBlockContainer"] {
+        background: #f5f7fa !important;
+        color: #1f2937 !important;
     }
+
     .block-container {
         padding-top: 1.2rem;
         padding-bottom: 3rem;
     }
+
+    /* ---------------- SIDEBAR ---------------- */
+    [data-testid="stSidebar"] {
+        background: #eef2f6 !important;
+        border-right: 1px solid #d7dee7;
+    }
+
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] span,
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] summary {
+        color: #243447;
+    }
+
+    [data-testid="stSidebar"] button p,
+    [data-testid="stSidebar"] button span {
+        color: inherit !important;
+    }
+
+    /* ---------------- TESTI GENERALI ---------------- */
+    h1, h2, h3, h4, h5, h6 {
+        color: #16324f !important;
+    }
+
+    [data-testid="stMarkdownContainer"] p,
+    [data-testid="stMarkdownContainer"] li {
+        color: #26384a;
+    }
+
+    [data-testid="stCaptionContainer"],
+    [data-testid="stCaptionContainer"] p {
+        color: #66788a !important;
+    }
+
+    /* ---------------- ETICHETTE WIDGET ---------------- */
+    [data-testid="stWidgetLabel"],
+    [data-testid="stWidgetLabel"] p,
+    [data-testid="stWidgetLabel"] span,
+    label[data-baseweb="checkbox"],
+    label[data-baseweb="radio"] {
+        color: #243447 !important;
+        font-weight: 600;
+    }
+
+    /* ---------------- INPUT LIGHT ---------------- */
+    [data-testid="stTextInput"] input,
+    [data-testid="stNumberInput"] input,
+    [data-testid="stDateInput"] input,
+    [data-testid="stTimeInput"] input,
+    [data-testid="stTextArea"] textarea {
+        background: #ffffff !important;
+        color: #111827 !important;
+        -webkit-text-fill-color: #111827 !important;
+        border-color: #cbd5e1 !important;
+    }
+
+    [data-testid="stTextInput"] input::placeholder,
+    [data-testid="stTextArea"] textarea::placeholder {
+        color: #8795a5 !important;
+        -webkit-text-fill-color: #8795a5 !important;
+        opacity: 1 !important;
+    }
+
+    [data-baseweb="select"] > div,
+    [data-baseweb="base-input"],
+    [data-baseweb="input"],
+    [data-baseweb="textarea"] {
+        background: #ffffff !important;
+        color: #111827 !important;
+        border-color: #cbd5e1 !important;
+    }
+
+    [data-baseweb="select"] span,
+    [data-baseweb="select"] div {
+        color: #111827 !important;
+    }
+
+    /* Mantiene ben visibili i +/- dei number input */
+    [data-testid="stNumberInput"] button,
+    [data-testid="stNumberInput"] button svg {
+        color: #243447 !important;
+        fill: #243447 !important;
+    }
+
+    /* ---------------- EXPANDER ---------------- */
+    [data-testid="stExpander"] {
+        background: transparent;
+    }
+
+    [data-testid="stExpander"] summary,
+    [data-testid="stExpander"] summary p,
+    [data-testid="stExpander"] summary span {
+        color: #243447 !important;
+    }
+
+    /* ---------------- BANNER ---------------- */
     .ski-banner {
         background: linear-gradient(90deg, #003a70 0%, #005ba8 55%, #0b72c5 100%);
         border-radius: 14px;
@@ -195,15 +296,24 @@ st.markdown(textwrap.dedent("""
         margin-bottom: 20px;
         box-shadow: 0 8px 24px rgba(0,0,0,.08);
     }
+
+    .ski-banner h1,
+    .ski-banner p {
+        color: white !important;
+    }
+
     .ski-banner h1 {
         margin: 0;
         font-size: 2rem;
         line-height: 1.1;
     }
+
     .ski-banner p {
         margin: 7px 0 0 0;
-        opacity: .88;
+        opacity: .9;
     }
+
+    /* ---------------- CARD ---------------- */
     .metric-card {
         background: white;
         border: 1px solid #e0e6ed;
@@ -212,19 +322,28 @@ st.markdown(textwrap.dedent("""
         min-height: 105px;
         box-shadow: 0 4px 16px rgba(0,0,0,.04);
     }
+
     .metric-label {
         font-size: .85rem;
         color: #6c7785;
         margin-bottom: 5px;
     }
+
     .metric-value {
         font-size: 1.7rem;
         font-weight: 700;
         color: #16324f;
     }
+
+    /* ---------------- TABELLE ---------------- */
     div[data-testid="stDataFrame"] {
         background: white;
         border-radius: 10px;
+    }
+
+    /* ---------------- MESSAGGI ---------------- */
+    [data-testid="stAlert"] p {
+        color: inherit !important;
     }
 </style>
 """).strip(), unsafe_allow_html=True)
@@ -391,8 +510,8 @@ def cambia_pagina(nome):
 st.sidebar.markdown(
     textwrap.dedent("""
     <div style="padding: 12px 8px 22px 8px;">
-        <div style="font-size:1.45rem;font-weight:800;color:#12385d;">SKI MATERIAL LAB</div>
-        <div style="font-size:.85rem;color:#6c7785;margin-top:2px;">Testing & Material Database</div>
+        <div style="font-size:1.45rem;font-weight:800;color:#12385d;">SNOWDATAPRO</div>
+        <div style="font-size:.85rem;color:#6c7785;margin-top:2px;">Material Testing & Snow Data</div>
     </div>
     """).strip(),
     unsafe_allow_html=True,
@@ -473,8 +592,8 @@ with st.sidebar.expander(
 
 if pagina == "Dashboard":
     mostra_banner(
-        "Ski Material Lab",
-        "Database per zero test, scorrimento, rigature e scioline di tenuta.",
+        "SnowDataPro",
+        "Material testing, snow data, zero test, scorrimento, rigature e tenuta.",
     )
 
     sessioni = sessioni_df()
@@ -1137,7 +1256,7 @@ elif pagina == "Backup":
 
     payload = json.dumps(
         {
-            "app": "Ski Material Lab",
+            "app": "SnowDataPro",
             "versione_database": VERSIONE_DATABASE_APP,
             "esportato_il": datetime.now().isoformat(timespec="seconds"),
             "dati": dati,
@@ -1150,7 +1269,7 @@ elif pagina == "Backup":
     st.download_button(
         "Scarica backup JSON",
         data=payload,
-        file_name=f"ski_material_lab_backup_{date.today().isoformat()}.json",
+        file_name=f"snowdatapro_backup_{date.today().isoformat()}.json",
         mime="application/json",
         type="primary",
         use_container_width=True,
