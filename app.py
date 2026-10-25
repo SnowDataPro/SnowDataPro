@@ -377,6 +377,15 @@ st.markdown(textwrap.dedent("""
         border-color: #2b3135 !important;
     }
 
+    /* Logo SnowDataPro: spostamento reale del contenitore Streamlit */
+    [data-testid="stSidebar"]
+    div[data-testid="stElementContainer"]:has(.snowdata-sidebar-logo) {
+        transform: translateY(-65px) !important;
+        margin-bottom: -65px !important;
+        position: relative !important;
+        z-index: 3 !important;
+    }
+
     /* ---------------- TESTI GENERALI ---------------- */
     h1, h2, h3, h4, h5, h6 {
         color: #16324f !important;
@@ -794,7 +803,7 @@ if os.path.exists(logo_sidebar_path):
 
     st.sidebar.markdown(
         f"""
-        <div style="
+        <div class="snowdata-sidebar-logo" style="
             padding:24px 18px 24px 18px;
             text-align:center;
         ">
