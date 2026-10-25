@@ -795,18 +795,18 @@ def cambia_pagina(nome):
 logo_sidebar_path = os.path.join(BASE_DIR, "snowdatapro_logo_transparent.png")
 
 if os.path.exists(logo_sidebar_path):
-    # Stessa struttura di Sector G2 Lab: tre colonne, logo centrato e spacer fisso.
-    col_logo_sx, col_logo, col_logo_dx = st.sidebar.columns([1, 4, 1])
+    # Logo più grande, sempre centrato e ben visibile.
+    col_logo_sx, col_logo, col_logo_dx = st.sidebar.columns([0.35, 5.3, 0.35])
 
     with col_logo:
         st.image(
             logo_sidebar_path,
-            width=285,
+            width=340,
         )
 
-    # Stessa distanza tra logo e Dashboard di Sector G2 Lab.
+    # Spaziatura simile a Sector tra logo e Dashboard.
     st.sidebar.markdown(
-        '<div style="height: 28px;"></div>',
+        '<div style="height: 24px;"></div>',
         unsafe_allow_html=True,
     )
 else:
