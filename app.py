@@ -19,7 +19,7 @@ st.set_page_config(
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "ski_material_lab.db")
-VERSIONE_DATABASE_APP = 1
+VERSIONE_DATABASE_APP = 2
 
 
 # ============================================================
@@ -158,6 +158,20 @@ def inizializza_database():
     """)
 
     conn.execute("""
+        CREATE TABLE IF NOT EXISTS catalogo_prodotti (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            categoria TEXT NOT NULL,
+            nome TEXT NOT NULL,
+            marca TEXT,
+            tipo TEXT,
+            condizioni TEXT,
+            descrizione TEXT,
+            note TEXT,
+            creato_il TEXT NOT NULL
+        )
+    """)
+
+    conn.execute("""
         INSERT INTO app_schema_meta (chiave, valore)
         VALUES ('versione_database_app', ?)
         ON CONFLICT(chiave) DO UPDATE SET valore = excluded.valore
@@ -193,22 +207,82 @@ st.markdown(textwrap.dedent("""
         padding-bottom: 3rem;
     }
 
-    /* ---------------- SIDEBAR ---------------- */
+    /* ---------------- SIDEBAR · STILE SECTOR G2 LAB ---------------- */
     [data-testid="stSidebar"] {
-        background: #eef2f6 !important;
-        border-right: 1px solid #d7dee7;
+        background: #191d1f !important;
+        border-right: 1px solid #22282b !important;
+    }
+
+    [data-testid="stSidebar"] > div:first-child {
+        background: #191d1f !important;
     }
 
     [data-testid="stSidebar"] p,
     [data-testid="stSidebar"] span,
     [data-testid="stSidebar"] label,
     [data-testid="stSidebar"] summary {
-        color: #243447;
+        color: #eef3f6 !important;
+    }
+
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
+        color: #eef3f6 !important;
+    }
+
+    /* Pulsanti di navigazione */
+    [data-testid="stSidebar"] button {
+        background: transparent !important;
+        color: #eef3f6 !important;
+        border: 0 !important;
+        border-radius: 2px !important;
+        box-shadow: none !important;
+        min-height: 52px;
+        justify-content: flex-start !important;
+        text-align: left !important;
+        padding-left: 16px !important;
+    }
+
+    [data-testid="stSidebar"] button:hover {
+        background: #252a2d !important;
+        color: #ffffff !important;
+    }
+
+    [data-testid="stSidebar"] button[kind="primary"] {
+        background: #252a2d !important;
+        color: #ffffff !important;
+        border-left: 4px solid #00a7e1 !important;
+        padding-left: 12px !important;
     }
 
     [data-testid="stSidebar"] button p,
     [data-testid="stSidebar"] button span {
         color: inherit !important;
+        font-size: 1rem !important;
+    }
+
+    /* Expander come intestazioni di sezione, senza riquadro */
+    [data-testid="stSidebar"] [data-testid="stExpander"] {
+        border: 0 !important;
+        background: transparent !important;
+    }
+
+    [data-testid="stSidebar"] [data-testid="stExpander"] details,
+    [data-testid="stSidebar"] [data-testid="stExpander"] summary {
+        border: 0 !important;
+        background: transparent !important;
+        box-shadow: none !important;
+    }
+
+    [data-testid="stSidebar"] [data-testid="stExpander"] summary {
+        min-height: 60px !important;
+        padding-left: 6px !important;
+    }
+
+    [data-testid="stSidebar"] [data-testid="stExpander"] summary:hover {
+        background: #202528 !important;
+    }
+
+    [data-testid="stSidebar"] hr {
+        border-color: #2b3135 !important;
     }
 
     /* ---------------- TESTI GENERALI ---------------- */
@@ -492,8 +566,83 @@ def coppie_simili_zero_test(sessione_id, tolleranza):
     return pd.DataFrame(coppie).sort_values("Δ medio (s)").reset_index(drop=True)
 
 
+
+def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
+    mostra_banner(titolo, sottotitolo)
+
+    with st.form(f"catalogo_{categoria}_form", clear_on_submit=True):
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            nome = st.text_input("Nome / codice *")
+        with c2:
+            marca = st.text_input("Marca")
+        with c3:
+            tipo = st.selectbox("Tipo", tipi)
+
+        condizioni = st.text_input(
+            "Condizioni / range di utilizzo",
+            placeholder="es. -5 / -10 °C, neve nuova, umidità elevata..."
+        )
+        descrizione = st.text_area(
+            "Descrizione",
+            placeholder="Caratteristiche del prodotto, applicazione, struttura, geometria..."
+        )
+        note = st.text_area("Note")
+
+        salva = st.form_submit_button(
+            "Aggiungi al catalogo",
+            type="primary",
+            use_container_width=True,
+        )
+
+        if salva:
+            if not nome.strip():
+                st.error("Inserisci il nome o codice.")
+            else:
+                esegui("""
+                    INSERT INTO catalogo_prodotti (
+                        categoria, nome, marca, tipo, condizioni,
+                        descrizione, note, creato_il
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    categoria,
+                    nome.strip(),
+                    marca.strip(),
+                    tipo,
+                    condizioni.strip(),
+                    descrizione.strip(),
+                    note.strip(),
+                    datetime.now().isoformat(timespec="seconds"),
+                ))
+                st.success("Prodotto aggiunto al catalogo.")
+                st.rerun()
+
+    st.markdown("### Catalogo")
+    df = leggi_df("""
+        SELECT id, nome, marca, tipo, condizioni, descrizione, note
+        FROM catalogo_prodotti
+        WHERE categoria = ?
+        ORDER BY nome COLLATE NOCASE
+    """, (categoria,))
+
+    if df.empty:
+        st.info("Nessun elemento ancora inserito in questo catalogo.")
+    else:
+        df = df.rename(columns={
+            "id": "ID",
+            "nome": "Nome / codice",
+            "marca": "Marca",
+            "tipo": "Tipo",
+            "condizioni": "Condizioni",
+            "descrizione": "Descrizione",
+            "note": "Note",
+        })
+        st.dataframe(df, use_container_width=True, hide_index=True)
+
+
 # ============================================================
-# MENU LATERALE
+# MENU LATERALE - SNOWDATAPRO / STILE SECTOR G2 LAB
 # ============================================================
 
 if "pagina" not in st.session_state:
@@ -509,9 +658,25 @@ def cambia_pagina(nome):
 
 st.sidebar.markdown(
     textwrap.dedent("""
-    <div style="padding: 12px 8px 22px 8px;">
-        <div style="font-size:1.45rem;font-weight:800;color:#12385d;">SNOWDATAPRO</div>
-        <div style="font-size:.85rem;color:#6c7785;margin-top:2px;">Material Testing & Snow Data</div>
+    <div style="padding:32px 18px 34px 18px;text-align:center;">
+        <div style="
+            font-size:1.40rem;
+            font-weight:800;
+            letter-spacing:.10em;
+            color:#7e8a90;
+            line-height:1.15;
+        ">SNOWDATAPRO</div>
+        <div style="
+            width:52px;
+            height:3px;
+            background:#00a7e1;
+            margin:15px auto 12px auto;
+        "></div>
+        <div style="
+            font-size:.78rem;
+            letter-spacing:.08em;
+            color:#7e8a90;
+        ">MATERIAL TESTING & SNOW DATA</div>
     </div>
     """).strip(),
     unsafe_allow_html=True,
@@ -519,71 +684,89 @@ st.sidebar.markdown(
 
 if st.sidebar.button(
     "Dashboard",
+    icon=":material/home:",
+    key="menu_dashboard",
     use_container_width=True,
     type="primary" if pagina == "Dashboard" else "secondary",
 ):
     cambia_pagina("Dashboard")
 
+
 with st.sidebar.expander(
-    "Sessioni",
-    expanded=pagina in ["Nuova sessione", "Zero test"],
+    "Test",
+    icon=":material/science:",
+    expanded=pagina in [
+        "Zero test",
+        "Test prodotti scorrimento",
+        "Test scioline di tenuta",
+        "Test rigature manuali",
+    ],
 ):
     if st.button(
-        "Nuova sessione",
-        use_container_width=True,
-        type="primary" if pagina == "Nuova sessione" else "secondary",
-    ):
-        cambia_pagina("Nuova sessione")
-
-    if st.button(
         "Zero test",
+        key="menu_zero_test",
         use_container_width=True,
         type="primary" if pagina == "Zero test" else "secondary",
     ):
         cambia_pagina("Zero test")
 
+    if st.button(
+        "Test prodotti scorrimento",
+        key="menu_test_scorrimento",
+        use_container_width=True,
+        type="primary" if pagina == "Test prodotti scorrimento" else "secondary",
+    ):
+        cambia_pagina("Test prodotti scorrimento")
+
+    if st.button(
+        "Test scioline di tenuta",
+        key="menu_test_tenuta",
+        use_container_width=True,
+        type="primary" if pagina == "Test scioline di tenuta" else "secondary",
+    ):
+        cambia_pagina("Test scioline di tenuta")
+
+    if st.button(
+        "Test rigature manuali",
+        key="menu_test_rigature",
+        use_container_width=True,
+        type="primary" if pagina == "Test rigature manuali" else "secondary",
+    ):
+        cambia_pagina("Test rigature manuali")
+
+
 with st.sidebar.expander(
-    "Test materiali",
-    expanded=pagina in ["Scorrimento e rigature", "Tenuta"],
+    "Prodotti",
+    icon=":material/inventory_2:",
+    expanded=pagina in [
+        "Prodotti di scorrimento",
+        "Scioline di tenuta",
+        "Rigature manuali",
+    ],
 ):
     if st.button(
-        "Scorrimento e rigature",
+        "Prodotti di scorrimento",
+        key="menu_prodotti_scorrimento",
         use_container_width=True,
-        type="primary" if pagina == "Scorrimento e rigature" else "secondary",
+        type="primary" if pagina == "Prodotti di scorrimento" else "secondary",
     ):
-        cambia_pagina("Scorrimento e rigature")
+        cambia_pagina("Prodotti di scorrimento")
 
     if st.button(
         "Scioline di tenuta",
+        key="menu_prodotti_tenuta",
         use_container_width=True,
-        type="primary" if pagina == "Tenuta" else "secondary",
+        type="primary" if pagina == "Scioline di tenuta" else "secondary",
     ):
-        cambia_pagina("Tenuta")
-
-with st.sidebar.expander(
-    "Archivio",
-    expanded=pagina in ["Catalogo sci", "Storico", "Backup"],
-):
-    if st.button(
-        "Catalogo sci",
-        use_container_width=True,
-        type="primary" if pagina == "Catalogo sci" else "secondary",
-    ):
-        cambia_pagina("Catalogo sci")
+        cambia_pagina("Scioline di tenuta")
 
     if st.button(
-        "Storico test",
+        "Rigature manuali",
+        key="menu_prodotti_rigature",
         use_container_width=True,
-        type="primary" if pagina == "Storico" else "secondary",
+        type="primary" if pagina == "Rigature manuali" else "secondary",
     ):
-        cambia_pagina("Storico")
-
-    if st.button(
-        "Backup",
-        use_container_width=True,
-        type="primary" if pagina == "Backup" else "secondary",
-    ):
-        cambia_pagina("Backup")
+        cambia_pagina("Rigature manuali")
 
 
 # ============================================================
@@ -614,6 +797,18 @@ if pagina == "Dashboard":
             "Test materiali",
             int(materiali.iloc[0]["n"]) + int(tenuta.iloc[0]["n"]),
         )
+
+    st.markdown("### Gestione")
+    c_g1, c_g2, c_g3 = st.columns(3)
+    with c_g1:
+        if st.button("Nuova sessione", use_container_width=True):
+            cambia_pagina("Nuova sessione")
+    with c_g2:
+        if st.button("Catalogo sci", use_container_width=True):
+            cambia_pagina("Catalogo sci")
+    with c_g3:
+        if st.button("Storico test", use_container_width=True):
+            cambia_pagina("Storico")
 
     st.markdown("### Ultime sessioni")
     if sessioni.empty:
@@ -773,11 +968,15 @@ elif pagina == "Zero test":
     sci = dizionario_sci()
 
     if not sessioni:
-        st.warning("Crea prima una sessione.")
+        st.warning("Crea prima una sessione dalla Dashboard.")
+        if st.button("Vai a Nuova sessione", type="primary"):
+            cambia_pagina("Nuova sessione")
         st.stop()
 
     if len(sci) < 2:
         st.warning("Inserisci almeno due sci nel catalogo.")
+        if st.button("Vai al Catalogo sci", type="primary"):
+            cambia_pagina("Catalogo sci")
         st.stop()
 
     sessione_label = st.selectbox("Sessione", list(sessioni.keys()))
@@ -877,9 +1076,15 @@ elif pagina == "Zero test":
             )
 
 
-elif pagina == "Scorrimento e rigature":
+elif pagina in ["Test prodotti scorrimento", "Test rigature manuali"]:
+    categoria = "Scorrimento" if pagina == "Test prodotti scorrimento" else "Rigatura"
+    titolo_pagina = (
+        "Test prodotti scorrimento"
+        if categoria == "Scorrimento"
+        else "Test rigature manuali"
+    )
     mostra_banner(
-        "Scorrimento e rigature",
+        titolo_pagina,
         "Registra confronti ad aste, parallel o fotocellule.",
     )
 
@@ -896,11 +1101,6 @@ elif pagina == "Scorrimento e rigature":
     sessione_label = st.selectbox("Sessione", list(sessioni.keys()))
     sessione_id = sessioni[sessione_label]
 
-    categoria = st.radio(
-        "Categoria",
-        ["Scorrimento", "Rigatura"],
-        horizontal=True,
-    )
     metodo = st.radio(
         "Metodo",
         ["Aste", "Parallel", "Fotocellule"],
@@ -918,10 +1118,9 @@ elif pagina == "Scorrimento e rigature":
         with c1:
             st.markdown("#### Preparazione A")
             sci_a_label = st.selectbox("Sci A", list(sci.keys()))
-            preparazione_a = st.text_input(
-                "Prodotto / rigatura A",
-                placeholder="es. Paraffina X / rigatura 1 mm"
-            )
+            label_a = "Prodotto A" if categoria == "Scorrimento" else "Rigatura A"
+            placeholder_a = "es. Paraffina X" if categoria == "Scorrimento" else "es. R1 / 1 mm lineare"
+            preparazione_a = st.text_input(label_a, placeholder=placeholder_a)
 
         with c2:
             st.markdown("#### Preparazione B")
@@ -930,10 +1129,9 @@ elif pagina == "Scorrimento e rigature":
                 list(sci.keys()),
                 index=1 if len(sci) > 1 else 0,
             )
-            preparazione_b = st.text_input(
-                "Prodotto / rigatura B",
-                placeholder="es. Paraffina Y / rigatura 2 mm"
-            )
+            label_b = "Prodotto B" if categoria == "Scorrimento" else "Rigatura B"
+            placeholder_b = "es. Paraffina Y" if categoria == "Scorrimento" else "es. R2 / 2 mm lineare"
+            preparazione_b = st.text_input(label_b, placeholder=placeholder_b)
 
         vincitore = None
         vantaggio_aste = None
@@ -1058,7 +1256,7 @@ elif pagina == "Scorrimento e rigature":
         st.dataframe(df, use_container_width=True, hide_index=True)
 
 
-elif pagina == "Tenuta":
+elif pagina == "Test scioline di tenuta":
     mostra_banner(
         "Scioline di tenuta",
         "Valutazione a sensazione: tenuta, scorrevolezza, facilità di calcio e durata.",
@@ -1149,6 +1347,33 @@ elif pagina == "Tenuta":
         st.info("Nessun test di tenuta registrato.")
     else:
         st.dataframe(df, use_container_width=True, hide_index=True)
+
+
+elif pagina == "Prodotti di scorrimento":
+    pagina_catalogo_prodotti(
+        "scorrimento",
+        "Prodotti di scorrimento",
+        "Catalogo di paraffine, liquidi, polveri e altri prodotti da scorrimento.",
+        ["Paraffina", "Liquido", "Polvere", "Top finish", "Additivo", "Altro"],
+    )
+
+
+elif pagina == "Scioline di tenuta":
+    pagina_catalogo_prodotti(
+        "tenuta",
+        "Scioline di tenuta",
+        "Catalogo di stick, klister, coperture e prodotti per la tenuta.",
+        ["Stick", "Klister", "Copertura", "Base", "Spray", "Altro"],
+    )
+
+
+elif pagina == "Rigature manuali":
+    pagina_catalogo_prodotti(
+        "rigatura",
+        "Rigature manuali",
+        "Catalogo degli utensili e delle configurazioni di rigatura manuale.",
+        ["Lineare", "Incrociata", "V", "Rullo", "Utensile", "Altro"],
+    )
 
 
 elif pagina == "Storico":
@@ -1251,7 +1476,7 @@ elif pagina == "Backup":
     )
 
     dati = {}
-    for tabella in ["sessioni", "sci", "zero_test", "test_materiali", "test_tenuta"]:
+    for tabella in ["sessioni", "sci", "zero_test", "test_materiali", "test_tenuta", "catalogo_prodotti"]:
         dati[tabella] = leggi_df(f"SELECT * FROM {tabella}").to_dict("records")
 
     payload = json.dumps(
