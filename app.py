@@ -203,45 +203,31 @@ st.markdown(textwrap.dedent("""
         color: #1f2937 !important;
     }
 
-    /* ---------------- HEADER STREAMLIT ----------------
-       Nessuna barra nera sopra: il banner parte dal bordo alto,
-       come in Sector G2 Lab. */
-    [data-testid="stHeader"],
-    [data-testid="stToolbar"],
-    [data-testid="stDecoration"],
-    #MainMenu {
-        display: none !important;
-    }
+    /* ======================================================
+       PAGINA / STREAMLIT - STESSA LOGICA DI SECTOR G2 LAB
+       ====================================================== */
 
-    html, body {
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-
-    [data-testid="stAppViewContainer"],
-    [data-testid="stMain"],
-    [data-testid="stMainBlockContainer"] {
-        padding-top: 0 !important;
-        margin-top: 0 !important;
-    }
-
-    /* Lo scroll resta quello nativo della pagina Streamlit.
-       Non viene creato nessun secondo viewport interno. */
-    [data-testid="stMain"] {
-        height: auto !important;
-        min-height: 100vh !important;
+    .stApp {
+        background:
+            linear-gradient(
+                180deg,
+                #f7f9fa 0px,
+                #f4f6f8 260px,
+                #f4f6f8 100%
+            );
+        color: #1f2937;
     }
 
     .block-container {
         max-width: 1380px;
-        padding-top: 0 !important;
+        padding-top: 2rem;
         padding-bottom: 4rem;
         padding-left: 2.4rem;
         padding-right: 2.4rem;
-        margin-top: 0 !important;
     }
 
-    /* ---------------- BANNER STICKY / CONTENUTO CHE SCORRE SOPRA ---------------- */
+    /* Il contenitore del banner resta fermo in alto.
+       Tutto il resto della pagina usa lo scroll nativo Streamlit. */
     div[data-testid="stElementContainer"]:has(.snowdata-sticky-banner) {
         position: sticky !important;
         top: 0 !important;
@@ -254,6 +240,7 @@ st.markdown(textwrap.dedent("""
         margin-bottom: 0 !important;
     }
 
+    /* Il contenuto ha z-index superiore e scorrendo copre il banner. */
     div[class*="st-key-snowdata_page_content"] {
         position: relative !important;
         z-index: 5 !important;
@@ -264,11 +251,52 @@ st.markdown(textwrap.dedent("""
                 #f4f6f8 260px,
                 #f4f6f8 100%
             ) !important;
-        margin-left: -2.4rem !important;
-        margin-right: -2.4rem !important;
-        padding: 2.0rem 2.4rem 4rem 2.4rem !important;
-        min-height: 100vh;
+
+        width: calc(100% + 6rem) !important;
+        max-width: none !important;
         box-sizing: border-box !important;
+        margin-left: -3rem !important;
+        margin-right: -3rem !important;
+        padding-left: 3rem !important;
+        padding-right: 3rem !important;
+        padding-top: 22px !important;
+        padding-bottom: 4rem !important;
+        min-height: calc(100vh - 145px);
+    }
+
+    div[class*="st-key-snowdata_page_content"] > div {
+        width: 100% !important;
+        max-width: none !important;
+        box-sizing: border-box !important;
+    }
+
+    /* In Sector l'header non viene rimosso: è trasparente.
+       Il banner viene spinto sotto di lui con margin-top negativo. */
+    #MainMenu {
+        visibility: hidden;
+    }
+
+    footer {
+        visibility: hidden;
+    }
+
+    header[data-testid="stHeader"] {
+        background-color: transparent !important;
+    }
+
+    @media (max-width: 900px) {
+        .block-container {
+            padding-left: 1.2rem;
+            padding-right: 1.2rem;
+        }
+
+        div[class*="st-key-snowdata_page_content"] {
+            width: calc(100% + 3.6rem) !important;
+            margin-left: -1.8rem !important;
+            margin-right: -1.8rem !important;
+            padding-left: 1.8rem !important;
+            padding-right: 1.8rem !important;
+        }
     }
 
     /* ---------------- SIDEBAR · STILE SECTOR G2 LAB ---------------- */
@@ -508,9 +536,9 @@ def mostra_banner_fotografico():
 
     banner_html = (
         '<div class="snowdata-sticky-banner" '
-        'style="width:auto;height:240px;margin-left:-2.4rem;'
-        'margin-right:-2.4rem;border-radius:0;overflow:hidden;'
-        'margin-bottom:0;margin-top:0;position:relative;'
+        'style="width:auto;height:240px;margin-left:-3rem;'
+        'margin-right:-3rem;border-radius:0;overflow:hidden;'
+        'margin-bottom:0;margin-top:-50px;position:relative;'
         'z-index:1;background:#dce7ef;">'
         '<img '
         f'src="data:image/jpeg;base64,{contenuto_base64}" '
@@ -759,7 +787,7 @@ def cambia_pagina(nome):
     st.rerun()
 
 
-logo_sidebar_path = os.path.join(BASE_DIR, "snowdatapro_logo_sidebar.png")
+logo_sidebar_path = os.path.join(BASE_DIR, "snowdatapro_logo_sidebar_clean.png")
 if os.path.exists(logo_sidebar_path):
     with open(logo_sidebar_path, "rb") as file:
         logo_sidebar_b64 = base64.b64encode(file.read()).decode()
@@ -770,17 +798,26 @@ if os.path.exists(logo_sidebar_path):
             padding:28px 24px 34px 24px;
             text-align:center;
         ">
-            <img
-                src="data:image/png;base64,{logo_sidebar_b64}"
-                alt="SnowDataPro"
-                style="
-                    width:100%;
-                    max-width:270px;
-                    height:auto;
-                    display:block;
-                    margin:0 auto;
-                "
-            >
+            <div style="
+                max-width:270px;
+                margin:0 auto;
+                background:#ffffff;
+                border-radius:10px;
+                padding:6px;
+                box-shadow:0 2px 10px rgba(0,0,0,.14);
+                overflow:hidden;
+            ">
+                <img
+                    src="data:image/png;base64,{logo_sidebar_b64}"
+                    alt="SnowDataPro"
+                    style="
+                        width:100%;
+                        height:auto;
+                        display:block;
+                        margin:0 auto;
+                    "
+                >
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
