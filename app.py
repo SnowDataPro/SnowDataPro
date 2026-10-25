@@ -203,12 +203,35 @@ st.markdown(textwrap.dedent("""
         color: #1f2937 !important;
     }
 
+    /* ---------------- HEADER STREAMLIT ----------------
+       Nessuna barra nera sopra: il banner parte dal bordo alto,
+       come in Sector G2 Lab. */
+    [data-testid="stHeader"],
+    [data-testid="stToolbar"],
+    [data-testid="stDecoration"],
+    #MainMenu {
+        display: none !important;
+    }
+
+    [data-testid="stAppViewContainer"],
+    [data-testid="stMain"],
+    [data-testid="stMainBlockContainer"] {
+        padding-top: 0 !important;
+        margin-top: 0 !important;
+    }
+
+    [data-testid="stMain"] {
+        overflow-y: auto !important;
+        height: 100vh !important;
+    }
+
     .block-container {
         max-width: 1380px;
-        padding-top: 2rem;
+        padding-top: 0 !important;
         padding-bottom: 4rem;
         padding-left: 2.4rem;
         padding-right: 2.4rem;
+        margin-top: 0 !important;
     }
 
     /* ---------------- BANNER STICKY / CONTENUTO CHE SCORRE SOPRA ---------------- */
@@ -238,6 +261,7 @@ st.markdown(textwrap.dedent("""
         margin-right: -2.4rem !important;
         padding: 2.0rem 2.4rem 4rem 2.4rem !important;
         min-height: 100vh;
+        box-sizing: border-box !important;
     }
 
     /* ---------------- SIDEBAR · STILE SECTOR G2 LAB ---------------- */
@@ -479,7 +503,7 @@ def mostra_banner_fotografico():
         '<div class="snowdata-sticky-banner" '
         'style="width:auto;height:255px;margin-left:-2.4rem;'
         'margin-right:-2.4rem;border-radius:0;overflow:hidden;'
-        'margin-bottom:0;margin-top:-2rem;position:relative;'
+        'margin-bottom:0;margin-top:0;position:relative;'
         'z-index:1;background:#dce7ef;">'
         '<img '
         f'src="data:image/jpeg;base64,{contenuto_base64}" '
