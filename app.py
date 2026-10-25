@@ -20,7 +20,7 @@ st.set_page_config(
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "ski_material_lab.db")
-VERSIONE_DATABASE_APP = 2
+VERSIONE_DATABASE_APP = 3
 
 
 # ============================================================
@@ -168,9 +168,39 @@ def inizializza_database():
             condizioni TEXT,
             descrizione TEXT,
             note TEXT,
-            creato_il TEXT NOT NULL
+            creato_il TEXT NOT NULL,
+            codice TEXT,
+            foto_url TEXT,
+            temp_min REAL,
+            temp_max REAL,
+            tipo_temperatura TEXT,
+            tipo_neve TEXT,
+            umidita_min REAL,
+            umidita_max REAL,
+            url_fonte TEXT
         )
     """)
+
+    # Migrazione non distruttiva per database SnowDataPro già esistenti.
+    colonne_catalogo = {
+        r[1] for r in conn.execute("PRAGMA table_info(catalogo_prodotti)").fetchall()
+    }
+    nuove_colonne_catalogo = {
+        "codice": "TEXT",
+        "foto_url": "TEXT",
+        "temp_min": "REAL",
+        "temp_max": "REAL",
+        "tipo_temperatura": "TEXT",
+        "tipo_neve": "TEXT",
+        "umidita_min": "REAL",
+        "umidita_max": "REAL",
+        "url_fonte": "TEXT",
+    }
+    for nome_colonna, tipo_colonna in nuove_colonne_catalogo.items():
+        if nome_colonna not in colonne_catalogo:
+            conn.execute(
+                f"ALTER TABLE catalogo_prodotti ADD COLUMN {nome_colonna} {tipo_colonna}"
+            )
 
     conn.execute("""
         INSERT INTO app_schema_meta (chiave, valore)
@@ -703,78 +733,437 @@ def coppie_simili_zero_test(sessione_id, tolleranza):
 
 
 
+def _numero_opzionale(valore):
+    valore = str(valore or "").strip().replace(",", ".")
+    if not valore:
+        return None
+    return float(valore)
+
+
+def _testo_range(minimo, massimo, unita="°C"):
+    if pd.isna(minimo) and pd.isna(massimo):
+        return "—"
+    if pd.isna(minimo):
+        return f"≤ {massimo:g} {unita}"
+    if pd.isna(massimo):
+        return f"≥ {minimo:g} {unita}"
+    return f"{minimo:g} / {massimo:g} {unita}"
+
+
 def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
     mostra_banner(titolo, sottotitolo)
 
-    with st.form(f"catalogo_{categoria}_form", clear_on_submit=True):
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            nome = st.text_input("Nome / codice *")
-        with c2:
-            marca = st.text_input("Marca")
-        with c3:
-            tipo = st.selectbox("Tipo", tipi)
+    usa_condizioni = categoria != "rigatura"
 
-        condizioni = st.text_input(
-            "Condizioni / range di utilizzo",
-            placeholder="es. -5 / -10 °C, neve nuova, umidità elevata..."
-        )
-        descrizione = st.text_area(
-            "Descrizione",
-            placeholder="Caratteristiche del prodotto, applicazione, struttura, geometria..."
-        )
-        note = st.text_area("Note")
+    with st.expander("➕ Aggiungi prodotto", expanded=False):
+        with st.form(f"catalogo_{categoria}_form", clear_on_submit=True):
+            r1c1, r1c2, r1c3 = st.columns([1.4, 1, 1])
+            with r1c1:
+                nome = st.text_input(
+                    "Nome prodotto *",
+                    placeholder="es. TS7 Black",
+                )
+            with r1c2:
+                codice = st.text_input(
+                    "Codice prodotto",
+                    placeholder="es. TS07B-4",
+                )
+            with r1c3:
+                marca = st.text_input(
+                    "Marca",
+                    placeholder="es. Swix",
+                )
 
-        salva = st.form_submit_button(
-            "Aggiungi al catalogo",
-            type="primary",
-            use_container_width=True,
-        )
+            r2c1, r2c2 = st.columns([1, 2])
+            with r2c1:
+                tipo = st.selectbox("Categoria prodotto", tipi)
+            with r2c2:
+                foto_url = st.text_input(
+                    "URL foto prodotto",
+                    placeholder="https://.../prodotto.jpg",
+                    help=(
+                        "Usa preferibilmente l'immagine ufficiale del produttore. "
+                        "Salviamo l'URL, non il file, così la foto resta disponibile "
+                        "anche su Streamlit Cloud."
+                    ),
+                )
 
-        if salva:
-            if not nome.strip():
-                st.error("Inserisci il nome o codice.")
-            else:
-                esegui("""
-                    INSERT INTO catalogo_prodotti (
-                        categoria, nome, marca, tipo, condizioni,
-                        descrizione, note, creato_il
+            tipo_neve_val = ""
+            temp_min_txt = ""
+            temp_max_txt = ""
+            tipo_temperatura = ""
+            umidita_min_txt = ""
+            umidita_max_txt = ""
+
+            if usa_condizioni:
+                st.markdown("#### Condizioni di utilizzo")
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    temp_min_txt = st.text_input(
+                        "Temperatura minima (°C)",
+                        placeholder="-10",
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    categoria,
-                    nome.strip(),
-                    marca.strip(),
-                    tipo,
-                    condizioni.strip(),
-                    descrizione.strip(),
-                    note.strip(),
-                    datetime.now().isoformat(timespec="seconds"),
-                ))
-                st.success("Prodotto aggiunto al catalogo.")
-                st.rerun()
+                with c2:
+                    temp_max_txt = st.text_input(
+                        "Temperatura massima (°C)",
+                        placeholder="-4",
+                    )
+                with c3:
+                    tipo_temperatura = st.selectbox(
+                        "Temperatura riferita a",
+                        ["Aria", "Neve", "Non specificato"],
+                    )
 
-    st.markdown("### Catalogo")
+                neve_opzioni = [
+                    "Neve nuova",
+                    "Neve fine",
+                    "Neve vecchia",
+                    "Neve trasformata",
+                    "Neve artificiale",
+                    "Neve bagnata",
+                    "Neve secca",
+                    "Mista / variabile",
+                ]
+                tipo_neve_sel = st.multiselect(
+                    "Tipo di neve",
+                    neve_opzioni,
+                    placeholder="Seleziona una o più condizioni",
+                )
+                tipo_neve_val = ", ".join(tipo_neve_sel)
+
+                u1, u2 = st.columns(2)
+                with u1:
+                    umidita_min_txt = st.text_input(
+                        "Umidità minima (%)",
+                        placeholder="es. 70",
+                    )
+                with u2:
+                    umidita_max_txt = st.text_input(
+                        "Umidità massima (%)",
+                        placeholder="es. 100",
+                    )
+
+            descrizione = st.text_area(
+                "Descrizione tecnica",
+                placeholder=(
+                    "Sintesi tecnica/parafrasata delle indicazioni del produttore: "
+                    "caratteristiche, uso consigliato, applicazione, tipo di neve..."
+                ),
+                height=130,
+            )
+
+            url_fonte = st.text_input(
+                "Pagina ufficiale del produttore",
+                placeholder="https://www.produttore.com/...",
+            )
+
+            condizioni = st.text_input(
+                "Altre condizioni / indicazioni",
+                placeholder="es. racing, base, top coat, neve aggressiva...",
+            )
+            note = st.text_area(
+                "Note personali",
+                placeholder="Osservazioni interne, combinazioni, preparazioni, ecc.",
+                height=90,
+            )
+
+            salva = st.form_submit_button(
+                "Aggiungi al catalogo",
+                type="primary",
+                use_container_width=True,
+            )
+
+            if salva:
+                errori = []
+                if not nome.strip():
+                    errori.append("Inserisci il nome del prodotto.")
+
+                try:
+                    temp_min = _numero_opzionale(temp_min_txt)
+                    temp_max = _numero_opzionale(temp_max_txt)
+                    umidita_min = _numero_opzionale(umidita_min_txt)
+                    umidita_max = _numero_opzionale(umidita_max_txt)
+                except ValueError:
+                    temp_min = temp_max = umidita_min = umidita_max = None
+                    errori.append(
+                        "Temperature e umidità devono essere numeri "
+                        "(usa ad esempio -8, -2, 70, 100)."
+                    )
+
+                if (
+                    temp_min is not None
+                    and temp_max is not None
+                    and temp_min > temp_max
+                ):
+                    errori.append(
+                        "La temperatura minima non può essere superiore alla massima."
+                    )
+
+                if (
+                    umidita_min is not None
+                    and umidita_max is not None
+                    and umidita_min > umidita_max
+                ):
+                    errori.append(
+                        "L'umidità minima non può essere superiore alla massima."
+                    )
+
+                if errori:
+                    for errore in errori:
+                        st.error(errore)
+                else:
+                    esegui("""
+                        INSERT INTO catalogo_prodotti (
+                            categoria, nome, marca, tipo, condizioni,
+                            descrizione, note, creato_il,
+                            codice, foto_url, temp_min, temp_max,
+                            tipo_temperatura, tipo_neve,
+                            umidita_min, umidita_max, url_fonte
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        categoria,
+                        nome.strip(),
+                        marca.strip(),
+                        tipo,
+                        condizioni.strip(),
+                        descrizione.strip(),
+                        note.strip(),
+                        datetime.now().isoformat(timespec="seconds"),
+                        codice.strip(),
+                        foto_url.strip(),
+                        temp_min,
+                        temp_max,
+                        tipo_temperatura if usa_condizioni else "",
+                        tipo_neve_val if usa_condizioni else "",
+                        umidita_min,
+                        umidita_max,
+                        url_fonte.strip(),
+                    ))
+                    st.success("Prodotto aggiunto al catalogo.")
+                    st.rerun()
+
+    st.markdown("### Catalogo prodotti")
+
     df = leggi_df("""
-        SELECT id, nome, marca, tipo, condizioni, descrizione, note
+        SELECT
+            id, nome, codice, marca, tipo, foto_url,
+            temp_min, temp_max, tipo_temperatura, tipo_neve,
+            umidita_min, umidita_max,
+            condizioni, descrizione, url_fonte, note
         FROM catalogo_prodotti
         WHERE categoria = ?
-        ORDER BY nome COLLATE NOCASE
+        ORDER BY marca COLLATE NOCASE, nome COLLATE NOCASE
     """, (categoria,))
 
     if df.empty:
         st.info("Nessun elemento ancora inserito in questo catalogo.")
-    else:
-        df = df.rename(columns={
-            "id": "ID",
-            "nome": "Nome / codice",
-            "marca": "Marca",
-            "tipo": "Tipo",
-            "condizioni": "Condizioni",
-            "descrizione": "Descrizione",
-            "note": "Note",
-        })
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        return
+
+    # ---------------- FILTRI ----------------
+    with st.container(border=True):
+        st.markdown("#### Filtri")
+        f1, f2, f3 = st.columns([1.8, 1, 1])
+        with f1:
+            cerca = st.text_input(
+                "Cerca",
+                key=f"cerca_catalogo_{categoria}",
+                placeholder="Nome, codice, marca, descrizione...",
+            )
+        with f2:
+            marche = ["Tutte"] + sorted(
+                [x for x in df["marca"].dropna().astype(str).unique() if x.strip()],
+                key=str.lower,
+            )
+            filtro_marca = st.selectbox(
+                "Marca",
+                marche,
+                key=f"filtro_marca_{categoria}",
+            )
+        with f3:
+            tipi_presenti = ["Tutti"] + sorted(
+                [x for x in df["tipo"].dropna().astype(str).unique() if x.strip()],
+                key=str.lower,
+            )
+            filtro_tipo = st.selectbox(
+                "Tipo",
+                tipi_presenti,
+                key=f"filtro_tipo_{categoria}",
+            )
+
+        filtro_temp_attivo = False
+        filtro_temp = 0.0
+        filtro_neve = "Tutte"
+
+        if usa_condizioni:
+            f4, f5 = st.columns([1, 1.5])
+            with f4:
+                filtro_temp_attivo = st.checkbox(
+                    "Filtra per temperatura",
+                    key=f"usa_temp_{categoria}",
+                )
+                if filtro_temp_attivo:
+                    filtro_temp = st.number_input(
+                        "Temperatura (°C)",
+                        value=-5.0,
+                        step=0.5,
+                        key=f"temp_catalogo_{categoria}",
+                    )
+            with f5:
+                neve_presenti = set()
+                for valore in df["tipo_neve"].fillna("").astype(str):
+                    for voce in valore.split(","):
+                        voce = voce.strip()
+                        if voce:
+                            neve_presenti.add(voce)
+                filtro_neve = st.selectbox(
+                    "Tipo di neve",
+                    ["Tutte"] + sorted(neve_presenti, key=str.lower),
+                    key=f"filtro_neve_{categoria}",
+                )
+
+    filtrato = df.copy()
+
+    if cerca.strip():
+        q = cerca.strip().lower()
+        colonne_testo = [
+            "nome", "codice", "marca", "tipo",
+            "condizioni", "descrizione", "note",
+        ]
+        maschera = pd.Series(False, index=filtrato.index)
+        for col in colonne_testo:
+            maschera = maschera | filtrato[col].fillna("").astype(str).str.lower().str.contains(q, regex=False)
+        filtrato = filtrato[maschera]
+
+    if filtro_marca != "Tutte":
+        filtrato = filtrato[filtrato["marca"] == filtro_marca]
+
+    if filtro_tipo != "Tutti":
+        filtrato = filtrato[filtrato["tipo"] == filtro_tipo]
+
+    if usa_condizioni and filtro_temp_attivo:
+        # I prodotti senza range restano esclusi dal filtro temperatura.
+        filtrato = filtrato[
+            filtrato["temp_min"].notna()
+            & filtrato["temp_max"].notna()
+            & (filtrato["temp_min"] <= filtro_temp)
+            & (filtrato["temp_max"] >= filtro_temp)
+        ]
+
+    if usa_condizioni and filtro_neve != "Tutte":
+        filtrato = filtrato[
+            filtrato["tipo_neve"]
+            .fillna("")
+            .astype(str)
+            .str.contains(filtro_neve, case=False, regex=False)
+        ]
+
+    st.caption(f"{len(filtrato)} prodotti visualizzati su {len(df)}")
+
+    if filtrato.empty:
+        st.info("Nessun prodotto corrisponde ai filtri selezionati.")
+        return
+
+    # ---------------- SCHEDE ----------------
+    righe = filtrato.to_dict("records")
+    for start in range(0, len(righe), 3):
+        colonne = st.columns(3)
+        for indice, prodotto in enumerate(righe[start:start + 3]):
+            with colonne[indice]:
+                with st.container(border=True):
+                    foto = str(prodotto.get("foto_url") or "").strip()
+                    if foto:
+                        try:
+                            st.image(foto, use_container_width=True)
+                        except Exception:
+                            st.caption("Immagine non disponibile")
+
+                    nome_prodotto = str(prodotto.get("nome") or "Prodotto")
+                    st.markdown(f"### {nome_prodotto}")
+
+                    meta = []
+                    marca_prodotto = str(prodotto.get("marca") or "").strip()
+                    tipo_prodotto = str(prodotto.get("tipo") or "").strip()
+                    codice_prodotto = str(prodotto.get("codice") or "").strip()
+
+                    if marca_prodotto:
+                        meta.append(marca_prodotto)
+                    if tipo_prodotto:
+                        meta.append(tipo_prodotto)
+                    if meta:
+                        st.caption(" · ".join(meta))
+
+                    if codice_prodotto:
+                        st.caption(f"Codice: {codice_prodotto}")
+
+                    if usa_condizioni:
+                        temp_txt = _testo_range(
+                            prodotto.get("temp_min"),
+                            prodotto.get("temp_max"),
+                            "°C",
+                        )
+                        tipo_temp = str(
+                            prodotto.get("tipo_temperatura") or ""
+                        ).strip()
+                        if temp_txt != "—":
+                            suffisso = (
+                                f" · {tipo_temp.lower()}"
+                                if tipo_temp and tipo_temp != "Non specificato"
+                                else ""
+                            )
+                            st.markdown(f"**Temperatura:** {temp_txt}{suffisso}")
+
+                        neve_txt = str(
+                            prodotto.get("tipo_neve") or ""
+                        ).strip()
+                        if neve_txt:
+                            st.markdown(f"**Neve:** {neve_txt}")
+
+                        umidita_txt = _testo_range(
+                            prodotto.get("umidita_min"),
+                            prodotto.get("umidita_max"),
+                            "%",
+                        )
+                        if umidita_txt != "—":
+                            st.markdown(f"**Umidità:** {umidita_txt}")
+
+                    descrizione_prodotto = str(
+                        prodotto.get("descrizione") or ""
+                    ).strip()
+                    if descrizione_prodotto:
+                        anteprima = descrizione_prodotto
+                        if len(anteprima) > 220:
+                            anteprima = anteprima[:217].rstrip() + "..."
+                        st.write(anteprima)
+
+                    with st.expander("Scheda completa"):
+                        if descrizione_prodotto:
+                            st.markdown("**Descrizione tecnica**")
+                            st.write(descrizione_prodotto)
+
+                        condizioni_prodotto = str(
+                            prodotto.get("condizioni") or ""
+                        ).strip()
+                        if condizioni_prodotto:
+                            st.markdown("**Altre condizioni**")
+                            st.write(condizioni_prodotto)
+
+                        note_prodotto = str(
+                            prodotto.get("note") or ""
+                        ).strip()
+                        if note_prodotto:
+                            st.markdown("**Note personali**")
+                            st.write(note_prodotto)
+
+                        url_fonte = str(
+                            prodotto.get("url_fonte") or ""
+                        ).strip()
+                        if url_fonte:
+                            st.link_button(
+                                "Pagina ufficiale del produttore",
+                                url_fonte,
+                                use_container_width=True,
+                            )
 
 
 # ============================================================
