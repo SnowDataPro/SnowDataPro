@@ -5,7 +5,6 @@ import os
 import json
 import textwrap
 import base64
-import hmac
 from datetime import datetime, date
 
 # ============================================================
@@ -22,96 +21,6 @@ st.set_page_config(
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "ski_material_lab.db")
 VERSIONE_DATABASE_APP = 2
-
-
-# ============================================================
-# ACCESSO RISERVATO
-# ============================================================
-
-def _leggi_password_app():
-    try:
-        valore = str(st.secrets.get("APP_PASSWORD", "") or "").strip()
-        if valore:
-            return valore
-    except Exception:
-        pass
-    return str(os.environ.get("APP_PASSWORD", "") or "").strip()
-
-
-def _schermata_accesso():
-    password_configurata = _leggi_password_app()
-
-    st.markdown(
-        """
-        <style>
-        [data-testid="stSidebar"] { display: none !important; }
-        header[data-testid="stHeader"] { background: transparent !important; }
-        #MainMenu, footer { visibility: hidden !important; }
-        .block-container {
-            max-width: 760px !important;
-            padding-top: 4.5rem !important;
-        }
-        .snowdata-login-title {
-            text-align: center;
-            color: #16324f;
-            font-size: 1.45rem;
-            font-weight: 750;
-            margin-top: 1.1rem;
-            margin-bottom: .35rem;
-        }
-        .snowdata-login-subtitle {
-            text-align: center;
-            color: #6b7888;
-            font-size: .95rem;
-            margin-bottom: 1.5rem;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    logo_path = os.path.join(BASE_DIR, "snowdatapro_logo_transparent.png")
-    col_sx, col_logo, col_dx = st.columns([1, 2.1, 1])
-    with col_logo:
-        if os.path.exists(logo_path):
-            st.image(logo_path, use_container_width=True)
-
-    st.markdown(
-        '<div class="snowdata-login-title">Accesso riservato</div>'
-        '<div class="snowdata-login-subtitle">Inserisci la password per accedere a SnowDataPro.</div>',
-        unsafe_allow_html=True,
-    )
-
-    if not password_configurata:
-        st.error(
-            "Password dell'app non configurata. Aggiungi APP_PASSWORD nei Secrets di Streamlit."
-        )
-        st.stop()
-
-    with st.form("snowdatapro_login", clear_on_submit=True):
-        password_inserita = st.text_input(
-            "Password",
-            type="password",
-            placeholder="Password",
-        )
-        entra = st.form_submit_button(
-            "Accedi",
-            type="primary",
-            use_container_width=True,
-        )
-
-    if entra:
-        if hmac.compare_digest(password_inserita, password_configurata):
-            st.session_state["snowdatapro_authenticated"] = True
-            st.rerun()
-        else:
-            st.error("Password non corretta.")
-
-    st.stop()
-
-
-if not st.session_state.get("snowdatapro_authenticated", False):
-    _schermata_accesso()
 
 
 # ============================================================
@@ -991,17 +900,6 @@ with st.sidebar.expander(
         type="primary" if pagina == "Rigature manuali" else "secondary",
     ):
         cambia_pagina("Rigature manuali")
-
-
-st.sidebar.markdown("---")
-if st.sidebar.button(
-    "Logout",
-    icon=":material/logout:",
-    key="snowdatapro_logout",
-    use_container_width=True,
-):
-    st.session_state["snowdatapro_authenticated"] = False
-    st.rerun()
 
 
 # ============================================================

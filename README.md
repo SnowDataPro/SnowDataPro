@@ -1,31 +1,33 @@
-# Ski Material Lab
+# SnowDataPro
 
-Prima versione Streamlit per catalogare:
+Applicazione Streamlit per catalogare e analizzare test sui materiali nello sci di fondo.
 
-- sessioni e condizioni neve
-- catalogo sci
-- zero test a fotocellule
-- selezione automatica delle coppie di sci con tempi medi simili
-- test di scorrimento e rigature
-- modalità Aste, Parallel e Fotocellule
-- test scioline di tenuta a sensazione
-- storico
-- backup JSON
+## Menu principale
 
-## Avvio locale
+### Test
+- Zero test
+- Test prodotti scorrimento
+- Test scioline di tenuta
+- Test rigature manuali
 
-```bash
-pip install -r requirements.txt
-streamlit run app.py
-```
+### Prodotti
+- Prodotti di scorrimento
+- Scioline di tenuta
+- Rigature manuali
+
+Le pagine Prodotti permettono di archiviare nome/codice, marca, tipo,
+condizioni di utilizzo, descrizione e note.
 
 ## Database
+Usa SQLite in locale oppure Turso online tramite:
+- TURSO_DATABASE_URL
+- TURSO_AUTH_TOKEN
 
-Per default usa SQLite locale (`ski_material_lab.db`).
+Per Streamlit Community Cloud usare Python 3.12.
 
-Se vengono configurati entrambi i secrets:
+## Privacy
+La protezione dell'app è gestita direttamente da Streamlit Community Cloud
+tramite **Sharing → Only specific people can view this app**.
 
-- `TURSO_DATABASE_URL`
-- `TURSO_AUTH_TOKEN`
-
-l'app usa Turso, seguendo la stessa logica di Sector G2 Lab.
+Non è richiesta alcuna password interna all'app e non è necessario configurare
+`APP_PASSWORD`.
