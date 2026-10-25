@@ -4,6 +4,7 @@ import sqlite3
 import os
 import json
 import textwrap
+import base64
 from datetime import datetime, date
 
 # ============================================================
@@ -203,8 +204,40 @@ st.markdown(textwrap.dedent("""
     }
 
     .block-container {
-        padding-top: 1.2rem;
-        padding-bottom: 3rem;
+        max-width: 1380px;
+        padding-top: 2rem;
+        padding-bottom: 4rem;
+        padding-left: 2.4rem;
+        padding-right: 2.4rem;
+    }
+
+    /* ---------------- BANNER STICKY / CONTENUTO CHE SCORRE SOPRA ---------------- */
+    div[data-testid="stElementContainer"]:has(.snowdata-sticky-banner) {
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 1 !important;
+        margin-bottom: 0 !important;
+    }
+
+    div[data-testid="stElementContainer"]:has(.snowdata-sticky-banner)
+    [data-testid="stMarkdownContainer"] {
+        margin-bottom: 0 !important;
+    }
+
+    div[class*="st-key-snowdata_page_content"] {
+        position: relative !important;
+        z-index: 5 !important;
+        background:
+            linear-gradient(
+                180deg,
+                #f7f9fa 0px,
+                #f4f6f8 260px,
+                #f4f6f8 100%
+            ) !important;
+        margin-left: -2.4rem !important;
+        margin-right: -2.4rem !important;
+        padding: 2.0rem 2.4rem 4rem 2.4rem !important;
+        min-height: 100vh;
     }
 
     /* ---------------- SIDEBAR · STILE SECTOR G2 LAB ---------------- */
@@ -361,30 +394,40 @@ st.markdown(textwrap.dedent("""
         color: #243447 !important;
     }
 
-    /* ---------------- BANNER ---------------- */
+    /* ---------------- TITOLI PAGINA ---------------- */
     .ski-banner {
-        background: linear-gradient(90deg, #003a70 0%, #005ba8 55%, #0b72c5 100%);
-        border-radius: 14px;
-        padding: 20px 24px;
-        color: white;
-        margin-bottom: 20px;
-        box-shadow: 0 8px 24px rgba(0,0,0,.08);
+        background: transparent;
+        border-radius: 0;
+        padding: 0 0 1.2rem 0;
+        color: #16324f;
+        margin: 0 0 1.4rem 0;
+        box-shadow: none;
+        border-bottom: 1px solid #d8e0e7;
+        position: relative;
     }
 
-    .ski-banner h1,
-    .ski-banner p {
-        color: white !important;
+    .ski-banner::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        bottom: -1px;
+        width: 54px;
+        height: 3px;
+        background: #00a7e1;
     }
 
     .ski-banner h1 {
+        color: #15283d !important;
         margin: 0;
-        font-size: 2rem;
-        line-height: 1.1;
+        font-size: 1.75rem;
+        line-height: 1.2;
+        font-weight: 760;
     }
 
     .ski-banner p {
-        margin: 7px 0 0 0;
-        opacity: .9;
+        color: #66788a !important;
+        margin: 0.85rem 0 0 0;
+        font-size: 1rem;
     }
 
     /* ---------------- CARD ---------------- */
@@ -421,6 +464,35 @@ st.markdown(textwrap.dedent("""
     }
 </style>
 """).strip(), unsafe_allow_html=True)
+
+
+def mostra_banner_fotografico():
+    """Banner panoramico sticky: il contenuto della pagina gli scorre sopra."""
+    percorso = os.path.join(BASE_DIR, "banner snowdatapro.jpg")
+    if not os.path.exists(percorso):
+        return
+
+    with open(percorso, "rb") as file:
+        contenuto_base64 = base64.b64encode(file.read()).decode()
+
+    banner_html = (
+        '<div class="snowdata-sticky-banner" '
+        'style="width:auto;height:255px;margin-left:-2.4rem;'
+        'margin-right:-2.4rem;border-radius:0;overflow:hidden;'
+        'margin-bottom:0;margin-top:-2rem;position:relative;'
+        'z-index:1;background:#dce7ef;">'
+        '<img '
+        f'src="data:image/jpeg;base64,{contenuto_base64}" '
+        'alt="Paesaggio innevato SnowDataPro" '
+        'style="width:100%;height:100%;object-fit:cover;'
+        'object-position:center 58%;display:block;">'
+        '<div aria-hidden="true" style="position:absolute;inset:0;'
+        'background:linear-gradient(180deg,rgba(7,28,45,.02) 0%,'
+        'rgba(7,28,45,.04) 65%,rgba(7,28,45,.10) 100%);'
+        'pointer-events:none;"></div>'
+        '</div>'
+    )
+    st.markdown(banner_html, unsafe_allow_html=True)
 
 
 def mostra_banner(titolo, sottotitolo):
@@ -773,647 +845,467 @@ with st.sidebar.expander(
 # PAGINE
 # ============================================================
 
-if pagina == "Dashboard":
-    mostra_banner(
-        "SnowDataPro",
-        "Material testing, snow data, zero test, scorrimento, rigature e tenuta.",
-    )
+mostra_banner_fotografico()
 
-    sessioni = sessioni_df()
-    sci = sci_df()
-    zero = leggi_df("SELECT COUNT(*) AS n FROM zero_test")
-    materiali = leggi_df("SELECT COUNT(*) AS n FROM test_materiali")
-    tenuta = leggi_df("SELECT COUNT(*) AS n FROM test_tenuta")
+with st.container(key="snowdata_page_content"):
 
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        metric_card("Sessioni", int(len(sessioni)))
-    with c2:
-        metric_card("Sci catalogati", int(len(sci)))
-    with c3:
-        metric_card("Prove zero test", int(zero.iloc[0]["n"]))
-    with c4:
-        metric_card(
-            "Test materiali",
-            int(materiali.iloc[0]["n"]) + int(tenuta.iloc[0]["n"]),
+    if pagina == "Dashboard":
+        mostra_banner(
+            "SnowDataPro",
+            "Material testing, snow data, zero test, scorrimento, rigature e tenuta.",
         )
 
-    st.markdown("### Gestione")
-    c_g1, c_g2, c_g3 = st.columns(3)
-    with c_g1:
-        if st.button("Nuova sessione", use_container_width=True):
-            cambia_pagina("Nuova sessione")
-    with c_g2:
-        if st.button("Catalogo sci", use_container_width=True):
-            cambia_pagina("Catalogo sci")
-    with c_g3:
-        if st.button("Storico test", use_container_width=True):
-            cambia_pagina("Storico")
+        sessioni = sessioni_df()
+        sci = sci_df()
+        zero = leggi_df("SELECT COUNT(*) AS n FROM zero_test")
+        materiali = leggi_df("SELECT COUNT(*) AS n FROM test_materiali")
+        tenuta = leggi_df("SELECT COUNT(*) AS n FROM test_tenuta")
 
-    st.markdown("### Ultime sessioni")
-    if sessioni.empty:
-        st.info("Nessuna sessione registrata. Crea la prima sessione dal menu laterale.")
-    else:
-        mostra = sessioni[
-            ["data", "ora", "luogo", "temperatura_aria", "temperatura_neve",
-             "tipo_neve", "condizione_pista"]
-        ].head(10).copy()
-        mostra.columns = [
-            "Data", "Ora", "Luogo", "T aria °C", "T neve °C",
-            "Tipo neve", "Pista"
-        ]
-        st.dataframe(mostra, use_container_width=True, hide_index=True)
-
-
-elif pagina == "Nuova sessione":
-    mostra_banner(
-        "Sessioni di test",
-        "Registra una giornata e le condizioni ambientali una sola volta.",
-    )
-
-    with st.form("form_sessione", clear_on_submit=True):
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            data_sessione = st.date_input("Data", value=date.today())
-            ora_sessione = st.time_input("Ora")
-            luogo = st.text_input("Luogo *")
-        with c2:
-            temperatura_aria = st.number_input(
-                "Temperatura aria (°C)", value=0.0, step=0.5
-            )
-            temperatura_neve = st.number_input(
-                "Temperatura neve (°C)", value=0.0, step=0.5
-            )
-            umidita = st.number_input(
-                "Umidità relativa (%)", min_value=0.0, max_value=100.0,
-                value=70.0, step=1.0
-            )
-        with c3:
-            tipo_neve = st.selectbox(
-                "Tipo neve",
-                [
-                    "Nuova", "Vecchia", "Trasformata", "Artificiale",
-                    "Mista", "Bagnata", "Ghiacciata", "Altro"
-                ],
-            )
-            condizione_pista = st.selectbox(
-                "Condizione pista",
-                [
-                    "Compatta", "Morbida", "Dura", "Ghiacciata",
-                    "Lucida", "Sporca", "Variabile", "Altro"
-                ],
-            )
-
-        note = st.text_area("Note")
-        salva = st.form_submit_button(
-            "Salva sessione", type="primary", use_container_width=True
-        )
-
-        if salva:
-            if not luogo.strip():
-                st.error("Inserisci il luogo.")
-            else:
-                esegui("""
-                    INSERT INTO sessioni (
-                        data, ora, luogo, temperatura_aria, temperatura_neve,
-                        umidita, tipo_neve, condizione_pista, note, creato_il
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    data_sessione.isoformat(),
-                    ora_sessione.strftime("%H:%M"),
-                    luogo.strip(),
-                    float(temperatura_aria),
-                    float(temperatura_neve),
-                    float(umidita),
-                    tipo_neve,
-                    condizione_pista,
-                    note.strip(),
-                    datetime.now().isoformat(timespec="seconds"),
-                ))
-                st.success("Sessione salvata.")
-                st.rerun()
-
-    st.markdown("### Sessioni registrate")
-    df = sessioni_df()
-    if not df.empty:
-        st.dataframe(
-            df[[
-                "id", "data", "ora", "luogo", "temperatura_aria",
-                "temperatura_neve", "umidita", "tipo_neve",
-                "condizione_pista", "note"
-            ]],
-            use_container_width=True,
-            hide_index=True,
-        )
-
-
-elif pagina == "Catalogo sci":
-    mostra_banner(
-        "Catalogo sci",
-        "Codifica gli sci una volta sola per riutilizzarli in tutti i test.",
-    )
-
-    with st.form("form_sci", clear_on_submit=True):
         c1, c2, c3, c4 = st.columns(4)
         with c1:
-            codice = st.text_input("Codice sci *", placeholder="es. C01")
+            metric_card("Sessioni", int(len(sessioni)))
         with c2:
-            marca = st.text_input("Marca")
+            metric_card("Sci catalogati", int(len(sci)))
         with c3:
-            modello = st.text_input("Modello")
+            metric_card("Prove zero test", int(zero.iloc[0]["n"]))
         with c4:
-            tecnica = st.selectbox("Tecnica", ["Skating", "Classico", "Entrambi"])
-
-        note = st.text_input("Note")
-        salva_sci = st.form_submit_button(
-            "Aggiungi sci", type="primary", use_container_width=True
-        )
-
-        if salva_sci:
-            if not codice.strip():
-                st.error("Inserisci il codice dello sci.")
-            else:
-                try:
-                    esegui("""
-                        INSERT INTO sci (codice, marca, modello, tecnica, note)
-                        VALUES (?, ?, ?, ?, ?)
-                    """, (
-                        codice.strip(), marca.strip(), modello.strip(),
-                        tecnica, note.strip()
-                    ))
-                    st.success("Sci aggiunto.")
-                    st.rerun()
-                except Exception as exc:
-                    st.error(f"Impossibile salvare: {exc}")
-
-    df = sci_df()
-    if df.empty:
-        st.info("Il catalogo sci è vuoto.")
-    else:
-        st.dataframe(
-            df[["id", "codice", "marca", "modello", "tecnica", "note"]],
-            use_container_width=True,
-            hide_index=True,
-        )
-
-
-elif pagina == "Zero test":
-    mostra_banner(
-        "Zero test",
-        "Fotocellule: individua gli sci più simili prima dei test di prodotti o rigature.",
-    )
-
-    sessioni = dizionario_sessioni()
-    sci = dizionario_sci()
-
-    if not sessioni:
-        st.warning("Crea prima una sessione dalla Dashboard.")
-        if st.button("Vai a Nuova sessione", type="primary"):
-            cambia_pagina("Nuova sessione")
-        st.stop()
-
-    if len(sci) < 2:
-        st.warning("Inserisci almeno due sci nel catalogo.")
-        if st.button("Vai al Catalogo sci", type="primary"):
-            cambia_pagina("Catalogo sci")
-        st.stop()
-
-    sessione_label = st.selectbox("Sessione", list(sessioni.keys()))
-    sessione_id = sessioni[sessione_label]
-
-    with st.form("form_zero_test", clear_on_submit=True):
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            sci_label = st.selectbox("Sci", list(sci.keys()))
-        with c2:
-            prova_numero = st.number_input(
-                "Numero prova", min_value=1, value=1, step=1
-            )
-        with c3:
-            tempo_sec = st.number_input(
-                "Tempo (s)", min_value=0.001, value=20.000,
-                step=0.001, format="%.3f"
+            metric_card(
+                "Test materiali",
+                int(materiali.iloc[0]["n"]) + int(tenuta.iloc[0]["n"]),
             )
 
-        note = st.text_input("Note")
-        salva_zero = st.form_submit_button(
-            "Salva prova", type="primary", use_container_width=True
-        )
+        st.markdown("### Gestione")
+        c_g1, c_g2, c_g3 = st.columns(3)
+        with c_g1:
+            if st.button("Nuova sessione", use_container_width=True):
+                cambia_pagina("Nuova sessione")
+        with c_g2:
+            if st.button("Catalogo sci", use_container_width=True):
+                cambia_pagina("Catalogo sci")
+        with c_g3:
+            if st.button("Storico test", use_container_width=True):
+                cambia_pagina("Storico")
 
-        if salva_zero:
-            esegui("""
-                INSERT INTO zero_test (
-                    sessione_id, sci_id, prova_numero, tempo_sec, note
-                )
-                VALUES (?, ?, ?, ?, ?)
-            """, (
-                int(sessione_id),
-                int(sci[sci_label]),
-                int(prova_numero),
-                float(tempo_sec),
-                note.strip(),
-            ))
-            st.success("Prova zero test salvata.")
-            st.rerun()
-
-    st.markdown("### Risultati")
-    risultati = zero_test_sessione(sessione_id)
-    if risultati.empty:
-        st.info("Non ci sono ancora prove per questa sessione.")
-    else:
-        st.dataframe(
-            risultati[["sci", "prova_numero", "tempo_sec", "note"]],
-            use_container_width=True,
-            hide_index=True,
-        )
-
-        riepilogo = riepilogo_zero_test(sessione_id)
-        mostra = riepilogo.copy()
-        mostra["tempo_medio"] = mostra["tempo_medio"].map(lambda x: f"{x:.3f}")
-        mostra["deviazione_standard"] = mostra["deviazione_standard"].map(lambda x: f"{x:.3f}")
-        mostra["miglior_tempo"] = mostra["miglior_tempo"].map(lambda x: f"{x:.3f}")
-        mostra["delta_migliore"] = mostra["delta_migliore"].map(lambda x: f"{x:.3f}")
-        mostra = mostra.rename(columns={
-            "sci": "Sci",
-            "prove": "N prove",
-            "tempo_medio": "Tempo medio (s)",
-            "deviazione_standard": "SD (s)",
-            "miglior_tempo": "Miglior tempo (s)",
-            "delta_migliore": "Δ migliore (s)",
-        })
-
-        st.markdown("### Riepilogo sci")
-        st.dataframe(
-            mostra[[
-                "Sci", "N prove", "Tempo medio (s)", "SD (s)",
-                "Miglior tempo (s)", "Δ migliore (s)"
-            ]],
-            use_container_width=True,
-            hide_index=True,
-        )
-
-        st.markdown("### Sci più simili")
-        tolleranza = st.number_input(
-            "Tolleranza massima tra i tempi medi (s)",
-            min_value=0.001,
-            value=0.100,
-            step=0.010,
-            format="%.3f",
-        )
-
-        coppie = coppie_simili_zero_test(sessione_id, float(tolleranza))
-        if coppie.empty:
-            st.warning("Nessuna coppia rientra nella tolleranza selezionata.")
+        st.markdown("### Ultime sessioni")
+        if sessioni.empty:
+            st.info("Nessuna sessione registrata. Crea la prima sessione dal menu laterale.")
         else:
-            coppie_mostra = coppie.copy()
-            for col in ["Tempo A", "Tempo B", "Δ medio (s)"]:
-                coppie_mostra[col] = coppie_mostra[col].map(lambda x: f"{x:.3f}")
+            mostra = sessioni[
+                ["data", "ora", "luogo", "temperatura_aria", "temperatura_neve",
+                 "tipo_neve", "condizione_pista"]
+            ].head(10).copy()
+            mostra.columns = [
+                "Data", "Ora", "Luogo", "T aria °C", "T neve °C",
+                "Tipo neve", "Pista"
+            ]
+            st.dataframe(mostra, use_container_width=True, hide_index=True)
+
+
+    elif pagina == "Nuova sessione":
+        mostra_banner(
+            "Sessioni di test",
+            "Registra una giornata e le condizioni ambientali una sola volta.",
+        )
+
+        with st.form("form_sessione", clear_on_submit=True):
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                data_sessione = st.date_input("Data", value=date.today())
+                ora_sessione = st.time_input("Ora")
+                luogo = st.text_input("Luogo *")
+            with c2:
+                temperatura_aria = st.number_input(
+                    "Temperatura aria (°C)", value=0.0, step=0.5
+                )
+                temperatura_neve = st.number_input(
+                    "Temperatura neve (°C)", value=0.0, step=0.5
+                )
+                umidita = st.number_input(
+                    "Umidità relativa (%)", min_value=0.0, max_value=100.0,
+                    value=70.0, step=1.0
+                )
+            with c3:
+                tipo_neve = st.selectbox(
+                    "Tipo neve",
+                    [
+                        "Nuova", "Vecchia", "Trasformata", "Artificiale",
+                        "Mista", "Bagnata", "Ghiacciata", "Altro"
+                    ],
+                )
+                condizione_pista = st.selectbox(
+                    "Condizione pista",
+                    [
+                        "Compatta", "Morbida", "Dura", "Ghiacciata",
+                        "Lucida", "Sporca", "Variabile", "Altro"
+                    ],
+                )
+
+            note = st.text_area("Note")
+            salva = st.form_submit_button(
+                "Salva sessione", type="primary", use_container_width=True
+            )
+
+            if salva:
+                if not luogo.strip():
+                    st.error("Inserisci il luogo.")
+                else:
+                    esegui("""
+                        INSERT INTO sessioni (
+                            data, ora, luogo, temperatura_aria, temperatura_neve,
+                            umidita, tipo_neve, condizione_pista, note, creato_il
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        data_sessione.isoformat(),
+                        ora_sessione.strftime("%H:%M"),
+                        luogo.strip(),
+                        float(temperatura_aria),
+                        float(temperatura_neve),
+                        float(umidita),
+                        tipo_neve,
+                        condizione_pista,
+                        note.strip(),
+                        datetime.now().isoformat(timespec="seconds"),
+                    ))
+                    st.success("Sessione salvata.")
+                    st.rerun()
+
+        st.markdown("### Sessioni registrate")
+        df = sessioni_df()
+        if not df.empty:
             st.dataframe(
-                coppie_mostra,
+                df[[
+                    "id", "data", "ora", "luogo", "temperatura_aria",
+                    "temperatura_neve", "umidita", "tipo_neve",
+                    "condizione_pista", "note"
+                ]],
                 use_container_width=True,
                 hide_index=True,
             )
 
 
-elif pagina in ["Test prodotti scorrimento", "Test rigature manuali"]:
-    categoria = "Scorrimento" if pagina == "Test prodotti scorrimento" else "Rigatura"
-    titolo_pagina = (
-        "Test prodotti scorrimento"
-        if categoria == "Scorrimento"
-        else "Test rigature manuali"
-    )
-    mostra_banner(
-        titolo_pagina,
-        "Registra confronti ad aste, parallel o fotocellule.",
-    )
-
-    sessioni = dizionario_sessioni()
-    sci = dizionario_sci()
-
-    if not sessioni:
-        st.warning("Crea prima una sessione.")
-        st.stop()
-    if len(sci) < 2:
-        st.warning("Inserisci almeno due sci nel catalogo.")
-        st.stop()
-
-    sessione_label = st.selectbox("Sessione", list(sessioni.keys()))
-    sessione_id = sessioni[sessione_label]
-
-    metodo = st.radio(
-        "Metodo",
-        ["Aste", "Parallel", "Fotocellule"],
-        horizontal=True,
-    )
-
-    with st.form("form_materiali", clear_on_submit=True):
-        titolo = st.text_input(
-            "Titolo / identificativo test",
-            placeholder="es. Paraffina A vs B oppure rigatura R1 vs R2"
+    elif pagina == "Catalogo sci":
+        mostra_banner(
+            "Catalogo sci",
+            "Codifica gli sci una volta sola per riutilizzarli in tutti i test.",
         )
 
-        c1, c2 = st.columns(2)
-
-        with c1:
-            st.markdown("#### Preparazione A")
-            sci_a_label = st.selectbox("Sci A", list(sci.keys()))
-            label_a = "Prodotto A" if categoria == "Scorrimento" else "Rigatura A"
-            placeholder_a = "es. Paraffina X" if categoria == "Scorrimento" else "es. R1 / 1 mm lineare"
-            preparazione_a = st.text_input(label_a, placeholder=placeholder_a)
-
-        with c2:
-            st.markdown("#### Preparazione B")
-            sci_b_label = st.selectbox(
-                "Sci B",
-                list(sci.keys()),
-                index=1 if len(sci) > 1 else 0,
-            )
-            label_b = "Prodotto B" if categoria == "Scorrimento" else "Rigatura B"
-            placeholder_b = "es. Paraffina Y" if categoria == "Scorrimento" else "es. R2 / 2 mm lineare"
-            preparazione_b = st.text_input(label_b, placeholder=placeholder_b)
-
-        vincitore = None
-        vantaggio_aste = None
-        tempo_a = None
-        tempo_b = None
-        valutazione = None
-
-        if metodo == "Aste":
-            c3, c4 = st.columns(2)
+        with st.form("form_sci", clear_on_submit=True):
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+                codice = st.text_input("Codice sci *", placeholder="es. C01")
+            with c2:
+                marca = st.text_input("Marca")
             with c3:
-                vincitore = st.selectbox("Risultato", ["Pari", "A", "B"])
+                modello = st.text_input("Modello")
             with c4:
-                vantaggio_aste = st.number_input(
-                    "Vantaggio (aste)", min_value=0.0, value=0.0, step=0.25
-                )
-            valutazione = st.slider(
-                "Chiarezza del confronto",
-                min_value=1, max_value=5, value=3,
-                help="1 = differenza quasi impercettibile, 5 = differenza molto netta"
+                tecnica = st.selectbox("Tecnica", ["Skating", "Classico", "Entrambi"])
+
+            note = st.text_input("Note")
+            salva_sci = st.form_submit_button(
+                "Aggiungi sci", type="primary", use_container_width=True
             )
 
-        elif metodo == "Parallel":
-            vincitore = st.selectbox(
-                "Risultato parallel",
-                ["Pari", "A", "B"]
-            )
-            valutazione = st.slider(
-                "Chiarezza del confronto",
-                min_value=1, max_value=5, value=3
-            )
+            if salva_sci:
+                if not codice.strip():
+                    st.error("Inserisci il codice dello sci.")
+                else:
+                    try:
+                        esegui("""
+                            INSERT INTO sci (codice, marca, modello, tecnica, note)
+                            VALUES (?, ?, ?, ?, ?)
+                        """, (
+                            codice.strip(), marca.strip(), modello.strip(),
+                            tecnica, note.strip()
+                        ))
+                        st.success("Sci aggiunto.")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Impossibile salvare: {exc}")
 
-        else:
-            c3, c4 = st.columns(2)
-            with c3:
-                tempo_a = st.number_input(
-                    "Tempo A (s)", min_value=0.001,
-                    value=20.000, step=0.001, format="%.3f"
-                )
-            with c4:
-                tempo_b = st.number_input(
-                    "Tempo B (s)", min_value=0.001,
-                    value=20.000, step=0.001, format="%.3f"
-                )
-            if tempo_a < tempo_b:
-                vincitore = "A"
-            elif tempo_b < tempo_a:
-                vincitore = "B"
-            else:
-                vincitore = "Pari"
-            st.caption(f"Vincitore calcolato: **{vincitore}**")
-
-        note = st.text_area(
-            "Note",
-            placeholder="Sensazioni, tratto di pista, velocità, eventuali anomalie..."
-        )
-
-        salva_test = st.form_submit_button(
-            "Salva confronto", type="primary", use_container_width=True
-        )
-
-        if salva_test:
-            if sci[sci_a_label] == sci[sci_b_label]:
-                st.error("Seleziona due sci diversi.")
-            else:
-                esegui("""
-                    INSERT INTO test_materiali (
-                        sessione_id, categoria, metodo, titolo,
-                        sci_a_id, preparazione_a,
-                        sci_b_id, preparazione_b,
-                        vincitore, vantaggio_aste,
-                        tempo_a, tempo_b,
-                        valutazione, note, creato_il
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    int(sessione_id),
-                    categoria,
-                    metodo,
-                    titolo.strip(),
-                    int(sci[sci_a_label]),
-                    preparazione_a.strip(),
-                    int(sci[sci_b_label]),
-                    preparazione_b.strip(),
-                    vincitore,
-                    float(vantaggio_aste) if vantaggio_aste is not None else None,
-                    float(tempo_a) if tempo_a is not None else None,
-                    float(tempo_b) if tempo_b is not None else None,
-                    int(valutazione) if valutazione is not None else None,
-                    note.strip(),
-                    datetime.now().isoformat(timespec="seconds"),
-                ))
-                st.success("Confronto salvato.")
-                st.rerun()
-
-    st.markdown("### Test della sessione")
-    df = leggi_df("""
-        SELECT
-            t.id,
-            t.categoria,
-            t.metodo,
-            t.titolo,
-            sa.codice AS sci_a,
-            t.preparazione_a,
-            sb.codice AS sci_b,
-            t.preparazione_b,
-            t.vincitore,
-            t.vantaggio_aste,
-            t.tempo_a,
-            t.tempo_b,
-            t.valutazione,
-            t.note
-        FROM test_materiali t
-        LEFT JOIN sci sa ON sa.id = t.sci_a_id
-        LEFT JOIN sci sb ON sb.id = t.sci_b_id
-        WHERE t.sessione_id = ?
-        ORDER BY t.id DESC
-    """, (int(sessione_id),))
-
-    if df.empty:
-        st.info("Nessun confronto registrato.")
-    else:
-        st.dataframe(df, use_container_width=True, hide_index=True)
-
-
-elif pagina == "Test scioline di tenuta":
-    mostra_banner(
-        "Scioline di tenuta",
-        "Valutazione a sensazione: tenuta, scorrevolezza, facilità di calcio e durata.",
-    )
-
-    sessioni = dizionario_sessioni()
-    sci = dizionario_sci()
-
-    if not sessioni:
-        st.warning("Crea prima una sessione.")
-        st.stop()
-
-    sessione_label = st.selectbox("Sessione", list(sessioni.keys()))
-    sessione_id = sessioni[sessione_label]
-
-    with st.form("form_tenuta", clear_on_submit=True):
-        c1, c2 = st.columns(2)
-
-        with c1:
-            sci_label = st.selectbox(
-                "Sci",
-                ["—"] + list(sci.keys())
-            )
-            preparazione = st.text_area(
-                "Preparazione / sciolina *",
-                placeholder="es. 2 mani stick X + copertura Y"
-            )
-
-        with c2:
-            tenuta = st.slider("Tenuta", 1, 5, 3)
-            scorrevolezza = st.slider("Scorrevolezza", 1, 5, 3)
-            facilita_calcio = st.slider("Facilità di calcio", 1, 5, 3)
-            durata = st.slider("Durata / stabilità", 1, 5, 3)
-
-        note = st.text_area(
-            "Note",
-            placeholder="Sensazione in salita, binario, neve, eventuale zoccolo..."
-        )
-
-        salva_tenuta = st.form_submit_button(
-            "Salva test tenuta", type="primary", use_container_width=True
-        )
-
-        if salva_tenuta:
-            if not preparazione.strip():
-                st.error("Inserisci la preparazione.")
-            else:
-                sci_id = None if sci_label == "—" else int(sci[sci_label])
-                esegui("""
-                    INSERT INTO test_tenuta (
-                        sessione_id, sci_id, preparazione,
-                        tenuta, scorrevolezza, facilita_calcio, durata,
-                        note, creato_il
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    int(sessione_id),
-                    sci_id,
-                    preparazione.strip(),
-                    int(tenuta),
-                    int(scorrevolezza),
-                    int(facilita_calcio),
-                    int(durata),
-                    note.strip(),
-                    datetime.now().isoformat(timespec="seconds"),
-                ))
-                st.success("Test tenuta salvato.")
-                st.rerun()
-
-    df = leggi_df("""
-        SELECT
-            t.id,
-            COALESCE(s.codice, '—') AS sci,
-            t.preparazione,
-            t.tenuta,
-            t.scorrevolezza,
-            t.facilita_calcio,
-            t.durata,
-            t.note
-        FROM test_tenuta t
-        LEFT JOIN sci s ON s.id = t.sci_id
-        WHERE t.sessione_id = ?
-        ORDER BY t.id DESC
-    """, (int(sessione_id),))
-
-    st.markdown("### Test della sessione")
-    if df.empty:
-        st.info("Nessun test di tenuta registrato.")
-    else:
-        st.dataframe(df, use_container_width=True, hide_index=True)
-
-
-elif pagina == "Prodotti di scorrimento":
-    pagina_catalogo_prodotti(
-        "scorrimento",
-        "Prodotti di scorrimento",
-        "Catalogo di paraffine, liquidi, polveri e altri prodotti da scorrimento.",
-        ["Paraffina", "Liquido", "Polvere", "Top finish", "Additivo", "Altro"],
-    )
-
-
-elif pagina == "Scioline di tenuta":
-    pagina_catalogo_prodotti(
-        "tenuta",
-        "Scioline di tenuta",
-        "Catalogo di stick, klister, coperture e prodotti per la tenuta.",
-        ["Stick", "Klister", "Copertura", "Base", "Spray", "Altro"],
-    )
-
-
-elif pagina == "Rigature manuali":
-    pagina_catalogo_prodotti(
-        "rigatura",
-        "Rigature manuali",
-        "Catalogo degli utensili e delle configurazioni di rigatura manuale.",
-        ["Lineare", "Incrociata", "V", "Rullo", "Utensile", "Altro"],
-    )
-
-
-elif pagina == "Storico":
-    mostra_banner(
-        "Storico test",
-        "Consulta in un unico punto zero test, scorrimento, rigature e tenuta.",
-    )
-
-    tab1, tab2, tab3 = st.tabs(
-        ["Zero test", "Scorrimento / Rigature", "Tenuta"]
-    )
-
-    with tab1:
-        df = leggi_df("""
-            SELECT
-                se.data,
-                se.luogo,
-                s.codice AS sci,
-                z.prova_numero,
-                z.tempo_sec,
-                se.temperatura_aria,
-                se.temperatura_neve,
-                se.tipo_neve,
-                se.condizione_pista,
-                z.note
-            FROM zero_test z
-            JOIN sessioni se ON se.id = z.sessione_id
-            JOIN sci s ON s.id = z.sci_id
-            ORDER BY se.data DESC, z.id DESC
-        """)
+        df = sci_df()
         if df.empty:
-            st.info("Archivio vuoto.")
+            st.info("Il catalogo sci è vuoto.")
         else:
-            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.dataframe(
+                df[["id", "codice", "marca", "modello", "tecnica", "note"]],
+                use_container_width=True,
+                hide_index=True,
+            )
 
-    with tab2:
+
+    elif pagina == "Zero test":
+        mostra_banner(
+            "Zero test",
+            "Fotocellule: individua gli sci più simili prima dei test di prodotti o rigature.",
+        )
+
+        sessioni = dizionario_sessioni()
+        sci = dizionario_sci()
+
+        if not sessioni:
+            st.warning("Crea prima una sessione dalla Dashboard.")
+            if st.button("Vai a Nuova sessione", type="primary"):
+                cambia_pagina("Nuova sessione")
+            st.stop()
+
+        if len(sci) < 2:
+            st.warning("Inserisci almeno due sci nel catalogo.")
+            if st.button("Vai al Catalogo sci", type="primary"):
+                cambia_pagina("Catalogo sci")
+            st.stop()
+
+        sessione_label = st.selectbox("Sessione", list(sessioni.keys()))
+        sessione_id = sessioni[sessione_label]
+
+        with st.form("form_zero_test", clear_on_submit=True):
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                sci_label = st.selectbox("Sci", list(sci.keys()))
+            with c2:
+                prova_numero = st.number_input(
+                    "Numero prova", min_value=1, value=1, step=1
+                )
+            with c3:
+                tempo_sec = st.number_input(
+                    "Tempo (s)", min_value=0.001, value=20.000,
+                    step=0.001, format="%.3f"
+                )
+
+            note = st.text_input("Note")
+            salva_zero = st.form_submit_button(
+                "Salva prova", type="primary", use_container_width=True
+            )
+
+            if salva_zero:
+                esegui("""
+                    INSERT INTO zero_test (
+                        sessione_id, sci_id, prova_numero, tempo_sec, note
+                    )
+                    VALUES (?, ?, ?, ?, ?)
+                """, (
+                    int(sessione_id),
+                    int(sci[sci_label]),
+                    int(prova_numero),
+                    float(tempo_sec),
+                    note.strip(),
+                ))
+                st.success("Prova zero test salvata.")
+                st.rerun()
+
+        st.markdown("### Risultati")
+        risultati = zero_test_sessione(sessione_id)
+        if risultati.empty:
+            st.info("Non ci sono ancora prove per questa sessione.")
+        else:
+            st.dataframe(
+                risultati[["sci", "prova_numero", "tempo_sec", "note"]],
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            riepilogo = riepilogo_zero_test(sessione_id)
+            mostra = riepilogo.copy()
+            mostra["tempo_medio"] = mostra["tempo_medio"].map(lambda x: f"{x:.3f}")
+            mostra["deviazione_standard"] = mostra["deviazione_standard"].map(lambda x: f"{x:.3f}")
+            mostra["miglior_tempo"] = mostra["miglior_tempo"].map(lambda x: f"{x:.3f}")
+            mostra["delta_migliore"] = mostra["delta_migliore"].map(lambda x: f"{x:.3f}")
+            mostra = mostra.rename(columns={
+                "sci": "Sci",
+                "prove": "N prove",
+                "tempo_medio": "Tempo medio (s)",
+                "deviazione_standard": "SD (s)",
+                "miglior_tempo": "Miglior tempo (s)",
+                "delta_migliore": "Δ migliore (s)",
+            })
+
+            st.markdown("### Riepilogo sci")
+            st.dataframe(
+                mostra[[
+                    "Sci", "N prove", "Tempo medio (s)", "SD (s)",
+                    "Miglior tempo (s)", "Δ migliore (s)"
+                ]],
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            st.markdown("### Sci più simili")
+            tolleranza = st.number_input(
+                "Tolleranza massima tra i tempi medi (s)",
+                min_value=0.001,
+                value=0.100,
+                step=0.010,
+                format="%.3f",
+            )
+
+            coppie = coppie_simili_zero_test(sessione_id, float(tolleranza))
+            if coppie.empty:
+                st.warning("Nessuna coppia rientra nella tolleranza selezionata.")
+            else:
+                coppie_mostra = coppie.copy()
+                for col in ["Tempo A", "Tempo B", "Δ medio (s)"]:
+                    coppie_mostra[col] = coppie_mostra[col].map(lambda x: f"{x:.3f}")
+                st.dataframe(
+                    coppie_mostra,
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+
+    elif pagina in ["Test prodotti scorrimento", "Test rigature manuali"]:
+        categoria = "Scorrimento" if pagina == "Test prodotti scorrimento" else "Rigatura"
+        titolo_pagina = (
+            "Test prodotti scorrimento"
+            if categoria == "Scorrimento"
+            else "Test rigature manuali"
+        )
+        mostra_banner(
+            titolo_pagina,
+            "Registra confronti ad aste, parallel o fotocellule.",
+        )
+
+        sessioni = dizionario_sessioni()
+        sci = dizionario_sci()
+
+        if not sessioni:
+            st.warning("Crea prima una sessione.")
+            st.stop()
+        if len(sci) < 2:
+            st.warning("Inserisci almeno due sci nel catalogo.")
+            st.stop()
+
+        sessione_label = st.selectbox("Sessione", list(sessioni.keys()))
+        sessione_id = sessioni[sessione_label]
+
+        metodo = st.radio(
+            "Metodo",
+            ["Aste", "Parallel", "Fotocellule"],
+            horizontal=True,
+        )
+
+        with st.form("form_materiali", clear_on_submit=True):
+            titolo = st.text_input(
+                "Titolo / identificativo test",
+                placeholder="es. Paraffina A vs B oppure rigatura R1 vs R2"
+            )
+
+            c1, c2 = st.columns(2)
+
+            with c1:
+                st.markdown("#### Preparazione A")
+                sci_a_label = st.selectbox("Sci A", list(sci.keys()))
+                label_a = "Prodotto A" if categoria == "Scorrimento" else "Rigatura A"
+                placeholder_a = "es. Paraffina X" if categoria == "Scorrimento" else "es. R1 / 1 mm lineare"
+                preparazione_a = st.text_input(label_a, placeholder=placeholder_a)
+
+            with c2:
+                st.markdown("#### Preparazione B")
+                sci_b_label = st.selectbox(
+                    "Sci B",
+                    list(sci.keys()),
+                    index=1 if len(sci) > 1 else 0,
+                )
+                label_b = "Prodotto B" if categoria == "Scorrimento" else "Rigatura B"
+                placeholder_b = "es. Paraffina Y" if categoria == "Scorrimento" else "es. R2 / 2 mm lineare"
+                preparazione_b = st.text_input(label_b, placeholder=placeholder_b)
+
+            vincitore = None
+            vantaggio_aste = None
+            tempo_a = None
+            tempo_b = None
+            valutazione = None
+
+            if metodo == "Aste":
+                c3, c4 = st.columns(2)
+                with c3:
+                    vincitore = st.selectbox("Risultato", ["Pari", "A", "B"])
+                with c4:
+                    vantaggio_aste = st.number_input(
+                        "Vantaggio (aste)", min_value=0.0, value=0.0, step=0.25
+                    )
+                valutazione = st.slider(
+                    "Chiarezza del confronto",
+                    min_value=1, max_value=5, value=3,
+                    help="1 = differenza quasi impercettibile, 5 = differenza molto netta"
+                )
+
+            elif metodo == "Parallel":
+                vincitore = st.selectbox(
+                    "Risultato parallel",
+                    ["Pari", "A", "B"]
+                )
+                valutazione = st.slider(
+                    "Chiarezza del confronto",
+                    min_value=1, max_value=5, value=3
+                )
+
+            else:
+                c3, c4 = st.columns(2)
+                with c3:
+                    tempo_a = st.number_input(
+                        "Tempo A (s)", min_value=0.001,
+                        value=20.000, step=0.001, format="%.3f"
+                    )
+                with c4:
+                    tempo_b = st.number_input(
+                        "Tempo B (s)", min_value=0.001,
+                        value=20.000, step=0.001, format="%.3f"
+                    )
+                if tempo_a < tempo_b:
+                    vincitore = "A"
+                elif tempo_b < tempo_a:
+                    vincitore = "B"
+                else:
+                    vincitore = "Pari"
+                st.caption(f"Vincitore calcolato: **{vincitore}**")
+
+            note = st.text_area(
+                "Note",
+                placeholder="Sensazioni, tratto di pista, velocità, eventuali anomalie..."
+            )
+
+            salva_test = st.form_submit_button(
+                "Salva confronto", type="primary", use_container_width=True
+            )
+
+            if salva_test:
+                if sci[sci_a_label] == sci[sci_b_label]:
+                    st.error("Seleziona due sci diversi.")
+                else:
+                    esegui("""
+                        INSERT INTO test_materiali (
+                            sessione_id, categoria, metodo, titolo,
+                            sci_a_id, preparazione_a,
+                            sci_b_id, preparazione_b,
+                            vincitore, vantaggio_aste,
+                            tempo_a, tempo_b,
+                            valutazione, note, creato_il
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        int(sessione_id),
+                        categoria,
+                        metodo,
+                        titolo.strip(),
+                        int(sci[sci_a_label]),
+                        preparazione_a.strip(),
+                        int(sci[sci_b_label]),
+                        preparazione_b.strip(),
+                        vincitore,
+                        float(vantaggio_aste) if vantaggio_aste is not None else None,
+                        float(tempo_a) if tempo_a is not None else None,
+                        float(tempo_b) if tempo_b is not None else None,
+                        int(valutazione) if valutazione is not None else None,
+                        note.strip(),
+                        datetime.now().isoformat(timespec="seconds"),
+                    ))
+                    st.success("Confronto salvato.")
+                    st.rerun()
+
+        st.markdown("### Test della sessione")
         df = leggi_df("""
             SELECT
-                se.data,
-                se.luogo,
+                t.id,
                 t.categoria,
                 t.metodo,
                 t.titolo,
@@ -1426,81 +1318,265 @@ elif pagina == "Storico":
                 t.tempo_a,
                 t.tempo_b,
                 t.valutazione,
-                se.temperatura_aria,
-                se.temperatura_neve,
-                se.tipo_neve,
-                se.condizione_pista,
                 t.note
             FROM test_materiali t
-            JOIN sessioni se ON se.id = t.sessione_id
             LEFT JOIN sci sa ON sa.id = t.sci_a_id
             LEFT JOIN sci sb ON sb.id = t.sci_b_id
-            ORDER BY se.data DESC, t.id DESC
-        """)
+            WHERE t.sessione_id = ?
+            ORDER BY t.id DESC
+        """, (int(sessione_id),))
+
         if df.empty:
-            st.info("Archivio vuoto.")
+            st.info("Nessun confronto registrato.")
         else:
             st.dataframe(df, use_container_width=True, hide_index=True)
 
-    with tab3:
+
+    elif pagina == "Test scioline di tenuta":
+        mostra_banner(
+            "Scioline di tenuta",
+            "Valutazione a sensazione: tenuta, scorrevolezza, facilità di calcio e durata.",
+        )
+
+        sessioni = dizionario_sessioni()
+        sci = dizionario_sci()
+
+        if not sessioni:
+            st.warning("Crea prima una sessione.")
+            st.stop()
+
+        sessione_label = st.selectbox("Sessione", list(sessioni.keys()))
+        sessione_id = sessioni[sessione_label]
+
+        with st.form("form_tenuta", clear_on_submit=True):
+            c1, c2 = st.columns(2)
+
+            with c1:
+                sci_label = st.selectbox(
+                    "Sci",
+                    ["—"] + list(sci.keys())
+                )
+                preparazione = st.text_area(
+                    "Preparazione / sciolina *",
+                    placeholder="es. 2 mani stick X + copertura Y"
+                )
+
+            with c2:
+                tenuta = st.slider("Tenuta", 1, 5, 3)
+                scorrevolezza = st.slider("Scorrevolezza", 1, 5, 3)
+                facilita_calcio = st.slider("Facilità di calcio", 1, 5, 3)
+                durata = st.slider("Durata / stabilità", 1, 5, 3)
+
+            note = st.text_area(
+                "Note",
+                placeholder="Sensazione in salita, binario, neve, eventuale zoccolo..."
+            )
+
+            salva_tenuta = st.form_submit_button(
+                "Salva test tenuta", type="primary", use_container_width=True
+            )
+
+            if salva_tenuta:
+                if not preparazione.strip():
+                    st.error("Inserisci la preparazione.")
+                else:
+                    sci_id = None if sci_label == "—" else int(sci[sci_label])
+                    esegui("""
+                        INSERT INTO test_tenuta (
+                            sessione_id, sci_id, preparazione,
+                            tenuta, scorrevolezza, facilita_calcio, durata,
+                            note, creato_il
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        int(sessione_id),
+                        sci_id,
+                        preparazione.strip(),
+                        int(tenuta),
+                        int(scorrevolezza),
+                        int(facilita_calcio),
+                        int(durata),
+                        note.strip(),
+                        datetime.now().isoformat(timespec="seconds"),
+                    ))
+                    st.success("Test tenuta salvato.")
+                    st.rerun()
+
         df = leggi_df("""
             SELECT
-                se.data,
-                se.luogo,
+                t.id,
                 COALESCE(s.codice, '—') AS sci,
                 t.preparazione,
                 t.tenuta,
                 t.scorrevolezza,
                 t.facilita_calcio,
                 t.durata,
-                se.temperatura_aria,
-                se.temperatura_neve,
-                se.tipo_neve,
-                se.condizione_pista,
                 t.note
             FROM test_tenuta t
-            JOIN sessioni se ON se.id = t.sessione_id
             LEFT JOIN sci s ON s.id = t.sci_id
-            ORDER BY se.data DESC, t.id DESC
-        """)
+            WHERE t.sessione_id = ?
+            ORDER BY t.id DESC
+        """, (int(sessione_id),))
+
+        st.markdown("### Test della sessione")
         if df.empty:
-            st.info("Archivio vuoto.")
+            st.info("Nessun test di tenuta registrato.")
         else:
             st.dataframe(df, use_container_width=True, hide_index=True)
 
 
-elif pagina == "Backup":
-    mostra_banner(
-        "Backup",
-        "Esporta l'intero archivio in JSON.",
-    )
+    elif pagina == "Prodotti di scorrimento":
+        pagina_catalogo_prodotti(
+            "scorrimento",
+            "Prodotti di scorrimento",
+            "Catalogo di paraffine, liquidi, polveri e altri prodotti da scorrimento.",
+            ["Paraffina", "Liquido", "Polvere", "Top finish", "Additivo", "Altro"],
+        )
 
-    dati = {}
-    for tabella in ["sessioni", "sci", "zero_test", "test_materiali", "test_tenuta", "catalogo_prodotti"]:
-        dati[tabella] = leggi_df(f"SELECT * FROM {tabella}").to_dict("records")
 
-    payload = json.dumps(
-        {
-            "app": "SnowDataPro",
-            "versione_database": VERSIONE_DATABASE_APP,
-            "esportato_il": datetime.now().isoformat(timespec="seconds"),
-            "dati": dati,
-        },
-        ensure_ascii=False,
-        indent=2,
-        default=str,
-    )
+    elif pagina == "Scioline di tenuta":
+        pagina_catalogo_prodotti(
+            "tenuta",
+            "Scioline di tenuta",
+            "Catalogo di stick, klister, coperture e prodotti per la tenuta.",
+            ["Stick", "Klister", "Copertura", "Base", "Spray", "Altro"],
+        )
 
-    st.download_button(
-        "Scarica backup JSON",
-        data=payload,
-        file_name=f"snowdatapro_backup_{date.today().isoformat()}.json",
-        mime="application/json",
-        type="primary",
-        use_container_width=True,
-    )
 
-    st.info(
-        "In questa prima versione il backup è solo in esportazione. "
-        "L'importazione verrà aggiunta dopo aver stabilizzato la struttura del database."
-    )
+    elif pagina == "Rigature manuali":
+        pagina_catalogo_prodotti(
+            "rigatura",
+            "Rigature manuali",
+            "Catalogo degli utensili e delle configurazioni di rigatura manuale.",
+            ["Lineare", "Incrociata", "V", "Rullo", "Utensile", "Altro"],
+        )
+
+
+    elif pagina == "Storico":
+        mostra_banner(
+            "Storico test",
+            "Consulta in un unico punto zero test, scorrimento, rigature e tenuta.",
+        )
+
+        tab1, tab2, tab3 = st.tabs(
+            ["Zero test", "Scorrimento / Rigature", "Tenuta"]
+        )
+
+        with tab1:
+            df = leggi_df("""
+                SELECT
+                    se.data,
+                    se.luogo,
+                    s.codice AS sci,
+                    z.prova_numero,
+                    z.tempo_sec,
+                    se.temperatura_aria,
+                    se.temperatura_neve,
+                    se.tipo_neve,
+                    se.condizione_pista,
+                    z.note
+                FROM zero_test z
+                JOIN sessioni se ON se.id = z.sessione_id
+                JOIN sci s ON s.id = z.sci_id
+                ORDER BY se.data DESC, z.id DESC
+            """)
+            if df.empty:
+                st.info("Archivio vuoto.")
+            else:
+                st.dataframe(df, use_container_width=True, hide_index=True)
+
+        with tab2:
+            df = leggi_df("""
+                SELECT
+                    se.data,
+                    se.luogo,
+                    t.categoria,
+                    t.metodo,
+                    t.titolo,
+                    sa.codice AS sci_a,
+                    t.preparazione_a,
+                    sb.codice AS sci_b,
+                    t.preparazione_b,
+                    t.vincitore,
+                    t.vantaggio_aste,
+                    t.tempo_a,
+                    t.tempo_b,
+                    t.valutazione,
+                    se.temperatura_aria,
+                    se.temperatura_neve,
+                    se.tipo_neve,
+                    se.condizione_pista,
+                    t.note
+                FROM test_materiali t
+                JOIN sessioni se ON se.id = t.sessione_id
+                LEFT JOIN sci sa ON sa.id = t.sci_a_id
+                LEFT JOIN sci sb ON sb.id = t.sci_b_id
+                ORDER BY se.data DESC, t.id DESC
+            """)
+            if df.empty:
+                st.info("Archivio vuoto.")
+            else:
+                st.dataframe(df, use_container_width=True, hide_index=True)
+
+        with tab3:
+            df = leggi_df("""
+                SELECT
+                    se.data,
+                    se.luogo,
+                    COALESCE(s.codice, '—') AS sci,
+                    t.preparazione,
+                    t.tenuta,
+                    t.scorrevolezza,
+                    t.facilita_calcio,
+                    t.durata,
+                    se.temperatura_aria,
+                    se.temperatura_neve,
+                    se.tipo_neve,
+                    se.condizione_pista,
+                    t.note
+                FROM test_tenuta t
+                JOIN sessioni se ON se.id = t.sessione_id
+                LEFT JOIN sci s ON s.id = t.sci_id
+                ORDER BY se.data DESC, t.id DESC
+            """)
+            if df.empty:
+                st.info("Archivio vuoto.")
+            else:
+                st.dataframe(df, use_container_width=True, hide_index=True)
+
+
+    elif pagina == "Backup":
+        mostra_banner(
+            "Backup",
+            "Esporta l'intero archivio in JSON.",
+        )
+
+        dati = {}
+        for tabella in ["sessioni", "sci", "zero_test", "test_materiali", "test_tenuta", "catalogo_prodotti"]:
+            dati[tabella] = leggi_df(f"SELECT * FROM {tabella}").to_dict("records")
+
+        payload = json.dumps(
+            {
+                "app": "SnowDataPro",
+                "versione_database": VERSIONE_DATABASE_APP,
+                "esportato_il": datetime.now().isoformat(timespec="seconds"),
+                "dati": dati,
+            },
+            ensure_ascii=False,
+            indent=2,
+            default=str,
+        )
+
+        st.download_button(
+            "Scarica backup JSON",
+            data=payload,
+            file_name=f"snowdatapro_backup_{date.today().isoformat()}.json",
+            mime="application/json",
+            type="primary",
+            use_container_width=True,
+        )
+
+        st.info(
+            "In questa prima versione il backup è solo in esportazione. "
+            "L'importazione verrà aggiunta dopo aver stabilizzato la struttura del database."
+        )
