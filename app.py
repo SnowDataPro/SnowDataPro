@@ -213,6 +213,11 @@ st.markdown(textwrap.dedent("""
         display: none !important;
     }
 
+    html, body {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
     [data-testid="stAppViewContainer"],
     [data-testid="stMain"],
     [data-testid="stMainBlockContainer"] {
@@ -220,9 +225,11 @@ st.markdown(textwrap.dedent("""
         margin-top: 0 !important;
     }
 
+    /* Lo scroll resta quello nativo della pagina Streamlit.
+       Non viene creato nessun secondo viewport interno. */
     [data-testid="stMain"] {
-        overflow-y: auto !important;
-        height: 100vh !important;
+        height: auto !important;
+        min-height: 100vh !important;
     }
 
     .block-container {
@@ -501,7 +508,7 @@ def mostra_banner_fotografico():
 
     banner_html = (
         '<div class="snowdata-sticky-banner" '
-        'style="width:auto;height:255px;margin-left:-2.4rem;'
+        'style="width:auto;height:240px;margin-left:-2.4rem;'
         'margin-right:-2.4rem;border-radius:0;overflow:hidden;'
         'margin-bottom:0;margin-top:0;position:relative;'
         'z-index:1;background:#dce7ef;">'
@@ -752,31 +759,37 @@ def cambia_pagina(nome):
     st.rerun()
 
 
-st.sidebar.markdown(
-    textwrap.dedent("""
-    <div style="padding:32px 18px 34px 18px;text-align:center;">
+logo_sidebar_path = os.path.join(BASE_DIR, "snowdatapro_logo_sidebar.png")
+if os.path.exists(logo_sidebar_path):
+    with open(logo_sidebar_path, "rb") as file:
+        logo_sidebar_b64 = base64.b64encode(file.read()).decode()
+
+    st.sidebar.markdown(
+        f"""
         <div style="
-            font-size:1.40rem;
-            font-weight:800;
-            letter-spacing:.10em;
-            color:#7e8a90;
-            line-height:1.15;
-        ">SNOWDATAPRO</div>
-        <div style="
-            width:52px;
-            height:3px;
-            background:#00a7e1;
-            margin:15px auto 12px auto;
-        "></div>
-        <div style="
-            font-size:.78rem;
-            letter-spacing:.08em;
-            color:#7e8a90;
-        ">MATERIAL TESTING & SNOW DATA</div>
-    </div>
-    """).strip(),
-    unsafe_allow_html=True,
-)
+            padding:28px 24px 34px 24px;
+            text-align:center;
+        ">
+            <img
+                src="data:image/png;base64,{logo_sidebar_b64}"
+                alt="SnowDataPro"
+                style="
+                    width:100%;
+                    max-width:270px;
+                    height:auto;
+                    display:block;
+                    margin:0 auto;
+                "
+            >
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+else:
+    st.sidebar.markdown(
+        "<div style='height:32px;'></div>",
+        unsafe_allow_html=True,
+    )
 
 if st.sidebar.button(
     "Dashboard",
