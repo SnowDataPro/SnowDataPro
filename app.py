@@ -787,7 +787,7 @@ def cambia_pagina(nome):
     st.rerun()
 
 
-logo_sidebar_path = os.path.join(BASE_DIR, "snowdatapro_logo_sidebar_clean.png")
+logo_sidebar_path = os.path.join(BASE_DIR, "snowdatapro_logo_transparent.png")
 if os.path.exists(logo_sidebar_path):
     with open(logo_sidebar_path, "rb") as file:
         logo_sidebar_b64 = base64.b64encode(file.read()).decode()
@@ -795,29 +795,20 @@ if os.path.exists(logo_sidebar_path):
     st.sidebar.markdown(
         f"""
         <div style="
-            padding:28px 24px 34px 24px;
+            padding:24px 18px 24px 18px;
             text-align:center;
         ">
-            <div style="
-                max-width:270px;
-                margin:0 auto;
-                background:#ffffff;
-                border-radius:10px;
-                padding:6px;
-                box-shadow:0 2px 10px rgba(0,0,0,.14);
-                overflow:hidden;
-            ">
-                <img
-                    src="data:image/png;base64,{logo_sidebar_b64}"
-                    alt="SnowDataPro"
-                    style="
-                        width:100%;
-                        height:auto;
-                        display:block;
-                        margin:0 auto;
-                    "
-                >
-            </div>
+            <img
+                src="data:image/png;base64,{logo_sidebar_b64}"
+                alt="SnowDataPro"
+                style="
+                    width:min(100%, 250px);
+                    height:auto;
+                    display:block;
+                    margin:0 auto;
+                    filter: drop-shadow(0 3px 10px rgba(0,0,0,.18));
+                "
+            >
         </div>
         """,
         unsafe_allow_html=True,
