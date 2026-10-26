@@ -1899,7 +1899,7 @@ st.markdown(
         border: 1px solid var(--border) !important;
         border-radius: var(--radius-medium) !important;
         padding: 0.9rem 0.95rem 0.8rem 0.95rem !important;
-        min-height: 365px !important;
+        min-height: 335px !important;
         box-shadow: var(--shadow-soft) !important;
     }
 
@@ -1960,6 +1960,32 @@ st.markdown(
         color: var(--text-light);
         font-size: 0.80rem;
         margin-bottom: 0.35rem;
+    }
+
+
+    .catalog-product-category {
+        min-height: 24px;
+        margin-bottom: 0.42rem;
+        color: var(--text-secondary);
+        font-size: 0.78rem;
+        font-weight: 700;
+        line-height: 1.2;
+        letter-spacing: 0.035em;
+        text-transform: uppercase;
+    }
+
+    div[class*="st-key-catalog_card_"] h3 {
+        min-height: 2.55rem !important;
+        display: flex !important;
+        align-items: flex-start !important;
+        font-size: 1.02rem !important;
+        line-height: 1.25 !important;
+        margin-top: 0.42rem !important;
+        margin-bottom: 0.42rem !important;
+    }
+
+    div[class*="st-key-catalog_card_"] [data-testid="stExpander"] {
+        margin-top: 0.55rem !important;
     }
 
     div[class*="st-key-catalog_card_"] h3 {
@@ -2740,6 +2766,23 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                     key=f"catalog_card_{categoria}_{prodotto_id}",
                     border=False,
                 ):
+                    # Ordine compatto della card:
+                    # categoria -> immagine -> marca + nome -> temperatura -> dettagli
+                    nome_prodotto = str(prodotto.get("nome") or "Prodotto").strip()
+                    marca_prodotto = str(prodotto.get("marca") or "").strip()
+                    tipo_prodotto = str(prodotto.get("tipo") or "").strip()
+
+                    if tipo_prodotto:
+                        st.markdown(
+                            f'<div class="catalog-product-category">{tipo_prodotto}</div>',
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        st.markdown(
+                            '<div class="catalog-product-category">&nbsp;</div>',
+                            unsafe_allow_html=True,
+                        )
+
                     foto_data = str(prodotto.get("foto_data") or "").strip()
                     if foto_data:
                         _mostra_foto_db(foto_data)
@@ -2749,14 +2792,11 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             unsafe_allow_html=True,
                         )
 
-                    nome_prodotto = str(prodotto.get("nome") or "Prodotto")
-                    st.markdown(f"### {nome_prodotto}")
-
-                    marca_prodotto = str(prodotto.get("marca") or "").strip()
-                    tipo_prodotto = str(prodotto.get("tipo") or "").strip()
-                    meta = " · ".join([x for x in [marca_prodotto, tipo_prodotto] if x])
-                    if meta:
-                        st.caption(meta)
+                    if marca_prodotto:
+                        titolo_card = f"{marca_prodotto} - {nome_prodotto}"
+                    else:
+                        titolo_card = nome_prodotto
+                    st.markdown(f"### {titolo_card}")
 
                     if usa_condizioni:
                         temp_txt = _testo_range(
@@ -2764,30 +2804,10 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             prodotto.get("temp_max"),
                             "°C",
                         )
-                        tipo_temp = str(prodotto.get("tipo_temperatura") or "").strip()
                         if temp_txt != "—":
-                            suffisso = (
-                                f" · {tipo_temp.lower()}"
-                                if tipo_temp and tipo_temp != "Non specificato"
-                                else ""
-                            )
-                            st.markdown(f"**Temperatura:** {temp_txt}{suffisso}")
-
-                        neve_txt = str(prodotto.get("tipo_neve") or "").strip()
-                        if neve_txt:
-                            neve_voci = [x.strip() for x in neve_txt.split(",") if x.strip()]
-                            if len(neve_voci) > 3:
-                                neve_breve = ", ".join(neve_voci[:3]) + f" +{len(neve_voci)-3}"
-                            else:
-                                neve_breve = ", ".join(neve_voci)
-                            st.markdown(f"**Neve:** {neve_breve}")
+                            st.markdown(f"**Temperatura:** {temp_txt}")
 
                     descrizione_prodotto = str(prodotto.get("descrizione") or "").strip()
-                    if descrizione_prodotto:
-                        anteprima = descrizione_prodotto
-                        if len(anteprima) > 125:
-                            anteprima = anteprima[:122].rstrip() + "..."
-                        st.caption(anteprima)
 
                     with st.expander("Scheda completa"):
                         if descrizione_prodotto:
