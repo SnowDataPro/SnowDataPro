@@ -20,35 +20,7 @@ st.set_page_config(
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "ski_material_lab.db")
-VERSIONE_DATABASE_APP = 4
-
-PRODOTTI_IMG_DIR = os.path.join(BASE_DIR, "assets", "prodotti")
-ESTENSIONI_IMMAGINI_PRODOTTO = {".png", ".jpg", ".jpeg", ".webp"}
-
-
-def immagini_prodotti_disponibili():
-    """Restituisce i file immagine presenti nel repository in assets/prodotti."""
-    if not os.path.isdir(PRODOTTI_IMG_DIR):
-        return []
-    immagini = []
-    for nome_file in os.listdir(PRODOTTI_IMG_DIR):
-        percorso = os.path.join(PRODOTTI_IMG_DIR, nome_file)
-        estensione = os.path.splitext(nome_file)[1].lower()
-        if os.path.isfile(percorso) and estensione in ESTENSIONI_IMMAGINI_PRODOTTO:
-            immagini.append(nome_file)
-    return sorted(immagini, key=str.lower)
-
-
-def percorso_immagine_prodotto(nome_file):
-    """Ritorna un percorso locale sicuro per un'immagine prodotto."""
-    nome_file = os.path.basename(str(nome_file or "").strip())
-    if not nome_file:
-        return None
-    percorso = os.path.join(PRODOTTI_IMG_DIR, nome_file)
-    if os.path.isfile(percorso):
-        return percorso
-    return None
-
+VERSIONE_DATABASE_APP = 5
 
 
 # ============================================================
@@ -200,6 +172,9 @@ def inizializza_database():
             codice TEXT,
             foto_url TEXT,
             foto_file TEXT,
+            foto_data TEXT,
+            foto_mime TEXT,
+            foto_nome TEXT,
             temp_min REAL,
             temp_max REAL,
             tipo_temperatura TEXT,
@@ -218,6 +193,9 @@ def inizializza_database():
         "codice": "TEXT",
         "foto_url": "TEXT",
         "foto_file": "TEXT",
+        "foto_data": "TEXT",
+        "foto_mime": "TEXT",
+        "foto_nome": "TEXT",
         "temp_min": "REAL",
         "temp_max": "REAL",
         "tipo_temperatura": "TEXT",
@@ -780,11 +758,49 @@ def _testo_range(minimo, massimo, unita="°C"):
     return f"{minimo:g} / {massimo:g} {unita}"
 
 
+MAX_FOTO_PRODOTTO_MB = 5
+MIME_FOTO_AMMESSI = {"image/jpeg", "image/png", "image/webp"}
+
+
+def _prepara_foto_upload(file_caricato):
+    if file_caricato is None:
+        return "", "", ""
+
+    mime = str(getattr(file_caricato, "type", "") or "").lower()
+    nome = str(getattr(file_caricato, "name", "") or "foto_prodotto").strip()
+    dati = file_caricato.getvalue()
+
+    if mime not in MIME_FOTO_AMMESSI:
+        raise ValueError("Formato foto non supportato. Usa JPG, PNG oppure WEBP.")
+
+    limite = MAX_FOTO_PRODOTTO_MB * 1024 * 1024
+    if len(dati) > limite:
+        raise ValueError(
+            f"La foto è troppo grande. Dimensione massima: {MAX_FOTO_PRODOTTO_MB} MB."
+        )
+
+    return base64.b64encode(dati).decode("ascii"), mime, nome
+
+
+def _mostra_foto_db(foto_data, use_container_width=True, width=None):
+    valore = str(foto_data or "").strip()
+    if not valore:
+        return False
+    try:
+        dati = base64.b64decode(valore)
+        if width is not None:
+            st.image(dati, width=width)
+        else:
+            st.image(dati, use_container_width=use_container_width)
+        return True
+    except Exception:
+        return False
+
+
 def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
     mostra_banner(titolo, sottotitolo)
 
     usa_condizioni = categoria != "rigatura"
-    immagini_disponibili = immagini_prodotti_disponibili()
 
     with st.expander("➕ Aggiungi prodotto", expanded=False):
         with st.form(f"catalogo_{categoria}_form", clear_on_submit=True):
@@ -804,23 +820,18 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
             with r2c1:
                 tipo = st.selectbox("Categoria prodotto", tipi)
             with r2c2:
-                opzioni_foto = ["Nessuna immagine"] + immagini_disponibili
-                foto_scelta = st.selectbox(
+                foto_upload = st.file_uploader(
                     "Foto prodotto",
-                    opzioni_foto,
+                    type=["jpg", "jpeg", "png", "webp"],
+                    key=f"upload_foto_nuovo_{categoria}",
                     help=(
-                        "Le immagini vengono lette dalla cartella assets/prodotti "
-                        "del repository GitHub. Carica lì la foto, attendi il nuovo "
-                        "deploy e poi selezionala da questo elenco."
+                        "Scegli una foto dal PC. Verrà salvata direttamente "
+                        f"nel database Turso (massimo {MAX_FOTO_PRODOTTO_MB} MB)."
                     ),
                 )
 
-            foto_file = "" if foto_scelta == "Nessuna immagine" else foto_scelta
-
-            if foto_file:
-                percorso_preview = percorso_immagine_prodotto(foto_file)
-                if percorso_preview:
-                    st.image(percorso_preview, width=220)
+            if foto_upload is not None:
+                st.image(foto_upload, width=220)
 
             tipo_neve_val = ""
             temp_min_txt = ""
@@ -933,6 +944,15 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                         "L'umidità minima non può essere superiore alla massima."
                     )
 
+                foto_data = foto_mime = foto_nome = ""
+                if foto_upload is not None:
+                    try:
+                        foto_data, foto_mime, foto_nome = _prepara_foto_upload(
+                            foto_upload
+                        )
+                    except ValueError as exc:
+                        errori.append(str(exc))
+
                 if errori:
                     for errore in errori:
                         st.error(errore)
@@ -941,11 +961,12 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                         INSERT INTO catalogo_prodotti (
                             categoria, nome, marca, tipo,
                             descrizione, note, creato_il,
-                            foto_file, temp_min, temp_max,
+                            foto_data, foto_mime, foto_nome,
+                            temp_min, temp_max,
                             tipo_temperatura, tipo_neve,
                             umidita_min, umidita_max
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         categoria,
                         nome.strip(),
@@ -954,7 +975,9 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                         descrizione.strip(),
                         note.strip(),
                         datetime.now().isoformat(timespec="seconds"),
-                        foto_file,
+                        foto_data,
+                        foto_mime,
+                        foto_nome,
                         temp_min,
                         temp_max,
                         tipo_temperatura if usa_condizioni else "",
@@ -969,7 +992,8 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
 
     df = leggi_df("""
         SELECT
-            id, nome, marca, tipo, foto_file,
+            id, nome, marca, tipo,
+            foto_data, foto_mime, foto_nome,
             temp_min, temp_max, tipo_temperatura, tipo_neve,
             umidita_min, umidita_max,
             descrizione, note
@@ -982,7 +1006,6 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
         st.info("Nessun elemento ancora inserito in questo catalogo.")
         return
 
-    # ---------------- FILTRI ----------------
     with st.container(border=True):
         st.markdown("#### Filtri")
         f1, f2, f3 = st.columns([1.8, 1, 1])
@@ -1089,17 +1112,15 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
         st.info("Nessun prodotto corrisponde ai filtri selezionati.")
         return
 
-    # ---------------- SCHEDE ----------------
     righe = filtrato.to_dict("records")
     for start in range(0, len(righe), 3):
         colonne = st.columns(3)
         for indice, prodotto in enumerate(righe[start:start + 3]):
             with colonne[indice]:
                 with st.container(border=True):
-                    foto_file = str(prodotto.get("foto_file") or "").strip()
-                    percorso_foto = percorso_immagine_prodotto(foto_file)
-                    if percorso_foto:
-                        st.image(percorso_foto, use_container_width=True)
+                    foto_data = str(prodotto.get("foto_data") or "").strip()
+                    if foto_data:
+                        _mostra_foto_db(foto_data)
 
                     nome_prodotto = str(prodotto.get("nome") or "Prodotto")
                     st.markdown(f"### {nome_prodotto}")
@@ -1107,7 +1128,6 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                     meta = []
                     marca_prodotto = str(prodotto.get("marca") or "").strip()
                     tipo_prodotto = str(prodotto.get("tipo") or "").strip()
-
                     if marca_prodotto:
                         meta.append(marca_prodotto)
                     if tipo_prodotto:
@@ -1165,41 +1185,60 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             st.markdown("**Note personali**")
                             st.write(note_prodotto)
 
-                        immagini_attuali = immagini_prodotti_disponibili()
-                        if immagini_attuali:
-                            opzioni = ["Nessuna immagine"] + immagini_attuali
-                            valore_attuale = (
-                                foto_file
-                                if foto_file in immagini_attuali
-                                else "Nessuna immagine"
+                        if foto_data:
+                            st.caption(
+                                "Foto salvata: "
+                                + str(prodotto.get("foto_nome") or "foto prodotto")
                             )
-                            nuova_foto = st.selectbox(
-                                "Immagine associata",
-                                opzioni,
-                                index=opzioni.index(valore_attuale),
-                                key=f"foto_prodotto_{categoria}_{prodotto['id']}",
-                            )
+
+                        nuova_foto = st.file_uploader(
+                            "Carica / sostituisci foto",
+                            type=["jpg", "jpeg", "png", "webp"],
+                            key=f"foto_update_{categoria}_{prodotto['id']}",
+                        )
+
+                        c_salva, c_rimuovi = st.columns(2)
+                        with c_salva:
                             if st.button(
-                                "Salva immagine",
+                                "Salva foto",
                                 key=f"salva_foto_{categoria}_{prodotto['id']}",
                                 use_container_width=True,
                             ):
-                                valore_db = (
-                                    ""
-                                    if nuova_foto == "Nessuna immagine"
-                                    else nuova_foto
-                                )
-                                esegui(
-                                    "UPDATE catalogo_prodotti SET foto_file = ? WHERE id = ?",
-                                    (valore_db, int(prodotto["id"])),
-                                )
-                                st.success("Immagine aggiornata.")
+                                if nuova_foto is None:
+                                    st.warning("Seleziona prima una foto.")
+                                else:
+                                    try:
+                                        nuova_data, nuova_mime, nuovo_nome = (
+                                            _prepara_foto_upload(nuova_foto)
+                                        )
+                                        esegui("""
+                                            UPDATE catalogo_prodotti
+                                            SET foto_data = ?, foto_mime = ?, foto_nome = ?
+                                            WHERE id = ?
+                                        """, (
+                                            nuova_data,
+                                            nuova_mime,
+                                            nuovo_nome,
+                                            int(prodotto["id"]),
+                                        ))
+                                        st.success("Foto aggiornata.")
+                                        st.rerun()
+                                    except ValueError as exc:
+                                        st.error(str(exc))
+
+                        with c_rimuovi:
+                            if foto_data and st.button(
+                                "Rimuovi foto",
+                                key=f"rimuovi_foto_{categoria}_{prodotto['id']}",
+                                use_container_width=True,
+                            ):
+                                esegui("""
+                                    UPDATE catalogo_prodotti
+                                    SET foto_data = '', foto_mime = '', foto_nome = ''
+                                    WHERE id = ?
+                                """, (int(prodotto["id"]),))
+                                st.success("Foto rimossa.")
                                 st.rerun()
-                        else:
-                            st.caption(
-                                "Per associare una foto, carica prima un file PNG/JPG/WEBP "
-                                "nella cartella assets/prodotti del repository GitHub."
-                            )
 
 
 # ============================================================
