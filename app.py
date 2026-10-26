@@ -227,27 +227,87 @@ inizializza_database()
 # STILE
 # ============================================================
 
-st.markdown(textwrap.dedent("""
-<style>
-    :root {
-        color-scheme: light;
-    }
+st.markdown(
+    """
+    <style>
 
-    html, body, .stApp,
-    [data-testid="stAppViewContainer"],
-    [data-testid="stMain"],
-    [data-testid="stMainBlockContainer"] {
-        background: #ffffff !important;
-        color: #1f2937 !important;
+    /* ======================================================
+       SECTOR G2 LAB - DESIGN SYSTEM
+       ====================================================== */
+
+    :root {
+        --bg-main: #f4f6f8;
+        --bg-sidebar: #eef1f4;
+        --surface: #ffffff;
+        --surface-soft: #f8fafb;
+
+        --text-main: #1f2933;
+        --text-secondary: #66737f;
+        --text-light: #8a96a0;
+
+        --border: #dce2e7;
+        --border-strong: #c8d0d7;
+
+        --accent: #395b68;
+        --accent-dark: #294651;
+        --accent-soft: #e9f0f3;
+
+        --radius-small: 8px;
+        --radius-medium: 12px;
+        --radius-large: 16px;
+
+        --shadow-soft: 0 2px 8px rgba(31, 41, 51, 0.05);
+        --shadow-card: 0 4px 16px rgba(31, 41, 51, 0.06);
     }
 
     /* ======================================================
-       PAGINA / STREAMLIT - STESSA LOGICA DI SECTOR G2 LAB
+       INDICATORE DI CARICAMENTO STREAMLIT
+       ====================================================== */
+
+    @keyframes sector-loading-spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+
+    [data-testid="stStatusWidgetRunningIcon"] > * {
+        display: none !important;
+    }
+
+    [data-testid="stStatusWidgetRunningIcon"] {
+        width: 22px !important;
+        height: 22px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    [data-testid="stStatusWidgetRunningIcon"]::after {
+        content: "";
+        display: block;
+        width: 17px;
+        height: 17px;
+        box-sizing: border-box;
+        border: 3px solid rgba(0, 167, 225, 0.24);
+        border-top-color: #00a7e1;
+        border-right-color: #1677d2;
+        border-radius: 50%;
+        animation: sector-loading-spin 0.75s linear infinite;
+    }
+
+
+    /* ======================================================
+       PAGINA
        ====================================================== */
 
     .stApp {
-        background: #ffffff;
-        color: #1f2937;
+        background:
+            linear-gradient(
+                180deg,
+                #f7f9fa 0px,
+                #f4f6f8 260px,
+                #f4f6f8 100%
+            );
+        color: var(--text-main);
     }
 
     .block-container {
@@ -258,26 +318,40 @@ st.markdown(textwrap.dedent("""
         padding-right: 2.4rem;
     }
 
-    /* Il contenitore del banner resta fermo in alto.
-       Tutto il resto della pagina usa lo scroll nativo Streamlit. */
-    div[data-testid="stElementContainer"]:has(.snowdata-sticky-banner) {
+    /* ======================================================
+       BANNER STICKY / CONTENUTO CHE SCORRE SOPRA
+       ====================================================== */
+
+    /* Il contenitore Streamlit del banner resta fermo in alto.
+       Il contenuto della pagina ha uno z-index superiore e,
+       scorrendo, copre progressivamente il banner. */
+    div[data-testid="stElementContainer"]:has(.sector-sticky-banner) {
         position: sticky !important;
         top: 0 !important;
         z-index: 1 !important;
         margin-bottom: 0 !important;
     }
 
-    div[data-testid="stElementContainer"]:has(.snowdata-sticky-banner)
+    div[data-testid="stElementContainer"]:has(.sector-sticky-banner)
     [data-testid="stMarkdownContainer"] {
         margin-bottom: 0 !important;
     }
 
-    /* Il contenuto ha z-index superiore e scorrendo copre il banner. */
-    div[class*="st-key-snowdata_page_content"] {
+    div[class*="st-key-sector_page_content"] {
         position: relative !important;
         z-index: 5 !important;
-        background: #ffffff !important;
+        background:
+            linear-gradient(
+                180deg,
+                #f7f9fa 0px,
+                #f4f6f8 260px,
+                #f4f6f8 100%
+            ) !important;
 
+        /* Full-bleed reale: il contenitore mantiene il contenuto allineato
+           alla pagina, ma lo sfondo si estende per tutta la larghezza
+           disponibile. In questo modo, scorrendo, copre il banner senza
+           lasciare colonne laterali visibili. */
         width: calc(100% + 6rem) !important;
         max-width: none !important;
         box-sizing: border-box !important;
@@ -286,18 +360,412 @@ st.markdown(textwrap.dedent("""
         padding-left: 3rem !important;
         padding-right: 3rem !important;
         padding-top: 22px !important;
-        padding-bottom: 4rem !important;
         min-height: calc(100vh - 145px);
     }
 
-    div[class*="st-key-snowdata_page_content"] > div {
+    div[class*="st-key-sector_page_content"] > div {
         width: 100% !important;
         max-width: none !important;
         box-sizing: border-box !important;
     }
 
-    /* In Sector l'header non viene rimosso: è trasparente.
-       Il banner viene spinto sotto di lui con margin-top negativo. */
+    @media (max-width: 900px) {
+        div[class*="st-key-sector_page_content"] {
+            width: calc(100% + 3.6rem) !important;
+            margin-left: -1.8rem !important;
+            margin-right: -1.8rem !important;
+            padding-left: 1.8rem !important;
+            padding-right: 1.8rem !important;
+        }
+    }
+
+
+    /* ======================================================
+       FONT E TESTI
+       ====================================================== */
+
+    html,
+    body,
+    [class*="css"],
+    p,
+    div,
+    label,
+    span,
+    button,
+    input,
+    textarea,
+    select {
+        font-family:
+            Inter,
+            -apple-system,
+            BlinkMacSystemFont,
+            "Segoe UI",
+            Arial,
+            sans-serif;
+    }
+
+    h1,
+    h2,
+    h3 {
+        color: var(--text-main) !important;
+        font-weight: 600 !important;
+        letter-spacing: -0.02em;
+    }
+
+    p {
+        color: var(--text-secondary);
+    }
+
+
+    /* ======================================================
+       SIDEBAR
+       ====================================================== */
+
+    section[data-testid="stSidebar"] {
+        background-color: var(--bg-sidebar);
+        border-right: 1px solid var(--border);
+    }
+
+    section[data-testid="stSidebar"] > div {
+        padding-top: 2rem;
+    }
+
+    section[data-testid="stSidebar"] label {
+        color: var(--text-secondary);
+    }
+
+    section[data-testid="stSidebar"] div[role="radiogroup"] {
+        gap: 0.25rem;
+    }
+
+    section[data-testid="stSidebar"] div[role="radiogroup"] label {
+        padding: 0.55rem 0.75rem;
+        border-radius: var(--radius-small);
+        transition: all 0.15s ease;
+    }
+
+    section[data-testid="stSidebar"] div[role="radiogroup"] label:hover {
+        background-color: rgba(255,255,255,0.65);
+    }
+
+
+    /* ======================================================
+       LOGO
+       ====================================================== */
+
+    .logo-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        padding: 0.5rem 0 1.5rem 0;
+    }
+
+    .logo-container img {
+        display: block;
+        max-width: 430px;
+        width: 55%;
+        height: auto;
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+
+    /* ======================================================
+       TITOLI
+       ====================================================== */
+
+    .main-title {
+        text-align: center;
+        color: var(--text-main);
+        font-size: 1.8rem;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        margin-bottom: 2.4rem;
+    }
+
+    .section-title {
+    color: #202529;
+    font-size: 1.25rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+
+    margin-top: 1.6rem;
+    margin-bottom: 1.25rem;
+
+    padding-bottom: 0.70rem;
+
+    border-bottom: 1px solid #d8dde1;
+
+    position: relative;
+}
+
+.section-title::after {
+    content: "";
+
+    position: absolute;
+
+    bottom: -1px;
+    left: 0;
+
+    width: 42px;
+    height: 2px;
+
+    background: #00a7e1;
+}
+
+    /* ======================================================
+       CARD METRICHE
+       ====================================================== */
+
+    .metric-card {
+    position: relative;
+
+    background: #ffffff;
+
+    border: 1px solid #d9dee2;
+    border-radius: 5px;
+
+    padding: 1.25rem 1.35rem 1.15rem 1.35rem;
+
+    min-height: 125px;
+
+    box-shadow:
+        0 1px 2px rgba(0,0,0,0.04),
+        0 3px 8px rgba(0,0,0,0.03);
+
+    overflow: hidden;
+
+    transition:
+        border-color 0.15s ease,
+        box-shadow 0.15s ease,
+        transform 0.15s ease;
+}
+
+
+/* Riga azzurra superiore */
+.metric-card::before {
+    content: "";
+
+    position: absolute;
+
+    top: 0;
+    left: 0;
+
+    width: 100%;
+    height: 3px;
+
+    background: #00a7e1;
+}
+
+
+/* Effetto passaggio mouse */
+.metric-card:hover {
+    transform: translateY(-1px);
+
+    border-color: #c4ccd1;
+
+    box-shadow:
+        0 2px 4px rgba(0,0,0,0.05),
+        0 6px 14px rgba(0,0,0,0.05);
+}
+
+
+/* Nome parametro */
+.metric-label {
+    color: #68757d;
+
+    font-size: 0.73rem;
+    font-weight: 600;
+
+    text-transform: uppercase;
+    letter-spacing: 0.075em;
+
+    margin-bottom: 0.75rem;
+}
+
+
+/* Valore principale */
+.metric-value {
+    color: #202529;
+
+    font-size: 2rem;
+    font-weight: 600;
+
+    letter-spacing: -0.035em;
+    line-height: 1.05;
+}
+
+
+/* Unità */
+.metric-unit {
+    color: #8b969c;
+
+    font-size: 0.80rem;
+    font-weight: 400;
+
+    margin-top: 0.40rem;
+}
+    /* ======================================================
+       BOX INFORMATIVI
+       ====================================================== */
+
+    .info-box {
+        background-color: var(--accent-soft);
+
+        border: 1px solid #d5e1e6;
+        border-radius: var(--radius-small);
+
+        padding: 1rem 1.1rem;
+
+        color: #405864;
+
+        margin: 1rem 0;
+    }
+
+    .warning-box {
+        background-color: #fff9ec;
+
+        border: 1px solid #eadcb6;
+        border-radius: var(--radius-small);
+
+        padding: 1rem 1.1rem;
+
+        color: #6f5a25;
+
+        margin: 1rem 0;
+    }
+
+    .success-box {
+        background-color: #eff7f2;
+
+        border: 1px solid #d0e2d5;
+        border-radius: var(--radius-small);
+
+        padding: 1rem 1.1rem;
+
+        color: #355b42;
+
+        margin: 1rem 0;
+    }
+
+
+    /* ======================================================
+       PULSANTI
+       ====================================================== */
+
+    .stButton > button {
+        min-height: 40px;
+
+        border-radius: var(--radius-small);
+        border: 1px solid var(--border-strong);
+
+        background-color: var(--surface);
+        color: var(--text-main);
+
+        font-weight: 500;
+
+        padding-left: 1rem;
+        padding-right: 1rem;
+
+        box-shadow: none;
+
+        transition: all 0.15s ease;
+    }
+
+    .stButton > button:hover {
+        border-color: var(--accent);
+        color: var(--accent-dark);
+
+        background-color: #f9fbfc;
+    }
+
+    .stButton > button[kind="primary"] {
+        background-color: var(--accent);
+        border-color: var(--accent);
+
+        color: white;
+    }
+
+    .stButton > button[kind="primary"]:hover {
+        background-color: var(--accent-dark);
+        border-color: var(--accent-dark);
+
+        color: white;
+    }
+
+
+    /* ======================================================
+       INPUT
+       ====================================================== */
+
+    div[data-baseweb="select"] > div,
+    div[data-baseweb="input"] > div,
+    div[data-baseweb="base-input"] {
+        border-radius: var(--radius-small) !important;
+        border-color: var(--border) !important;
+
+        background-color: var(--surface) !important;
+    }
+
+    input,
+    textarea {
+        color: var(--text-main) !important;
+    }
+
+    textarea {
+        border-radius: var(--radius-small) !important;
+    }
+
+
+    /* ======================================================
+       DATAFRAME E TABELLE
+       ====================================================== */
+
+    div[data-testid="stDataFrame"] {
+        background-color: var(--surface);
+
+        border: 1px solid var(--border);
+        border-radius: var(--radius-medium);
+
+        /* La tabella Streamlit possiede già la propria barra orizzontale. */
+        overflow: hidden !important;
+
+        box-shadow: var(--shadow-soft);
+
+        /* Nasconde la scrollbar del contenitore esterno, non quella interna. */
+        scrollbar-width: none !important;
+        -ms-overflow-style: none !important;
+    }
+
+    div[data-testid="stDataFrame"]::-webkit-scrollbar {
+        width: 0 !important;
+        height: 0 !important;
+        display: none !important;
+    }
+
+    table {
+        border-radius: var(--radius-small);
+    }
+
+
+    /* ======================================================
+       DIVIDER
+       ====================================================== */
+
+    hr {
+        border: none !important;
+        border-top: 1px solid var(--border) !important;
+
+        margin-top: 2rem !important;
+        margin-bottom: 2rem !important;
+    }
+
+
+    /* ======================================================
+       STREAMLIT
+       ====================================================== */
+
     #MainMenu {
         visibility: hidden;
     }
@@ -307,423 +775,1014 @@ st.markdown(textwrap.dedent("""
     }
 
     header[data-testid="stHeader"] {
-        background-color: transparent !important;
+        background-color: transparent;
     }
 
+
+    /* ======================================================
+       RESPONSIVE
+       ====================================================== */
+
     @media (max-width: 900px) {
+
         .block-container {
             padding-left: 1.2rem;
             padding-right: 1.2rem;
         }
 
-        div[class*="st-key-snowdata_page_content"] {
-            width: calc(100% + 3.6rem) !important;
-            margin-left: -1.8rem !important;
-            margin-right: -1.8rem !important;
-            padding-left: 1.8rem !important;
-            padding-right: 1.8rem !important;
+        .metric-value {
+            font-size: 1.65rem;
         }
+
     }
 
-    /* ---------------- SIDEBAR · STILE SECTOR G2 LAB ---------------- */
-    [data-testid="stSidebar"] {
-        background: #191d1f !important;
-        border-right: 1px solid #22282b !important;
-    }
+/* ======================================================
+   SECTOR G2 LAB - DARK NAVIGATION
+   ====================================================== */
 
-    [data-testid="stSidebar"] > div:first-child {
-        background: #191d1f !important;
-    }
+/* Sidebar principale */
+section[data-testid="stSidebar"] {
+    background: #191c1e !important;
+    border-right: 1px solid #2b3033 !important;
+}
 
-    /* Stessa spaziatura verticale usata in Sector G2 Lab */
-    section[data-testid="stSidebar"] > div {
-        padding-top: 1.8rem !important;
-    }
-
-    [data-testid="stSidebar"] p,
-    [data-testid="stSidebar"] span,
-    [data-testid="stSidebar"] label,
-    [data-testid="stSidebar"] summary {
-        color: #eef3f6 !important;
-    }
-
-    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
-        color: #eef3f6 !important;
-    }
-
-    /* Pulsanti di navigazione */
-    [data-testid="stSidebar"] button {
-        background: transparent !important;
-        color: #eef3f6 !important;
-        border: 0 !important;
-        border-radius: 2px !important;
-        box-shadow: none !important;
-        min-height: 52px;
-        justify-content: flex-start !important;
-        text-align: left !important;
-        padding-left: 16px !important;
-    }
-
-    [data-testid="stSidebar"] button:hover {
-        background: #252a2d !important;
-        color: #ffffff !important;
-    }
-
-    [data-testid="stSidebar"] button[kind="primary"] {
-        background: #252a2d !important;
-        color: #ffffff !important;
-        border-left: 4px solid #00a7e1 !important;
-        padding-left: 12px !important;
-    }
-
-    [data-testid="stSidebar"] button p,
-    [data-testid="stSidebar"] button span {
-        color: inherit !important;
-        font-size: 1rem !important;
-    }
-
-    /* Expander come intestazioni di sezione, senza riquadro */
-    [data-testid="stSidebar"] [data-testid="stExpander"] {
-        border: 0 !important;
-        background: transparent !important;
-    }
-
-    [data-testid="stSidebar"] [data-testid="stExpander"] details,
-    [data-testid="stSidebar"] [data-testid="stExpander"] summary {
-        border: 0 !important;
-        background: transparent !important;
-        box-shadow: none !important;
-    }
-
-    [data-testid="stSidebar"] [data-testid="stExpander"] summary {
-        min-height: 60px !important;
-        padding-left: 6px !important;
-    }
-
-    [data-testid="stSidebar"] [data-testid="stExpander"] summary:hover {
-        background: #202528 !important;
-    }
-
-    [data-testid="stSidebar"] hr {
-        border-color: #2b3135 !important;
-    }
-
-    /* ---------------- TESTI GENERALI ---------------- */
-    h1, h2, h3, h4, h5, h6 {
-        color: #16324f !important;
-    }
-
-    [data-testid="stMarkdownContainer"] p,
-    [data-testid="stMarkdownContainer"] li {
-        color: #26384a;
-    }
-
-    [data-testid="stCaptionContainer"],
-    [data-testid="stCaptionContainer"] p {
-        color: #66788a !important;
-    }
-
-    /* ---------------- ETICHETTE WIDGET ---------------- */
-    [data-testid="stWidgetLabel"],
-    [data-testid="stWidgetLabel"] p,
-    [data-testid="stWidgetLabel"] span,
-    label[data-baseweb="checkbox"],
-    label[data-baseweb="radio"] {
-        color: #243447 !important;
-        font-weight: 600;
-    }
-
-    /* ---------------- INPUT LIGHT ---------------- */
-    [data-testid="stTextInput"] div[data-baseweb="input"],
-    [data-testid="stNumberInput"] div[data-baseweb="input"],
-    [data-testid="stDateInput"] div[data-baseweb="input"],
-    [data-testid="stTimeInput"] div[data-baseweb="input"],
-    [data-testid="stTextArea"] textarea {
-        background: #eef1f4 !important;
-        color: #1f2933 !important;
-        border-color: #c8d0d7 !important;
-        box-shadow: none !important;
-        border-radius: 5px !important;
-    }
-
-    [data-testid="stTextInput"] input,
-    [data-testid="stNumberInput"] input,
-    [data-testid="stDateInput"] input,
-    [data-testid="stTimeInput"] input {
-        background: transparent !important;
-        color: #1f2933 !important;
-        -webkit-text-fill-color: #1f2933 !important;
-    }
-
-    [data-testid="stTextInput"] input::placeholder,
-    [data-testid="stTextArea"] textarea::placeholder {
-        color: #8795a5 !important;
-        -webkit-text-fill-color: #8795a5 !important;
-        opacity: 1 !important;
-    }
-
-    [data-testid="stSelectbox"] div[data-baseweb="select"] > div,
-    [data-testid="stMultiSelect"] div[data-baseweb="select"] > div,
-    [data-baseweb="base-input"],
-    [data-baseweb="input"],
-    [data-baseweb="textarea"] {
-        background: #eef1f4 !important;
-        color: #1f2933 !important;
-        border-color: #c8d0d7 !important;
-        box-shadow: none !important;
-        border-radius: 5px !important;
-    }
-
-    [data-baseweb="select"] span,
-    [data-baseweb="select"] div {
-        color: #111827 !important;
-    }
-
-    /* Mantiene ben visibili i +/- dei number input */
-    [data-testid="stNumberInput"] button,
-    [data-testid="stNumberInput"] button svg {
-        color: #243447 !important;
-        fill: #243447 !important;
-    }
-
-    /* ---------------- EXPANDER ---------------- */
-    [data-testid="stExpander"] {
-        background: transparent;
-    }
-
-    [data-testid="stExpander"] summary,
-    [data-testid="stExpander"] summary p,
-    [data-testid="stExpander"] summary span {
-        color: #243447 !important;
-    }
-
-    /* ---------------- TITOLI PAGINA ---------------- */
-    .ski-banner {
-        background: transparent;
-        border-radius: 0;
-        padding: 0 0 1.2rem 0;
-        color: #16324f;
-        margin: 0 0 1.4rem 0;
-        box-shadow: none;
-        border-bottom: 1px solid #d8e0e7;
-        position: relative;
-    }
-
-    .ski-banner::after {
-        content: "";
-        position: absolute;
-        left: 0;
-        bottom: -1px;
-        width: 54px;
-        height: 3px;
-        background: #00a7e1;
-    }
-
-    .ski-banner h1 {
-        color: #15283d !important;
-        margin: 0;
-        font-size: 1.75rem;
-        line-height: 1.2;
-        font-weight: 760;
-    }
-
-    .ski-banner p {
-        color: #66788a !important;
-        margin: 0.85rem 0 0 0;
-        font-size: 1rem;
-    }
-
-    /* ---------------- CARD ---------------- */
-    .metric-card {
-        background: white;
-        border: 1px solid #e0e6ed;
-        border-radius: 12px;
-        padding: 16px;
-        min-height: 105px;
-        box-shadow: 0 4px 16px rgba(0,0,0,.04);
-    }
-
-    .metric-label {
-        font-size: .85rem;
-        color: #6c7785;
-        margin-bottom: 5px;
-    }
-
-    .metric-value {
-        font-size: 1.7rem;
-        font-weight: 700;
-        color: #16324f;
-    }
-
-    /* ---------------- TABELLE ---------------- */
-    div[data-testid="stDataFrame"] {
-        background: white;
-        border-radius: 10px;
-    }
-
-    /* ---------------- MESSAGGI ---------------- */
-    [data-testid="stAlert"] p {
-        color: inherit !important;
-    }
-
-
-    /* ======================================================
-       CATALOGO PRODOTTI · LAYOUT DEFINITIVO STILE SECTOR
-       ====================================================== */
-
-    div[class*="st-key-catalog_form_panel_"] {
-        background: #ffffff !important;
-        border: 1px solid #d9dee2 !important;
-        border-radius: 5px !important;
-        padding: 1.15rem 1.25rem 1.25rem 1.25rem !important;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.03) !important;
-        margin-bottom: 1.25rem !important;
-    }
-
-    div[class*="st-key-catalog_filter_panel_"] {
-        background: #ffffff !important;
-        border: 1px solid #d9dee2 !important;
-        border-radius: 5px !important;
-        padding: 0.95rem 1.05rem 0.75rem 1.05rem !important;
-        margin-bottom: 1.05rem !important;
-    }
-
-    div[class*="st-key-catalog_card_"] {
-        background: #ffffff !important;
-        border: 1px solid #d9dee2 !important;
-        border-radius: 5px !important;
-        padding: 1rem 1rem 0.8rem 1rem !important;
-        min-height: 410px !important;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.03) !important;
-    }
-
-    div[class*="st-key-catalog_card_"] [data-testid="stImage"] {
-        display: flex !important;
-        justify-content: center !important;
-        align-items: center !important;
-        min-height: 145px !important;
-        max-height: 145px !important;
-        overflow: hidden !important;
-        margin-bottom: 0.45rem !important;
-    }
-
-    div[class*="st-key-catalog_card_"] [data-testid="stImage"] img {
-        width: 100% !important;
-        height: 145px !important;
-        max-height: 145px !important;
-        object-fit: contain !important;
-    }
-
-    .catalog-image-placeholder {
-        height: 145px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: #f7f8fa;
-        border: 1px dashed #d3d9de;
-        border-radius: 5px;
-        color: #98a3aa;
-        font-size: 0.82rem;
-        margin-bottom: 0.45rem;
-    }
-
-    div[class*="st-key-catalog_card_"] h3 {
-        font-size: 1.12rem !important;
-        line-height: 1.25 !important;
-        margin-top: 0.25rem !important;
-        margin-bottom: 0.25rem !important;
-        color: #202529 !important;
-    }
-
-    div[class*="st-key-catalog_card_"] [data-testid="stCaptionContainer"] p {
-        font-size: 0.78rem !important;
-        margin-bottom: 0.35rem !important;
-    }
-
-    div[class*="st-key-catalog_card_"] [data-testid="stMarkdownContainer"] p {
-        font-size: 0.88rem !important;
-        line-height: 1.35 !important;
-        margin-bottom: 0.38rem !important;
-    }
-
-    div[class*="st-key-catalog_card_"] [data-testid="stExpander"] {
-        margin-top: 0.55rem !important;
-        border-top: 1px solid #e3e7ea !important;
-    }
-
-    div[class*="st-key-catalog_form_panel_"] [data-testid="stTextInput"] div[data-baseweb="input"],
-    div[class*="st-key-catalog_form_panel_"] [data-testid="stNumberInput"] div[data-baseweb="input"],
-    div[class*="st-key-catalog_form_panel_"] [data-testid="stSelectbox"] div[data-baseweb="select"] > div,
-    div[class*="st-key-catalog_form_panel_"] [data-testid="stMultiSelect"] div[data-baseweb="select"] > div,
-    div[class*="st-key-catalog_filter_panel_"] [data-testid="stTextInput"] div[data-baseweb="input"],
-    div[class*="st-key-catalog_filter_panel_"] [data-testid="stNumberInput"] div[data-baseweb="input"],
-    div[class*="st-key-catalog_filter_panel_"] [data-testid="stSelectbox"] div[data-baseweb="select"] > div,
-    div[class*="st-key-catalog_filter_panel_"] [data-testid="stMultiSelect"] div[data-baseweb="select"] > div {
-        min-height: 48px !important;
-        height: 48px !important;
-        background: #eef1f4 !important;
-        border: 1px solid #c8d0d7 !important;
-        border-radius: 5px !important;
-        box-shadow: none !important;
-    }
-
-    div[class*="st-key-catalog_form_panel_"] [data-testid="stTextArea"] textarea {
-        background: #eef1f4 !important;
-        border: 1px solid #c8d0d7 !important;
-        border-radius: 5px !important;
-        box-shadow: none !important;
-    }
-
-    div[class*="st-key-catalog_form_panel_"] [data-testid="stFileUploader"] section {
-        min-height: 92px !important;
-        background: #eef1f4 !important;
-        border: 1px dashed #bfc8cf !important;
-        border-radius: 5px !important;
-    }
-
-    div[class*="st-key-save_product_"] button {
-        height: 48px !important;
-        background: #00a7e1 !important;
-        border: 1px solid #00a7e1 !important;
-        border-radius: 5px !important;
-        color: #ffffff !important;
-        font-weight: 600 !important;
-        box-shadow: none !important;
-    }
-
-    div[class*="st-key-save_product_"] button:hover {
-        background: #0095c9 !important;
-        border-color: #0095c9 !important;
-    }
-
-    div[class*="st-key-delete_product_"] button,
-    div[class*="st-key-confirm_delete_product_"] button {
-        height: 42px !important;
-        background: #ffffff !important;
-        border: 1px solid #d9534f !important;
-        border-radius: 5px !important;
-        color: #d9534f !important;
-        font-weight: 600 !important;
-        box-shadow: none !important;
-    }
-
-    div[class*="st-key-confirm_delete_product_"] button {
-        background: #d9534f !important;
-        color: #ffffff !important;
-    }
-
-    div[class*="st-key-delete_product_"] button:hover {
-        background: #fff4f4 !important;
-    }
-
-    div[class*="st-key-cancel_delete_product_"] button {
-        height: 42px !important;
-        border-radius: 5px !important;
-    }
+/* Spaziatura interna */
+section[data-testid="stSidebar"] > div {
+    padding-top: 1.8rem;
+}
 
 
 /* ======================================================
-   CAMPI DI INSERIMENTO — IDENTICI A SECTOR G2 LAB
+   BRAND
+   ====================================================== */
+
+.sidebar-brand {
+    padding: 0.4rem 0.25rem 1.5rem 0.25rem;
+}
+
+.sidebar-brand-main {
+    color: #ffffff;
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+}
+
+.sidebar-brand-sub {
+    color: #8f9ba2;
+    font-size: 0.82rem;
+    margin-top: 0.25rem;
+}
+
+
+/* ======================================================
+   PULSANTI MENU
+   ====================================================== */
+
+section[data-testid="stSidebar"] .stButton > button {
+    width: 100%;
+
+    min-height: 44px;
+
+    justify-content: flex-start;
+
+    background: transparent !important;
+
+    color: #c9d0d4 !important;
+
+    border: none !important;
+    border-radius: 3px !important;
+
+    padding-left: 1rem !important;
+
+    font-weight: 400;
+
+    box-shadow: none !important;
+
+    transition:
+        background-color 0.15s ease,
+        color 0.15s ease;
+}
+
+
+/* Hover */
+section[data-testid="stSidebar"] .stButton > button:hover {
+    background-color: #252a2d !important;
+
+    color: #ffffff !important;
+
+    border: none !important;
+}
+
+
+/* Voce attiva */
+section[data-testid="stSidebar"]
+.stButton > button[kind="primary"] {
+
+    background-color: #252a2d !important;
+
+    color: #ffffff !important;
+
+    border-left: 4px solid #00a7e1 !important;
+
+    border-radius: 2px !important;
+
+    font-weight: 500;
+}
+
+
+/* ======================================================
+   EXPANDER
+   ====================================================== */
+
+section[data-testid="stSidebar"]
+[data-testid="stExpander"] {
+
+    background: transparent !important;
+
+    border: none !important;
+
+    border-radius: 3px !important;
+
+    margin-top: 0.35rem;
+}
+
+
+/* Riga principale expander */
+section[data-testid="stSidebar"]
+[data-testid="stExpander"] summary {
+
+    background: transparent !important;
+
+    color: #c9d0d4 !important;
+
+    border-radius: 3px !important;
+
+    min-height: 44px;
+
+    padding-left: 0.4rem;
+
+    transition:
+        background-color 0.15s ease,
+        color 0.15s ease;
+}
+
+
+/* Hover expander */
+section[data-testid="stSidebar"]
+[data-testid="stExpander"] summary:hover {
+
+    background-color: #252a2d !important;
+
+    color: #ffffff !important;
+}
+
+
+/* Testo expander */
+section[data-testid="stSidebar"]
+[data-testid="stExpander"] summary p {
+
+    color: inherit !important;
+
+    font-weight: 400 !important;
+}
+
+
+/* Freccia */
+section[data-testid="stSidebar"]
+[data-testid="stExpander"] svg {
+
+    fill: #9ba6ac !important;
+}
+
+
+/* Contenuto sotto l'expander */
+section[data-testid="stSidebar"]
+[data-testid="stExpander"] > details > div {
+
+    padding-left: 0.65rem;
+}
+
+
+/* Pulsanti interni leggermente più piccoli */
+section[data-testid="stSidebar"]
+[data-testid="stExpander"]
+.stButton > button {
+
+    min-height: 39px;
+
+    font-size: 0.90rem;
+
+    padding-left: 1.25rem !important;
+}
+
+
+/* ======================================================
+   TESTI SIDEBAR
+   ====================================================== */
+
+section[data-testid="stSidebar"] p,
+section[data-testid="stSidebar"] span,
+section[data-testid="stSidebar"] label {
+
+    color: #c9d0d4;
+}
+
+
+/* ======================================================
+   SCROLLBAR SIDEBAR
+   ====================================================== */
+
+section[data-testid="stSidebar"] ::-webkit-scrollbar {
+    width: 6px;
+}
+
+section[data-testid="stSidebar"] ::-webkit-scrollbar-thumb {
+    background: #41484c;
+    border-radius: 10px;
+}
+
+
+/* ======================================================
+   CONTROLLI STREAMLIT
+   ====================================================== */
+
+/* Nasconde solo gli elementi non necessari, senza nascondere
+   il comando che permette di riaprire la sidebar. */
+[data-testid="stDecoration"] {
+    display: none !important;
+}
+
+.stDeployButton,
+[data-testid="stDeployButton"] {
+    display: none !important;
+    visibility: hidden !important;
+}
+
+/* Il pulsante di riapertura deve restare sempre disponibile. Nelle versioni
+   recenti di Streamlit vive dentro l'header/toolbar, che quindi non va nascosto. */
+header[data-testid="stHeader"] {
+    display: flex !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    z-index: 999998 !important;
+}
+
+[data-testid="stSidebarCollapsedControl"],
+button[aria-label="Open sidebar"],
+button[title="Open sidebar"] {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 999999 !important;
+}
+
+/* Mantiene visibile anche il normale comando di chiusura/apertura. */
+[data-testid="stSidebarCollapseButton"],
+button[aria-label="Collapse sidebar"],
+button[title="Collapse sidebar"] {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+[data-testid="stSidebarCollapsedControl"] button,
+button[aria-label="Open sidebar"],
+button[title="Open sidebar"] {
+    background: #ffffff !important;
+    color: #1f2933 !important;
+    border: 1px solid #c8d0d7 !important;
+    border-radius: 6px !important;
+    box-shadow: 0 2px 8px rgba(31, 41, 51, 0.12) !important;
+}
+
+[data-testid="stSidebarCollapsedControl"] svg,
+button[aria-label="Open sidebar"] svg,
+button[title="Open sidebar"] svg {
+    color: #1f2933 !important;
+    fill: #1f2933 !important;
+}
+
+/* Allinea le voci del menu a sinistra */
+section[data-testid="stSidebar"] .stButton > button {
+    justify-content: flex-start !important;
+    text-align: left !important;
+}
+
+section[data-testid="stSidebar"]
+.stButton > button [data-testid="stMarkdownContainer"] {
+    width: 100%;
+    text-align: left !important;
+}
+/* Porta Dashboard sulla stessa linea delle altre voci */
+section[data-testid="stSidebar"] > div
+[data-testid="stSidebarContent"]
+.stButton > button {
+    padding-left: 0.65rem !important;
+}
+/* Centra il logo nella sidebar */
+section[data-testid="stSidebar"] [data-testid="stImage"] {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+}
+
+section[data-testid="stSidebar"] [data-testid="stImage"] img {
+    margin-left: auto;
+    margin-right: auto;
+}
+/* Dashboard: icona e testo realmente a sinistra */
+section[data-testid="stSidebar"] .stButton button {
+    justify-content: flex-start !important;
+    text-align: left !important;
+    padding-left: 0.65rem !important;
+}
+
+section[data-testid="stSidebar"] .stButton button > div {
+    justify-content: flex-start !important;
+    width: 100% !important;
+}
+
+section[data-testid="stSidebar"] .stButton button p {
+    text-align: left !important;
+}
+
+    /* Dashboard: icona e testo realmente a sinistra */
+    section[data-testid="stSidebar"] .stButton button p {
+        text-align: left !important;
+    }
+
+/* ======================================================
+   ANALISI - SELETTORE TECNICHE
+   ====================================================== */
+
+[data-testid="stMultiSelect"] [data-baseweb="tag"] {
+    background-color: #e9eef1 !important;
+    border: 1px solid #cbd5da !important;
+    border-radius: 5px !important;
+    box-shadow: none !important;
+}
+
+[data-testid="stMultiSelect"] [data-baseweb="tag"] * {
+    color: #34444d !important;
+}
+
+[data-testid="stMultiSelect"] [data-baseweb="tag"] svg {
+    fill: #718088 !important;
+    color: #718088 !important;
+}
+
+[data-testid="stMultiSelect"] [data-baseweb="tag"]:hover {
+    background-color: #dde7eb !important;
+    border-color: #00a7e1 !important;
+}
+
+/* ======================================================
+   ANALISI - PULSANTI TECNICHE
+   ====================================================== */
+
+/* Struttura generale V1 / V2 / DP / DS */
+div[class*="st-key-filtro_tecnica_"] button {
+    min-height: 44px !important;
+
+    border-radius: 5px !important;
+
+    font-weight: 600 !important;
+
+    box-shadow: none !important;
+
+    transition:
+        background-color 0.15s ease,
+        border-color 0.15s ease,
+        color 0.15s ease !important;
+}
+
+
+/* TECNICA SELEZIONATA */
+div[class*="st-key-filtro_tecnica_"] button[kind="primary"],
+div[class*="st-key-filtro_tecnica_"] button[data-testid="stBaseButton-primary"] {
+
+    background: #eaf7fc !important;
+
+    border: 1px solid #00a7e1 !important;
+
+    color: #26353d !important;
+}
+
+
+/* Testo tecnica selezionata */
+div[class*="st-key-filtro_tecnica_"] button[kind="primary"] p,
+div[class*="st-key-filtro_tecnica_"] button[data-testid="stBaseButton-primary"] p {
+
+    color: #26353d !important;
+
+    font-weight: 600 !important;
+}
+
+
+/* TECNICA NON SELEZIONATA */
+div[class*="st-key-filtro_tecnica_"] button[kind="secondary"],
+div[class*="st-key-filtro_tecnica_"] button[data-testid="stBaseButton-secondary"] {
+
+    background: #ffffff !important;
+
+    border: 1px solid #d5dce0 !important;
+
+    color: #7a858c !important;
+}
+
+/* Testo tecnica non selezionata */
+div[class*="st-key-filtro_tecnica_"] button[kind="secondary"] p,
+div[class*="st-key-filtro_tecnica_"] button[data-testid="stBaseButton-secondary"] p {
+
+    color: #7a858c !important;
+}
+
+
+/* Hover */
+div[class*="st-key-filtro_tecnica_"] button:hover {
+
+    background: #f1f8fa !important;
+
+    border-color: #00a7e1 !important;
+
+    color: #26353d !important;
+}
+/* ======================================================
+   PULSANTE SALVA ALLENAMENTO
+   ====================================================== */
+
+div[class*="st-key-salva_allenamento"] button {
+    min-width: 190px !important;
+    height: 48px !important;
+    background: #00a7e1 !important;
+    border: 1px solid #00a7e1 !important;
+    border-radius: 5px !important;
+    box-shadow: none !important;
+    font-weight: 600 !important;
+    transition:
+        background-color 0.15s ease,
+        border-color 0.15s ease !important;
+}
+
+div[class*="st-key-salva_allenamento"] button p {
+    color: #ffffff !important;
+    font-weight: 600 !important;
+}
+
+div[class*="st-key-salva_allenamento"] button:hover {
+    background: #0095c9 !important;
+    border-color: #0095c9 !important;
+}
+
+div[class*="st-key-salva_allenamento"] button:hover p {
+    color: #ffffff !important;
+}
+
+/* ======================================================
+   AMTP - CARD PERCENTUALE
+   ====================================================== */
+
+div[class*="st-key-percentuale_amtp_card"] {
+    position: relative;
+
+    background: #ffffff;
+
+    border: 1px solid #d9dee2;
+    border-radius: 5px;
+
+    padding: 1.25rem 1.35rem 1.15rem 1.35rem;
+
+    height: 165px !important;
+    min-height: 165px !important;
+    box-sizing: border-box !important;
+
+    box-shadow:
+        0 1px 2px rgba(0,0,0,0.04),
+        0 3px 8px rgba(0,0,0,0.03);
+
+    overflow: hidden;
+
+    transition:
+        border-color 0.15s ease,
+        box-shadow 0.15s ease,
+        transform 0.15s ease;
+}
+
+/* Elimina il gap verticale automatico di Streamlit dentro la card */
+div[class*="st-key-percentuale_amtp_card"] [data-testid="stVerticalBlock"] {
+    gap: 0 !important;
+}
+
+/* La card W/kg della stessa sezione ha esattamente la stessa altezza */
+div[class*="st-key-wkg_percentuale_card"] .metric-card {
+    height: 165px !important;
+    min-height: 165px !important;
+    box-sizing: border-box !important;
+}
+
+div[class*="st-key-percentuale_amtp_card"]::before {
+    content: "";
+
+    position: absolute;
+
+    top: 0;
+    left: 0;
+
+    width: 100%;
+    height: 3px;
+
+    background: #00a7e1;
+}
+
+div[class*="st-key-percentuale_amtp_card"]:hover {
+    transform: translateY(-1px);
+
+    border-color: #c4ccd1;
+
+    box-shadow:
+        0 2px 4px rgba(0,0,0,0.05),
+        0 6px 14px rgba(0,0,0,0.05);
+}
+
+/* Toglie lo spazio standard sopra/sotto al number input */
+div[class*="st-key-percentuale_amtp_card"] [data-testid="stNumberInput"] {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+/* Corpo del controllo: bianco, pulito, senza il classico box grigio Streamlit */
+div[class*="st-key-percentuale_amtp_card"] [data-testid="stNumberInput"] div[data-baseweb="input"],
+div[class*="st-key-percentuale_amtp_card"] [data-testid="stNumberInput"] div[data-baseweb="input"] > div {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* Valore numerico grande, coerente con le metric card */
+div[class*="st-key-percentuale_amtp_card"] [data-testid="stNumberInput"] input {
+    background: transparent !important;
+
+    border: none !important;
+
+    color: #202529 !important;
+
+    font-size: 2rem !important;
+    font-weight: 600 !important;
+
+    letter-spacing: -0.035em !important;
+
+    padding-left: 0 !important;
+
+    min-height: 42px !important;
+}
+
+/* Pulsanti - / + più discreti */
+div[class*="st-key-percentuale_amtp_card"] [data-testid="stNumberInput"] button {
+    width: 34px !important;
+    min-width: 34px !important;
+    height: 34px !important;
+    min-height: 34px !important;
+
+    margin-left: 5px !important;
+
+    background: #f8fafb !important;
+
+    border: 1px solid #d9dee2 !important;
+    border-radius: 5px !important;
+
+    color: #65727a !important;
+
+    box-shadow: none !important;
+}
+
+div[class*="st-key-percentuale_amtp_card"] [data-testid="stNumberInput"] button:hover {
+    background: #eef7fa !important;
+
+    border-color: #00a7e1 !important;
+
+    color: #26353d !important;
+}
+
+/* Evita che eventuali contenitori interni aggiungano bordi */
+div[class*="st-key-percentuale_amtp_card"] [data-testid="stVerticalBlockBorderWrapper"] {
+    border: none !important;
+}
+
+/* Posizione dell'unità identica alla metric-unit standard */
+div[class*="st-key-percentuale_amtp_card"] .percentuale-unit {
+    margin-top: 0.40rem !important;
+    margin-bottom: 0 !important;
+}
+
+div[class*="st-key-percentuale_amtp_card"] [data-testid="stMarkdown"] {
+    margin-bottom: 0 !important;
+}
+
+
+/* ======================================================
+   CALCOLO POTENZA - CARD POTENZA TARGET
+   Stessa grafica della card Percentuale AMTP
+   ====================================================== */
+
+div[class*="st-key-potenza_target_card"] {
+    position: relative;
+
+    background: #ffffff;
+
+    border: 1px solid #d9dee2;
+    border-radius: 5px;
+
+    padding: 1.25rem 1.35rem 1.15rem 1.35rem;
+
+    height: 165px !important;
+    min-height: 165px !important;
+    box-sizing: border-box !important;
+
+    box-shadow:
+        0 1px 2px rgba(0,0,0,0.04),
+        0 3px 8px rgba(0,0,0,0.03);
+
+    overflow: hidden;
+
+    transition:
+        border-color 0.15s ease,
+        box-shadow 0.15s ease,
+        transform 0.15s ease;
+}
+
+div[class*="st-key-potenza_target_card"] [data-testid="stVerticalBlock"] {
+    gap: 0 !important;
+}
+
+div[class*="st-key-potenza_target_card"]::before {
+    content: "";
+
+    position: absolute;
+
+    top: 0;
+    left: 0;
+
+    width: 100%;
+    height: 3px;
+
+    background: #00a7e1;
+}
+
+div[class*="st-key-potenza_target_card"]:hover {
+    transform: translateY(-1px);
+
+    border-color: #c4ccd1;
+
+    box-shadow:
+        0 2px 4px rgba(0,0,0,0.05),
+        0 6px 14px rgba(0,0,0,0.05);
+}
+
+div[class*="st-key-potenza_target_card"] [data-testid="stNumberInput"] {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+div[class*="st-key-potenza_target_card"] [data-testid="stNumberInput"] div[data-baseweb="input"],
+div[class*="st-key-potenza_target_card"] [data-testid="stNumberInput"] div[data-baseweb="input"] > div {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+div[class*="st-key-potenza_target_card"] [data-testid="stNumberInput"] input {
+    background: transparent !important;
+
+    border: none !important;
+
+    color: #202529 !important;
+
+    font-size: 2rem !important;
+    font-weight: 600 !important;
+
+    letter-spacing: -0.035em !important;
+
+    padding-left: 0 !important;
+
+    min-height: 42px !important;
+}
+
+div[class*="st-key-potenza_target_card"] [data-testid="stNumberInput"] button {
+    width: 34px !important;
+    min-width: 34px !important;
+    height: 34px !important;
+    min-height: 34px !important;
+
+    margin-left: 5px !important;
+
+    background: #f8fafb !important;
+
+    border: 1px solid #d9dee2 !important;
+    border-radius: 5px !important;
+
+    color: #65727a !important;
+
+    box-shadow: none !important;
+}
+
+div[class*="st-key-potenza_target_card"] [data-testid="stNumberInput"] button:hover {
+    background: #eef7fa !important;
+
+    border-color: #00a7e1 !important;
+
+    color: #26353d !important;
+}
+
+div[class*="st-key-potenza_target_card"] [data-testid="stVerticalBlockBorderWrapper"] {
+    border: none !important;
+}
+
+div[class*="st-key-potenza_target_card"] .potenza-target-unit {
+    margin-top: 0.40rem !important;
+    margin-bottom: 0 !important;
+}
+
+div[class*="st-key-potenza_target_card"] [data-testid="stMarkdown"] {
+    margin-bottom: 0 !important;
+}
+
+/* ======================================================
+   CALCOLO POTENZA - CARD PENDENZA TARGET
+   Stessa grafica della card Potenza target / Percentuale AMTP
+   ====================================================== */
+
+div[class*="st-key-pendenza_target_card"] {
+    position: relative;
+
+    background: #ffffff;
+
+    border: 1px solid #d9dee2;
+    border-radius: 5px;
+
+    padding: 1.25rem 1.35rem 1.15rem 1.35rem;
+
+    height: 165px !important;
+    min-height: 165px !important;
+    box-sizing: border-box !important;
+
+    box-shadow:
+        0 1px 2px rgba(0,0,0,0.04),
+        0 3px 8px rgba(0,0,0,0.03);
+
+    overflow: hidden;
+
+    transition:
+        border-color 0.15s ease,
+        box-shadow 0.15s ease,
+        transform 0.15s ease;
+}
+
+div[class*="st-key-pendenza_target_card"] [data-testid="stVerticalBlock"] {
+    gap: 0 !important;
+}
+
+div[class*="st-key-pendenza_target_card"]::before {
+    content: "";
+
+    position: absolute;
+
+    top: 0;
+    left: 0;
+
+    width: 100%;
+    height: 3px;
+
+    background: #00a7e1;
+}
+
+div[class*="st-key-pendenza_target_card"]:hover {
+    transform: translateY(-1px);
+
+    border-color: #c4ccd1;
+
+    box-shadow:
+        0 2px 4px rgba(0,0,0,0.05),
+        0 6px 14px rgba(0,0,0,0.05);
+}
+
+div[class*="st-key-pendenza_target_card"] [data-testid="stNumberInput"] {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+div[class*="st-key-pendenza_target_card"] [data-testid="stNumberInput"] div[data-baseweb="input"],
+div[class*="st-key-pendenza_target_card"] [data-testid="stNumberInput"] div[data-baseweb="input"] > div {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+div[class*="st-key-pendenza_target_card"] [data-testid="stNumberInput"] input {
+    background: transparent !important;
+
+    border: none !important;
+
+    color: #202529 !important;
+
+    font-size: 2rem !important;
+    font-weight: 600 !important;
+
+    letter-spacing: -0.035em !important;
+
+    padding-left: 0 !important;
+
+    min-height: 42px !important;
+}
+
+div[class*="st-key-pendenza_target_card"] [data-testid="stNumberInput"] button {
+    width: 34px !important;
+    min-width: 34px !important;
+    height: 34px !important;
+    min-height: 34px !important;
+
+    margin-left: 5px !important;
+
+    background: #f8fafb !important;
+
+    border: 1px solid #d9dee2 !important;
+    border-radius: 5px !important;
+
+    color: #65727a !important;
+
+    box-shadow: none !important;
+}
+
+div[class*="st-key-pendenza_target_card"] [data-testid="stNumberInput"] button:hover {
+    background: #eef7fa !important;
+
+    border-color: #00a7e1 !important;
+
+    color: #26353d !important;
+}
+
+div[class*="st-key-pendenza_target_card"] [data-testid="stVerticalBlockBorderWrapper"] {
+    border: none !important;
+}
+
+div[class*="st-key-pendenza_target_card"] .pendenza-target-unit {
+    margin-top: 0.40rem !important;
+    margin-bottom: 0 !important;
+}
+
+div[class*="st-key-pendenza_target_card"] [data-testid="stMarkdown"] {
+    margin-bottom: 0 !important;
+}
+
+/* Stepper decimali: stesso aspetto del controllo Percentuale AMTP. */
+div[class*="st-key-potenza_target_card"] [data-testid="stHorizontalBlock"],
+div[class*="st-key-pendenza_target_card"] [data-testid="stHorizontalBlock"] {
+    gap: 0.45rem !important;
+    align-items: center !important;
+    min-height: 52px !important;
+    padding: 0 0.25rem 0 0 !important;
+    background: #f1f3f5 !important;
+    border-radius: 5px !important;
+}
+
+div[class*="st-key-potenza_target_card"] [data-testid="stTextInput"],
+div[class*="st-key-pendenza_target_card"] [data-testid="stTextInput"] {
+    margin: 0 !important;
+}
+
+div[class*="st-key-potenza_target_card"] [data-testid="stTextInput"] div[data-baseweb="input"],
+div[class*="st-key-pendenza_target_card"] [data-testid="stTextInput"] div[data-baseweb="input"] {
+    min-height: 52px !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+div[class*="st-key-potenza_target_card"] [data-testid="stTextInput"] input,
+div[class*="st-key-pendenza_target_card"] [data-testid="stTextInput"] input {
+    min-height: 52px !important;
+    padding: 0 0 0 0.2rem !important;
+    background: transparent !important;
+    border: none !important;
+    color: #202529 !important;
+    font-size: 2rem !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.035em !important;
+}
+
+div[class*="st-key-potenza_target_riferimento_input_velocita_step_meno"] button,
+div[class*="st-key-potenza_target_riferimento_input_velocita_step_piu"] button,
+div[class*="st-key-pendenza_target_input_velocita_step_meno"] button,
+div[class*="st-key-pendenza_target_input_velocita_step_piu"] button {
+    width: 34px !important;
+    min-width: 34px !important;
+    height: 34px !important;
+    min-height: 34px !important;
+    padding: 0 !important;
+    background: #f8fafb !important;
+    border: 1px solid #d9dee2 !important;
+    border-radius: 5px !important;
+    color: #65727a !important;
+    box-shadow: none !important;
+}
+
+div[class*="st-key-potenza_target_riferimento_input_velocita_step_meno"] button p,
+div[class*="st-key-potenza_target_riferimento_input_velocita_step_piu"] button p,
+div[class*="st-key-pendenza_target_input_velocita_step_meno"] button p,
+div[class*="st-key-pendenza_target_input_velocita_step_piu"] button p {
+    margin: 0 !important;
+    color: #65727a !important;
+    font-size: 1.15rem !important;
+    font-weight: 700 !important;
+    line-height: 1 !important;
+}
+
+div[class*="st-key-potenza_target_riferimento_input_velocita_step_meno"] button:hover,
+div[class*="st-key-potenza_target_riferimento_input_velocita_step_piu"] button:hover,
+div[class*="st-key-pendenza_target_input_velocita_step_meno"] button:hover,
+div[class*="st-key-pendenza_target_input_velocita_step_piu"] button:hover {
+    background: #eef7fa !important;
+    border-color: #00a7e1 !important;
+    color: #26353d !important;
+}
+
+div[class*="st-key-potenza_target_riferimento_input_velocita_step_meno"] button:hover p,
+div[class*="st-key-potenza_target_riferimento_input_velocita_step_piu"] button:hover p,
+div[class*="st-key-pendenza_target_input_velocita_step_meno"] button:hover p,
+div[class*="st-key-pendenza_target_input_velocita_step_piu"] button:hover p {
+    color: #26353d !important;
+}
+
+/* ======================================================
+   PULSANTI TEST DI RIFERIMENTO
+   Stessa grafica di "Salva allenamento"
+   ====================================================== */
+
+div[class*="st-key-salva_test_riferimento"] button,
+div[class*="st-key-salva_modifiche_test_riferimento"] button,
+div[class*="st-key-apri_modifica_test_riferimento"] button {
+    min-width: 190px !important;
+    height: 48px !important;
+    background: #00a7e1 !important;
+    border: 1px solid #00a7e1 !important;
+    border-radius: 5px !important;
+    box-shadow: none !important;
+    font-weight: 600 !important;
+    transition:
+        background-color 0.15s ease,
+        border-color 0.15s ease !important;
+}
+
+div[class*="st-key-salva_test_riferimento"] button p,
+div[class*="st-key-salva_modifiche_test_riferimento"] button p,
+div[class*="st-key-apri_modifica_test_riferimento"] button p {
+    color: #ffffff !important;
+    font-weight: 600 !important;
+}
+
+div[class*="st-key-salva_test_riferimento"] button:hover,
+div[class*="st-key-salva_modifiche_test_riferimento"] button:hover,
+div[class*="st-key-apri_modifica_test_riferimento"] button:hover {
+    background: #0095c9 !important;
+    border-color: #0095c9 !important;
+}
+
+div[class*="st-key-salva_test_riferimento"] button:hover p,
+div[class*="st-key-salva_modifiche_test_riferimento"] button:hover p,
+div[class*="st-key-apri_modifica_test_riferimento"] button:hover p {
+    color: #ffffff !important;
+}
+
+/* Elimina test: stessa grafica di "Elimina allenamento" */
+div[class*="st-key-elimina_test_riferimento"] button:not(:disabled) {
+    min-width: 205px !important;
+    height: 48px !important;
+    background: #ffffff !important;
+    border: 1px solid #d9534f !important;
+    border-radius: 5px !important;
+    box-shadow: none !important;
+    font-weight: 600 !important;
+    transition:
+        background-color 0.15s ease,
+        border-color 0.15s ease,
+        color 0.15s ease !important;
+}
+
+div[class*="st-key-elimina_test_riferimento"] button:not(:disabled) p {
+    color: #d9534f !important;
+    font-weight: 600 !important;
+}
+
+div[class*="st-key-elimina_test_riferimento"] button:not(:disabled):hover {
+    background: #d9534f !important;
+    border-color: #d9534f !important;
+}
+
+div[class*="st-key-elimina_test_riferimento"] button:not(:disabled):hover p {
+    color: #ffffff !important;
+}
+
+/* ======================================================
+   CAMPI DI INSERIMENTO CHIARI
    Compatibile con i componenti BaseWeb usati da Streamlit Cloud.
    ====================================================== */
 
@@ -788,10 +1847,6 @@ div[data-baseweb="select"] svg,
     border-color: #c8d0d7 !important;
 }
 
-[data-testid="stFileUploaderDropzone"] * {
-    color: #1f2933 !important;
-}
-
 div[data-baseweb="popover"] ul,
 div[role="listbox"] {
     background-color: #ffffff !important;
@@ -807,73 +1862,201 @@ div[role="option"]:hover,
 div[role="option"][aria-selected="true"] {
     background-color: #e7edf1 !important;
 }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
-/* Mantiene le dimensioni standardizzate della pagina Prodotti */
-div[class*="st-key-catalog_form_panel_"] [data-testid="stTextInput"] div[data-baseweb="input"],
-div[class*="st-key-catalog_form_panel_"] [data-testid="stNumberInput"] div[data-baseweb="input"],
-div[class*="st-key-catalog_form_panel_"] [data-testid="stSelectbox"] div[data-baseweb="select"] > div,
-div[class*="st-key-catalog_form_panel_"] [data-testid="stMultiSelect"] div[data-baseweb="select"] > div,
-div[class*="st-key-catalog_filter_panel_"] [data-testid="stTextInput"] div[data-baseweb="input"],
-div[class*="st-key-catalog_filter_panel_"] [data-testid="stNumberInput"] div[data-baseweb="input"],
-div[class*="st-key-catalog_filter_panel_"] [data-testid="stSelectbox"] div[data-baseweb="select"] > div,
-div[class*="st-key-catalog_filter_panel_"] [data-testid="stMultiSelect"] div[data-baseweb="select"] > div {
-    min-height: 48px !important;
-    height: 48px !important;
-}
+st.markdown(
+    """
+    <style>
 
+    /* ======================================================
+       SNOWDATAPRO - SOLO LAYOUT CATALOGO
+       I colori e i widget vengono dal design system Sector G2 Lab.
+       ====================================================== */
 
-/* Il tema Streamlit è LIGHT; queste regole uniformano i campi a Sector G2 Lab. */
-[data-testid="stTextInput"] [data-baseweb="input"],
-[data-testid="stTextInput"] [data-baseweb="base-input"],
-[data-testid="stNumberInput"] [data-baseweb="input"],
-[data-testid="stNumberInput"] [data-baseweb="base-input"],
-[data-testid="stDateInput"] [data-baseweb="input"],
-[data-testid="stTimeInput"] [data-baseweb="input"],
-[data-testid="stSelectbox"] [data-baseweb="select"],
-[data-testid="stSelectbox"] [data-baseweb="select"] > div,
-[data-testid="stMultiSelect"] [data-baseweb="select"],
-[data-testid="stMultiSelect"] [data-baseweb="select"] > div,
-[data-testid="stTextArea"] [data-baseweb="textarea"],
-[data-testid="stTextArea"] textarea {
-    background: #eef1f4 !important;
-    background-color: #eef1f4 !important;
-    color: #1f2933 !important;
-    border-color: #c8d0d7 !important;
-}
+    div[class*="st-key-catalog_form_panel_"] {
+        background: #ffffff !important;
+        border: 1px solid var(--border) !important;
+        border-radius: var(--radius-medium) !important;
+        padding: 1.15rem 1.25rem 1.25rem 1.25rem !important;
+        box-shadow: var(--shadow-soft) !important;
+        margin-bottom: 1.25rem !important;
+    }
 
-/* Copre gli strati BaseWeb interni che, col tema scuro, restavano neri. */
-[data-testid="stTextInput"] [data-baseweb="input"] > div,
-[data-testid="stTextInput"] [data-baseweb="base-input"] > div,
-[data-testid="stNumberInput"] [data-baseweb="input"] > div,
-[data-testid="stNumberInput"] [data-baseweb="base-input"] > div,
-[data-testid="stSelectbox"] [data-baseweb="select"] > div > div,
-[data-testid="stMultiSelect"] [data-baseweb="select"] > div > div {
-    background: #eef1f4 !important;
-    background-color: #eef1f4 !important;
-    color: #1f2933 !important;
-}
+    div[class*="st-key-catalog_filter_panel_"] {
+        background: #ffffff !important;
+        border: 1px solid var(--border) !important;
+        border-radius: var(--radius-medium) !important;
+        padding: 0.95rem 1.05rem 0.75rem 1.05rem !important;
+        box-shadow: var(--shadow-soft) !important;
+        margin-bottom: 1.05rem !important;
+    }
 
-[data-testid="stTextInput"] input,
-[data-testid="stNumberInput"] input,
-[data-testid="stDateInput"] input,
-[data-testid="stTimeInput"] input,
-[data-testid="stSelectbox"] input,
-[data-testid="stMultiSelect"] input,
-[data-testid="stTextArea"] textarea {
-    color: #1f2933 !important;
-    -webkit-text-fill-color: #1f2933 !important;
-}
+    div[class*="st-key-catalog_card_"] {
+        background: #ffffff !important;
+        border: 1px solid var(--border) !important;
+        border-radius: var(--radius-medium) !important;
+        padding: 0.9rem 0.95rem 0.8rem 0.95rem !important;
+        min-height: 365px !important;
+        box-shadow: var(--shadow-soft) !important;
+    }
 
-[data-testid="stSelectbox"] [data-baseweb="select"] span,
-[data-testid="stMultiSelect"] [data-baseweb="select"] span,
-[data-testid="stSelectbox"] [data-baseweb="select"] div,
-[data-testid="stMultiSelect"] [data-baseweb="select"] div {
-    color: #1f2933 !important;
-    -webkit-text-fill-color: #1f2933 !important;
-}
+    /* Dimensioni standard identiche tra i campi del form. */
+    div[class*="st-key-catalog_form_panel_"]
+    [data-testid="stTextInput"] div[data-baseweb="input"],
 
-</style>
-""").strip(), unsafe_allow_html=True)
+    div[class*="st-key-catalog_form_panel_"]
+    [data-testid="stNumberInput"] div[data-baseweb="input"],
+
+    div[class*="st-key-catalog_form_panel_"]
+    [data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+
+    div[class*="st-key-catalog_form_panel_"]
+    [data-testid="stMultiSelect"] div[data-baseweb="select"] > div,
+
+    div[class*="st-key-catalog_filter_panel_"]
+    [data-testid="stTextInput"] div[data-baseweb="input"],
+
+    div[class*="st-key-catalog_filter_panel_"]
+    [data-testid="stNumberInput"] div[data-baseweb="input"],
+
+    div[class*="st-key-catalog_filter_panel_"]
+    [data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+
+    div[class*="st-key-catalog_filter_panel_"]
+    [data-testid="stMultiSelect"] div[data-baseweb="select"] > div {
+        min-height: 48px !important;
+        height: 48px !important;
+    }
+
+    /* Foto più compatta per guadagnare spazio. */
+    div[class*="st-key-catalog_card_"] [data-testid="stImage"] {
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        min-height: 125px !important;
+        max-height: 125px !important;
+        overflow: hidden !important;
+        margin-bottom: 0.35rem !important;
+    }
+
+    div[class*="st-key-catalog_card_"] [data-testid="stImage"] img {
+        width: 100% !important;
+        height: 125px !important;
+        max-height: 125px !important;
+        object-fit: contain !important;
+    }
+
+    .catalog-image-placeholder {
+        height: 125px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--surface-soft);
+        border: 1px dashed var(--border-strong);
+        border-radius: var(--radius-small);
+        color: var(--text-light);
+        font-size: 0.80rem;
+        margin-bottom: 0.35rem;
+    }
+
+    div[class*="st-key-catalog_card_"] h3 {
+        font-size: 1.08rem !important;
+        line-height: 1.22 !important;
+        margin-top: 0.18rem !important;
+        margin-bottom: 0.20rem !important;
+    }
+
+    div[class*="st-key-catalog_card_"]
+    [data-testid="stCaptionContainer"] p {
+        font-size: 0.77rem !important;
+        margin-bottom: 0.30rem !important;
+    }
+
+    div[class*="st-key-catalog_card_"]
+    [data-testid="stMarkdownContainer"] p {
+        font-size: 0.84rem !important;
+        line-height: 1.30 !important;
+        margin-bottom: 0.30rem !important;
+    }
+
+    /* Upload più compatto, colori ereditati da Sector. */
+    div[class*="st-key-catalog_form_panel_"]
+    [data-testid="stFileUploaderDropzone"] {
+        min-height: 88px !important;
+        padding-top: 0.55rem !important;
+        padding-bottom: 0.55rem !important;
+    }
+
+    /* Salva prodotto: stessa grafica di "Salva allenamento" in Sector. */
+    div[class*="st-key-save_product_"] button {
+        min-width: 190px !important;
+        height: 48px !important;
+        background: #00a7e1 !important;
+        border: 1px solid #00a7e1 !important;
+        border-radius: 5px !important;
+        box-shadow: none !important;
+        font-weight: 600 !important;
+        transition:
+            background-color 0.15s ease,
+            border-color 0.15s ease !important;
+    }
+
+    div[class*="st-key-save_product_"] button p {
+        color: #ffffff !important;
+        font-weight: 600 !important;
+    }
+
+    div[class*="st-key-save_product_"] button:hover {
+        background: #0095c9 !important;
+        border-color: #0095c9 !important;
+    }
+
+    div[class*="st-key-save_product_"] button:hover p {
+        color: #ffffff !important;
+    }
+
+    /* Elimina prodotto: stessa grafica di "Elimina allenamento" in Sector. */
+    div[class*="st-key-delete_product_"] button,
+    div[class*="st-key-confirm_delete_product_"] button {
+        min-width: 180px !important;
+        height: 44px !important;
+        background: #ffffff !important;
+        border: 1px solid #d9534f !important;
+        border-radius: 5px !important;
+        box-shadow: none !important;
+        font-weight: 600 !important;
+    }
+
+    div[class*="st-key-delete_product_"] button p {
+        color: #d9534f !important;
+        font-weight: 600 !important;
+    }
+
+    div[class*="st-key-delete_product_"] button:hover,
+    div[class*="st-key-confirm_delete_product_"] button {
+        background: #d9534f !important;
+        border-color: #d9534f !important;
+    }
+
+    div[class*="st-key-delete_product_"] button:hover p,
+    div[class*="st-key-confirm_delete_product_"] button p {
+        color: #ffffff !important;
+        font-weight: 600 !important;
+    }
+
+    div[class*="st-key-cancel_delete_product_"] button {
+        height: 44px !important;
+        border-radius: 5px !important;
+    }
+
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 
 
 def mostra_banner_fotografico():
@@ -886,7 +2069,7 @@ def mostra_banner_fotografico():
         contenuto_base64 = base64.b64encode(file.read()).decode()
 
     banner_html = (
-        '<div class="snowdata-sticky-banner" '
+        '<div class="sector-sticky-banner" '
         'style="width:auto;height:240px;margin-left:-3rem;'
         'margin-right:-3rem;border-radius:0;overflow:hidden;'
         'margin-bottom:0;margin-top:-50px;position:relative;'
@@ -1708,7 +2891,7 @@ with st.sidebar.expander(
 
 mostra_banner_fotografico()
 
-with st.container(key="snowdata_page_content"):
+with st.container(key="sector_page_content"):
 
     if pagina == "Dashboard":
         mostra_banner(
