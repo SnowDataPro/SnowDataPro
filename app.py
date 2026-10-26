@@ -2081,6 +2081,11 @@ st.markdown(
 
 
     /* Modifica prodotto: azione secondaria chiara e professionale */
+    div[class*="st-key-edit_product_"] {
+        margin-top: 1.15rem !important;
+        margin-bottom: 0.10rem !important;
+    }
+
     div[class*="st-key-edit_product_"] button,
     div[class*="st-key-cancel_edit_product_"] button {
         width: 100% !important;
@@ -2706,14 +2711,19 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                         )
 
                     neve_opzioni = [
-                        "Neve nuova",
-                        "Neve fine",
-                        "Neve vecchia",
-                        "Neve trasformata",
-                        "Neve artificiale",
-                        "Neve bagnata",
-                        "Neve secca",
-                        "Mista / variabile",
+                        "Neve fredda e fine",
+                        "Neve nuova fredda",
+                        "Neve nuova umida",
+                        "Neve nuova lucida",
+                        "Neve nuova bagnata",
+                        "Neve cadente bagnata",
+                        "Neve artificiale fine",
+                        "Neve artificiale trasformata",
+                        "Neve artificiale umida",
+                        "Neve trasformata bagnata",
+                        "Neve trasformata ghiacciata",
+                        "Neve trasformata sporca",
+                        "Neve mista trasformata/nuova",
                     ]
 
                     neve_default = []
@@ -3253,7 +3263,10 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             )
                             st.rerun()
 
-                        st.markdown("---")
+                        st.markdown(
+                            '<div style="height:0.15rem;"></div><hr style="margin:0.20rem 0 1.10rem 0;border:none;border-top:1px solid #d9dfe4;">',
+                            unsafe_allow_html=True,
+                        )
 
                         # --------------------------------------------
                         # ELIMINA PRODOTTO
