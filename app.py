@@ -237,7 +237,7 @@ st.markdown(textwrap.dedent("""
     [data-testid="stAppViewContainer"],
     [data-testid="stMain"],
     [data-testid="stMainBlockContainer"] {
-        background: #f5f7fa !important;
+        background: #ffffff !important;
         color: #1f2937 !important;
     }
 
@@ -246,13 +246,7 @@ st.markdown(textwrap.dedent("""
        ====================================================== */
 
     .stApp {
-        background:
-            linear-gradient(
-                180deg,
-                #f7f9fa 0px,
-                #f4f6f8 260px,
-                #f4f6f8 100%
-            );
+        background: #ffffff;
         color: #1f2937;
     }
 
@@ -282,13 +276,7 @@ st.markdown(textwrap.dedent("""
     div[class*="st-key-snowdata_page_content"] {
         position: relative !important;
         z-index: 5 !important;
-        background:
-            linear-gradient(
-                180deg,
-                #f7f9fa 0px,
-                #f4f6f8 260px,
-                #f4f6f8 100%
-            ) !important;
+        background: #ffffff !important;
 
         width: calc(100% + 6rem) !important;
         max-width: none !important;
@@ -446,15 +434,25 @@ st.markdown(textwrap.dedent("""
     }
 
     /* ---------------- INPUT LIGHT ---------------- */
+    [data-testid="stTextInput"] div[data-baseweb="input"],
+    [data-testid="stNumberInput"] div[data-baseweb="input"],
+    [data-testid="stDateInput"] div[data-baseweb="input"],
+    [data-testid="stTimeInput"] div[data-baseweb="input"],
+    [data-testid="stTextArea"] textarea {
+        background: #eef1f4 !important;
+        color: #1f2933 !important;
+        border-color: #c8d0d7 !important;
+        box-shadow: none !important;
+        border-radius: 5px !important;
+    }
+
     [data-testid="stTextInput"] input,
     [data-testid="stNumberInput"] input,
     [data-testid="stDateInput"] input,
-    [data-testid="stTimeInput"] input,
-    [data-testid="stTextArea"] textarea {
-        background: #ffffff !important;
-        color: #111827 !important;
-        -webkit-text-fill-color: #111827 !important;
-        border-color: #cbd5e1 !important;
+    [data-testid="stTimeInput"] input {
+        background: transparent !important;
+        color: #1f2933 !important;
+        -webkit-text-fill-color: #1f2933 !important;
     }
 
     [data-testid="stTextInput"] input::placeholder,
@@ -464,13 +462,16 @@ st.markdown(textwrap.dedent("""
         opacity: 1 !important;
     }
 
-    [data-baseweb="select"] > div,
+    [data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+    [data-testid="stMultiSelect"] div[data-baseweb="select"] > div,
     [data-baseweb="base-input"],
     [data-baseweb="input"],
     [data-baseweb="textarea"] {
-        background: #ffffff !important;
-        color: #111827 !important;
-        border-color: #cbd5e1 !important;
+        background: #eef1f4 !important;
+        color: #1f2933 !important;
+        border-color: #c8d0d7 !important;
+        box-shadow: none !important;
+        border-radius: 5px !important;
     }
 
     [data-baseweb="select"] span,
@@ -564,6 +565,162 @@ st.markdown(textwrap.dedent("""
     [data-testid="stAlert"] p {
         color: inherit !important;
     }
+
+
+    /* ======================================================
+       CATALOGO PRODOTTI · LAYOUT DEFINITIVO STILE SECTOR
+       ====================================================== */
+
+    div[class*="st-key-catalog_form_panel_"] {
+        background: #ffffff !important;
+        border: 1px solid #d9dee2 !important;
+        border-radius: 5px !important;
+        padding: 1.15rem 1.25rem 1.25rem 1.25rem !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.03) !important;
+        margin-bottom: 1.25rem !important;
+    }
+
+    div[class*="st-key-catalog_filter_panel_"] {
+        background: #ffffff !important;
+        border: 1px solid #d9dee2 !important;
+        border-radius: 5px !important;
+        padding: 0.95rem 1.05rem 0.75rem 1.05rem !important;
+        margin-bottom: 1.05rem !important;
+    }
+
+    div[class*="st-key-catalog_card_"] {
+        background: #ffffff !important;
+        border: 1px solid #d9dee2 !important;
+        border-radius: 5px !important;
+        padding: 1rem 1rem 0.8rem 1rem !important;
+        min-height: 410px !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.03) !important;
+    }
+
+    div[class*="st-key-catalog_card_"] [data-testid="stImage"] {
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        min-height: 145px !important;
+        max-height: 145px !important;
+        overflow: hidden !important;
+        margin-bottom: 0.45rem !important;
+    }
+
+    div[class*="st-key-catalog_card_"] [data-testid="stImage"] img {
+        width: 100% !important;
+        height: 145px !important;
+        max-height: 145px !important;
+        object-fit: contain !important;
+    }
+
+    .catalog-image-placeholder {
+        height: 145px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f7f8fa;
+        border: 1px dashed #d3d9de;
+        border-radius: 5px;
+        color: #98a3aa;
+        font-size: 0.82rem;
+        margin-bottom: 0.45rem;
+    }
+
+    div[class*="st-key-catalog_card_"] h3 {
+        font-size: 1.12rem !important;
+        line-height: 1.25 !important;
+        margin-top: 0.25rem !important;
+        margin-bottom: 0.25rem !important;
+        color: #202529 !important;
+    }
+
+    div[class*="st-key-catalog_card_"] [data-testid="stCaptionContainer"] p {
+        font-size: 0.78rem !important;
+        margin-bottom: 0.35rem !important;
+    }
+
+    div[class*="st-key-catalog_card_"] [data-testid="stMarkdownContainer"] p {
+        font-size: 0.88rem !important;
+        line-height: 1.35 !important;
+        margin-bottom: 0.38rem !important;
+    }
+
+    div[class*="st-key-catalog_card_"] [data-testid="stExpander"] {
+        margin-top: 0.55rem !important;
+        border-top: 1px solid #e3e7ea !important;
+    }
+
+    div[class*="st-key-catalog_form_panel_"] [data-testid="stTextInput"] div[data-baseweb="input"],
+    div[class*="st-key-catalog_form_panel_"] [data-testid="stNumberInput"] div[data-baseweb="input"],
+    div[class*="st-key-catalog_form_panel_"] [data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+    div[class*="st-key-catalog_form_panel_"] [data-testid="stMultiSelect"] div[data-baseweb="select"] > div,
+    div[class*="st-key-catalog_filter_panel_"] [data-testid="stTextInput"] div[data-baseweb="input"],
+    div[class*="st-key-catalog_filter_panel_"] [data-testid="stNumberInput"] div[data-baseweb="input"],
+    div[class*="st-key-catalog_filter_panel_"] [data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+    div[class*="st-key-catalog_filter_panel_"] [data-testid="stMultiSelect"] div[data-baseweb="select"] > div {
+        min-height: 48px !important;
+        height: 48px !important;
+        background: #eef1f4 !important;
+        border: 1px solid #c8d0d7 !important;
+        border-radius: 5px !important;
+        box-shadow: none !important;
+    }
+
+    div[class*="st-key-catalog_form_panel_"] [data-testid="stTextArea"] textarea {
+        background: #eef1f4 !important;
+        border: 1px solid #c8d0d7 !important;
+        border-radius: 5px !important;
+        box-shadow: none !important;
+    }
+
+    div[class*="st-key-catalog_form_panel_"] [data-testid="stFileUploader"] section {
+        min-height: 92px !important;
+        background: #eef1f4 !important;
+        border: 1px dashed #bfc8cf !important;
+        border-radius: 5px !important;
+    }
+
+    div[class*="st-key-save_product_"] button {
+        height: 48px !important;
+        background: #00a7e1 !important;
+        border: 1px solid #00a7e1 !important;
+        border-radius: 5px !important;
+        color: #ffffff !important;
+        font-weight: 600 !important;
+        box-shadow: none !important;
+    }
+
+    div[class*="st-key-save_product_"] button:hover {
+        background: #0095c9 !important;
+        border-color: #0095c9 !important;
+    }
+
+    div[class*="st-key-delete_product_"] button,
+    div[class*="st-key-confirm_delete_product_"] button {
+        height: 42px !important;
+        background: #ffffff !important;
+        border: 1px solid #d9534f !important;
+        border-radius: 5px !important;
+        color: #d9534f !important;
+        font-weight: 600 !important;
+        box-shadow: none !important;
+    }
+
+    div[class*="st-key-confirm_delete_product_"] button {
+        background: #d9534f !important;
+        color: #ffffff !important;
+    }
+
+    div[class*="st-key-delete_product_"] button:hover {
+        background: #fff4f4 !important;
+    }
+
+    div[class*="st-key-cancel_delete_product_"] button {
+        height: 42px !important;
+        border-radius: 5px !important;
+    }
+
 </style>
 """).strip(), unsafe_allow_html=True)
 
@@ -799,39 +956,21 @@ def _mostra_foto_db(foto_data, use_container_width=True, width=None):
 
 def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
     mostra_banner(titolo, sottotitolo)
-
     usa_condizioni = categoria != "rigatura"
 
-    with st.expander("➕ Aggiungi prodotto", expanded=False):
+    st.markdown("### Inserimento prodotto")
+    with st.container(key=f"catalog_form_panel_{categoria}"):
         with st.form(f"catalogo_{categoria}_form", clear_on_submit=True):
-            r1c1, r1c2 = st.columns([1.4, 1])
-            with r1c1:
+            c_nome, c_marca, c_tipo = st.columns(3)
+            with c_nome:
                 nome = st.text_input(
                     "Nome prodotto *",
                     placeholder="es. UHX Block Middle 26",
                 )
-            with r1c2:
-                marca = st.text_input(
-                    "Marca",
-                    placeholder="es. HWK",
-                )
-
-            r2c1, r2c2 = st.columns([1, 2])
-            with r2c1:
+            with c_marca:
+                marca = st.text_input("Marca", placeholder="es. HWK")
+            with c_tipo:
                 tipo = st.selectbox("Categoria prodotto", tipi)
-            with r2c2:
-                foto_upload = st.file_uploader(
-                    "Foto prodotto",
-                    type=["jpg", "jpeg", "png", "webp"],
-                    key=f"upload_foto_nuovo_{categoria}",
-                    help=(
-                        "Scegli una foto dal PC. Verrà salvata direttamente "
-                        f"nel database Turso (massimo {MAX_FOTO_PRODOTTO_MB} MB)."
-                    ),
-                )
-
-            if foto_upload is not None:
-                st.image(foto_upload, width=220)
 
             tipo_neve_val = ""
             temp_min_txt = ""
@@ -842,18 +981,18 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
 
             if usa_condizioni:
                 st.markdown("#### Condizioni di utilizzo")
-                c1, c2, c3 = st.columns(3)
-                with c1:
+                c_tmin, c_tmax, c_ttipo = st.columns(3)
+                with c_tmin:
                     temp_min_txt = st.text_input(
                         "Temperatura minima (°C)",
                         placeholder="-10",
                     )
-                with c2:
+                with c_tmax:
                     temp_max_txt = st.text_input(
                         "Temperatura massima (°C)",
                         placeholder="-4",
                     )
-                with c3:
+                with c_ttipo:
                     tipo_temperatura = st.selectbox(
                         "Temperatura riferita a",
                         ["Aria", "Neve", "Non specificato"],
@@ -869,42 +1008,53 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                     "Neve secca",
                     "Mista / variabile",
                 ]
-                tipo_neve_sel = st.multiselect(
-                    "Tipo di neve",
-                    neve_opzioni,
-                    placeholder="Seleziona una o più condizioni",
-                )
-                tipo_neve_val = ", ".join(tipo_neve_sel)
-
-                u1, u2 = st.columns(2)
-                with u1:
+                c_neve, c_umin, c_umax = st.columns([1.6, 1, 1])
+                with c_neve:
+                    tipo_neve_sel = st.multiselect(
+                        "Tipo di neve",
+                        neve_opzioni,
+                        placeholder="Seleziona condizioni",
+                    )
+                    tipo_neve_val = ", ".join(tipo_neve_sel)
+                with c_umin:
                     umidita_min_txt = st.text_input(
                         "Umidità minima (%)",
-                        placeholder="es. 70",
+                        placeholder="70",
                     )
-                with u2:
+                with c_umax:
                     umidita_max_txt = st.text_input(
                         "Umidità massima (%)",
-                        placeholder="es. 100",
+                        placeholder="100",
                     )
 
-            descrizione = st.text_area(
-                "Descrizione tecnica",
-                placeholder=(
-                    "Sintesi tecnica delle indicazioni del produttore: "
-                    "caratteristiche, uso consigliato, applicazione, tipo di neve..."
-                ),
-                height=130,
-            )
-
-            note = st.text_area(
-                "Note personali",
-                placeholder="Osservazioni interne, combinazioni, preparazioni, ecc.",
-                height=90,
-            )
+            c_foto, c_descr, c_note = st.columns([1, 1.35, 1.35])
+            with c_foto:
+                foto_upload = st.file_uploader(
+                    "Foto prodotto",
+                    type=["jpg", "jpeg", "png", "webp"],
+                    key=f"upload_foto_nuovo_{categoria}",
+                    help=(
+                        "JPG, PNG o WEBP. La foto viene salvata in Turso "
+                        f"(massimo {MAX_FOTO_PRODOTTO_MB} MB)."
+                    ),
+                )
+                if foto_upload is not None:
+                    st.image(foto_upload, width=125)
+            with c_descr:
+                descrizione = st.text_area(
+                    "Descrizione tecnica",
+                    placeholder="Caratteristiche e indicazioni principali...",
+                    height=92,
+                )
+            with c_note:
+                note = st.text_area(
+                    "Note personali",
+                    placeholder="Osservazioni interne...",
+                    height=92,
+                )
 
             salva = st.form_submit_button(
-                "Aggiungi al catalogo",
+                "Salva prodotto",
                 type="primary",
                 use_container_width=True,
             )
@@ -923,14 +1073,10 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                     temp_min = temp_max = umidita_min = umidita_max = None
                     errori.append(
                         "Temperature e umidità devono essere numeri "
-                        "(usa ad esempio -8, -2, 70, 100)."
+                        "(es. -8, -2, 70, 100)."
                     )
 
-                if (
-                    temp_min is not None
-                    and temp_max is not None
-                    and temp_min > temp_max
-                ):
+                if temp_min is not None and temp_max is not None and temp_min > temp_max:
                     errori.append(
                         "La temperatura minima non può essere superiore alla massima."
                     )
@@ -985,7 +1131,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                         umidita_min,
                         umidita_max,
                     ))
-                    st.success("Prodotto aggiunto al catalogo.")
+                    st.success("Prodotto salvato.")
                     st.rerun()
 
     st.markdown("### Catalogo prodotti")
@@ -1003,11 +1149,10 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
     """, (categoria,))
 
     if df.empty:
-        st.info("Nessun elemento ancora inserito in questo catalogo.")
+        st.info("Nessun prodotto ancora inserito in questo catalogo.")
         return
 
-    with st.container(border=True):
-        st.markdown("#### Filtri")
+    with st.container(key=f"catalog_filter_panel_{categoria}"):
         f1, f2, f3 = st.columns([1.8, 1, 1])
         with f1:
             cerca = st.text_input(
@@ -1041,7 +1186,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
         filtro_neve = "Tutte"
 
         if usa_condizioni:
-            f4, f5 = st.columns([1, 1.5])
+            f4, f5 = st.columns([1, 2])
             with f4:
                 filtro_temp_attivo = st.checkbox(
                     "Filtra per temperatura",
@@ -1113,27 +1258,32 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
         return
 
     righe = filtrato.to_dict("records")
-    for start in range(0, len(righe), 3):
+    for start_idx in range(0, len(righe), 3):
         colonne = st.columns(3)
-        for indice, prodotto in enumerate(righe[start:start + 3]):
-            with colonne[indice]:
-                with st.container(border=True):
+        for col_idx, prodotto in enumerate(righe[start_idx:start_idx + 3]):
+            prodotto_id = int(prodotto["id"])
+            with colonne[col_idx]:
+                with st.container(
+                    key=f"catalog_card_{categoria}_{prodotto_id}",
+                    border=False,
+                ):
                     foto_data = str(prodotto.get("foto_data") or "").strip()
                     if foto_data:
                         _mostra_foto_db(foto_data)
+                    else:
+                        st.markdown(
+                            '<div class="catalog-image-placeholder">Nessuna foto</div>',
+                            unsafe_allow_html=True,
+                        )
 
                     nome_prodotto = str(prodotto.get("nome") or "Prodotto")
                     st.markdown(f"### {nome_prodotto}")
 
-                    meta = []
                     marca_prodotto = str(prodotto.get("marca") or "").strip()
                     tipo_prodotto = str(prodotto.get("tipo") or "").strip()
-                    if marca_prodotto:
-                        meta.append(marca_prodotto)
-                    if tipo_prodotto:
-                        meta.append(tipo_prodotto)
+                    meta = " · ".join([x for x in [marca_prodotto, tipo_prodotto] if x])
                     if meta:
-                        st.caption(" · ".join(meta))
+                        st.caption(meta)
 
                     if usa_condizioni:
                         temp_txt = _testo_range(
@@ -1141,9 +1291,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             prodotto.get("temp_max"),
                             "°C",
                         )
-                        tipo_temp = str(
-                            prodotto.get("tipo_temperatura") or ""
-                        ).strip()
+                        tipo_temp = str(prodotto.get("tipo_temperatura") or "").strip()
                         if temp_txt != "—":
                             suffisso = (
                                 f" · {tipo_temp.lower()}"
@@ -1154,54 +1302,54 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
 
                         neve_txt = str(prodotto.get("tipo_neve") or "").strip()
                         if neve_txt:
-                            st.markdown(f"**Neve:** {neve_txt}")
+                            neve_voci = [x.strip() for x in neve_txt.split(",") if x.strip()]
+                            if len(neve_voci) > 3:
+                                neve_breve = ", ".join(neve_voci[:3]) + f" +{len(neve_voci)-3}"
+                            else:
+                                neve_breve = ", ".join(neve_voci)
+                            st.markdown(f"**Neve:** {neve_breve}")
 
-                        umidita_txt = _testo_range(
-                            prodotto.get("umidita_min"),
-                            prodotto.get("umidita_max"),
-                            "%",
-                        )
-                        if umidita_txt != "—":
-                            st.markdown(f"**Umidità:** {umidita_txt}")
-
-                    descrizione_prodotto = str(
-                        prodotto.get("descrizione") or ""
-                    ).strip()
+                    descrizione_prodotto = str(prodotto.get("descrizione") or "").strip()
                     if descrizione_prodotto:
                         anteprima = descrizione_prodotto
-                        if len(anteprima) > 220:
-                            anteprima = anteprima[:217].rstrip() + "..."
-                        st.write(anteprima)
+                        if len(anteprima) > 125:
+                            anteprima = anteprima[:122].rstrip() + "..."
+                        st.caption(anteprima)
 
                     with st.expander("Scheda completa"):
                         if descrizione_prodotto:
                             st.markdown("**Descrizione tecnica**")
                             st.write(descrizione_prodotto)
 
-                        note_prodotto = str(
-                            prodotto.get("note") or ""
-                        ).strip()
+                        note_prodotto = str(prodotto.get("note") or "").strip()
                         if note_prodotto:
                             st.markdown("**Note personali**")
                             st.write(note_prodotto)
 
-                        if foto_data:
-                            st.caption(
-                                "Foto salvata: "
-                                + str(prodotto.get("foto_nome") or "foto prodotto")
+                        if usa_condizioni:
+                            umidita_txt = _testo_range(
+                                prodotto.get("umidita_min"),
+                                prodotto.get("umidita_max"),
+                                "%",
                             )
+                            if umidita_txt != "—":
+                                st.markdown(f"**Umidità:** {umidita_txt}")
+
+                            neve_completa = str(prodotto.get("tipo_neve") or "").strip()
+                            if neve_completa:
+                                st.markdown(f"**Tipi di neve:** {neve_completa}")
 
                         nuova_foto = st.file_uploader(
-                            "Carica / sostituisci foto",
+                            "Sostituisci foto",
                             type=["jpg", "jpeg", "png", "webp"],
-                            key=f"foto_update_{categoria}_{prodotto['id']}",
+                            key=f"foto_update_{categoria}_{prodotto_id}",
                         )
 
-                        c_salva, c_rimuovi = st.columns(2)
-                        with c_salva:
+                        c_salva_foto, c_rimuovi_foto = st.columns(2)
+                        with c_salva_foto:
                             if st.button(
                                 "Salva foto",
-                                key=f"salva_foto_{categoria}_{prodotto['id']}",
+                                key=f"save_photo_{categoria}_{prodotto_id}",
                                 use_container_width=True,
                             ):
                                 if nuova_foto is None:
@@ -1219,26 +1367,63 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                             nuova_data,
                                             nuova_mime,
                                             nuovo_nome,
-                                            int(prodotto["id"]),
+                                            prodotto_id,
                                         ))
                                         st.success("Foto aggiornata.")
                                         st.rerun()
                                     except ValueError as exc:
                                         st.error(str(exc))
 
-                        with c_rimuovi:
+                        with c_rimuovi_foto:
                             if foto_data and st.button(
                                 "Rimuovi foto",
-                                key=f"rimuovi_foto_{categoria}_{prodotto['id']}",
+                                key=f"remove_photo_{categoria}_{prodotto_id}",
                                 use_container_width=True,
                             ):
                                 esegui("""
                                     UPDATE catalogo_prodotti
                                     SET foto_data = '', foto_mime = '', foto_nome = ''
                                     WHERE id = ?
-                                """, (int(prodotto["id"]),))
+                                """, (prodotto_id,))
                                 st.success("Foto rimossa.")
                                 st.rerun()
+
+                        st.markdown("---")
+                        conferma_key = f"conferma_elimina_{categoria}_{prodotto_id}"
+                        if st.button(
+                            "Elimina prodotto",
+                            key=f"delete_product_{categoria}_{prodotto_id}",
+                            use_container_width=True,
+                        ):
+                            st.session_state[conferma_key] = True
+
+                        if st.session_state.get(conferma_key, False):
+                            st.warning(
+                                "Eliminare definitivamente questo prodotto? "
+                                "L'operazione non può essere annullata."
+                            )
+                            c_conf, c_ann = st.columns(2)
+                            with c_conf:
+                                if st.button(
+                                    "Conferma elimina",
+                                    key=f"confirm_delete_product_{categoria}_{prodotto_id}",
+                                    use_container_width=True,
+                                ):
+                                    esegui(
+                                        "DELETE FROM catalogo_prodotti WHERE id = ?",
+                                        (prodotto_id,),
+                                    )
+                                    st.session_state.pop(conferma_key, None)
+                                    st.success("Prodotto eliminato.")
+                                    st.rerun()
+                            with c_ann:
+                                if st.button(
+                                    "Annulla",
+                                    key=f"cancel_delete_product_{categoria}_{prodotto_id}",
+                                    use_container_width=True,
+                                ):
+                                    st.session_state.pop(conferma_key, None)
+                                    st.rerun()
 
 
 # ============================================================
