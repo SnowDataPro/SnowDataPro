@@ -2717,6 +2717,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                         "Neve nuova lucida",
                         "Neve nuova bagnata",
                         "Neve cadente bagnata",
+                        "Neve fine sporca",
                         "Neve artificiale fine",
                         "Neve artificiale trasformata",
                         "Neve artificiale umida",
