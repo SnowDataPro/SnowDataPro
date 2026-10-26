@@ -6,6 +6,7 @@ import json
 import textwrap
 import base64
 from datetime import datetime, date
+import math
 
 # ============================================================
 # CONFIGURAZIONE
@@ -2134,6 +2135,18 @@ st.markdown(
         font-weight: 600 !important;
     }
 
+    /* Inserimento prodotto a tendina: pulito e coerente con Sector */
+    div[data-testid="stExpander"]:has(div[class*="st-key-catalog_form_panel_"]) {
+        margin-bottom: 1.15rem !important;
+    }
+
+    div[data-testid="stExpander"]:has(div[class*="st-key-catalog_form_panel_"]) > details {
+        background: #ffffff !important;
+        border: 1px solid var(--border) !important;
+        border-radius: var(--radius-medium) !important;
+        box-shadow: var(--shadow-soft) !important;
+    }
+
     .catalog-edit-notice {
         background: #eef8fc;
         border: 1px solid #b9e4f3;
@@ -2581,375 +2594,380 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
         except ValueError:
             return fallback
 
-    st.markdown(
-        "### Modifica prodotto" if modalita_modifica else "### Inserimento prodotto"
-    )
-
     if modalita_modifica:
-        nome_corrente = str(prodotto_edit.get("nome") or "").strip()
-        marca_corrente = str(prodotto_edit.get("marca") or "").strip()
-        titolo_corrente = (
-            f"{marca_corrente} - {nome_corrente}"
-            if marca_corrente
-            else nome_corrente
-        )
-        st.markdown(
-            f'<div class="catalog-edit-notice">'
-            f'Stai modificando <strong>{titolo_corrente}</strong>. '
-            f'Se non carichi una nuova foto, quella attuale verrà mantenuta.'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
+        nome_exp = str(prodotto_edit.get("nome") or "").strip()
+        marca_exp = str(prodotto_edit.get("marca") or "").strip()
+        titolo_exp = f"{marca_exp} - {nome_exp}" if marca_exp else nome_exp
+        expander_label = f"✏️ Modifica prodotto — {titolo_exp}"
+    else:
+        expander_label = "➕ Inserimento prodotto"
 
-    with st.container(key=f"catalog_form_panel_{categoria}"):
-        with st.form(
-            f"catalogo_{categoria}_form_{edit_id if modalita_modifica else 'new'}",
-            clear_on_submit=not modalita_modifica,
-        ):
-            valore_nome = (
-                str(prodotto_edit.get("nome") or "")
-                if modalita_modifica else ""
+    with st.expander(expander_label, expanded=modalita_modifica):
+        if modalita_modifica:
+            nome_corrente = str(prodotto_edit.get("nome") or "").strip()
+            marca_corrente = str(prodotto_edit.get("marca") or "").strip()
+            titolo_corrente = (
+                f"{marca_corrente} - {nome_corrente}"
+                if marca_corrente
+                else nome_corrente
             )
-            valore_marca = (
-                str(prodotto_edit.get("marca") or "")
-                if modalita_modifica else ""
-            )
-            valore_tipo = (
-                str(prodotto_edit.get("tipo") or "")
-                if modalita_modifica else ""
+            st.markdown(
+                f'<div class="catalog-edit-notice">'
+                f'Stai modificando <strong>{titolo_corrente}</strong>. '
+                f'Se non carichi una nuova foto, quella attuale verrà mantenuta.'
+                f'</div>',
+                unsafe_allow_html=True,
             )
 
-            c_nome, c_marca, c_tipo = st.columns(3)
-            with c_nome:
-                nome = st.text_input(
-                    "Nome prodotto *",
-                    value=valore_nome,
-                    placeholder="es. UHX Block Middle 26",
-                )
-            with c_marca:
-                marca = st.text_input(
-                    "Marca",
-                    value=valore_marca,
-                    placeholder="es. HWK",
-                )
-            with c_tipo:
-                tipo = st.selectbox(
-                    "Categoria prodotto",
-                    tipi,
-                    index=_indice_opzione(tipi, valore_tipo, 0),
-                )
-
-            tipo_neve_val = ""
-            temp_min_txt = ""
-            temp_max_txt = ""
-            tipo_temperatura = ""
-            umidita_min_txt = ""
-            umidita_max_txt = ""
-
-            if usa_condizioni:
-                st.markdown("#### Condizioni di utilizzo")
-
-                temp_min_default = (
-                    _input_numero_da_db(prodotto_edit.get("temp_min"))
+        with st.container(key=f"catalog_form_panel_{categoria}"):
+            with st.form(
+                f"catalogo_{categoria}_form_{edit_id if modalita_modifica else 'new'}",
+                clear_on_submit=not modalita_modifica,
+            ):
+                valore_nome = (
+                    str(prodotto_edit.get("nome") or "")
                     if modalita_modifica else ""
                 )
-                temp_max_default = (
-                    _input_numero_da_db(prodotto_edit.get("temp_max"))
+                valore_marca = (
+                    str(prodotto_edit.get("marca") or "")
                     if modalita_modifica else ""
                 )
-                tipo_temp_opzioni = ["Aria", "Neve", "Non specificato"]
-                tipo_temp_default = (
-                    str(prodotto_edit.get("tipo_temperatura") or "")
-                    if modalita_modifica else "Aria"
+                valore_tipo = (
+                    str(prodotto_edit.get("tipo") or "")
+                    if modalita_modifica else ""
                 )
 
-                c_tmin, c_tmax, c_ttipo = st.columns(3)
-                with c_tmin:
-                    temp_min_txt = st.text_input(
-                        "Temperatura minima (°C)",
-                        value=temp_min_default,
-                        placeholder="-10",
+                c_nome, c_marca, c_tipo = st.columns(3)
+                with c_nome:
+                    nome = st.text_input(
+                        "Nome prodotto *",
+                        value=valore_nome,
+                        placeholder="es. UHX Block Middle 26",
                     )
-                with c_tmax:
-                    temp_max_txt = st.text_input(
-                        "Temperatura massima (°C)",
-                        value=temp_max_default,
-                        placeholder="-4",
+                with c_marca:
+                    marca = st.text_input(
+                        "Marca",
+                        value=valore_marca,
+                        placeholder="es. HWK",
                     )
-                with c_ttipo:
-                    tipo_temperatura = st.selectbox(
-                        "Temperatura riferita a",
-                        tipo_temp_opzioni,
-                        index=_indice_opzione(
+                with c_tipo:
+                    tipo = st.selectbox(
+                        "Categoria prodotto",
+                        tipi,
+                        index=_indice_opzione(tipi, valore_tipo, 0),
+                    )
+
+                tipo_neve_val = ""
+                temp_min_txt = ""
+                temp_max_txt = ""
+                tipo_temperatura = ""
+                umidita_min_txt = ""
+                umidita_max_txt = ""
+
+                if usa_condizioni:
+                    st.markdown("#### Condizioni di utilizzo")
+
+                    temp_min_default = (
+                        _input_numero_da_db(prodotto_edit.get("temp_min"))
+                        if modalita_modifica else ""
+                    )
+                    temp_max_default = (
+                        _input_numero_da_db(prodotto_edit.get("temp_max"))
+                        if modalita_modifica else ""
+                    )
+                    tipo_temp_opzioni = ["Aria", "Neve", "Non specificato"]
+                    tipo_temp_default = (
+                        str(prodotto_edit.get("tipo_temperatura") or "")
+                        if modalita_modifica else "Aria"
+                    )
+
+                    c_tmin, c_tmax, c_ttipo = st.columns(3)
+                    with c_tmin:
+                        temp_min_txt = st.text_input(
+                            "Temperatura minima (°C)",
+                            value=temp_min_default,
+                            placeholder="-10",
+                        )
+                    with c_tmax:
+                        temp_max_txt = st.text_input(
+                            "Temperatura massima (°C)",
+                            value=temp_max_default,
+                            placeholder="-4",
+                        )
+                    with c_ttipo:
+                        tipo_temperatura = st.selectbox(
+                            "Temperatura riferita a",
                             tipo_temp_opzioni,
-                            tipo_temp_default,
-                            0,
-                        ),
-                    )
+                            index=_indice_opzione(
+                                tipo_temp_opzioni,
+                                tipo_temp_default,
+                                0,
+                            ),
+                        )
 
-                neve_opzioni = [
-                    "Neve nuova",
-                    "Neve fine",
-                    "Neve vecchia",
-                    "Neve trasformata",
-                    "Neve artificiale",
-                    "Neve bagnata",
-                    "Neve secca",
-                    "Mista / variabile",
-                ]
-
-                neve_default = []
-                if modalita_modifica:
-                    neve_salvata = str(
-                        prodotto_edit.get("tipo_neve") or ""
-                    ).strip()
-                    neve_default = [
-                        voce.strip()
-                        for voce in neve_salvata.split(",")
-                        if voce.strip() in neve_opzioni
+                    neve_opzioni = [
+                        "Neve nuova",
+                        "Neve fine",
+                        "Neve vecchia",
+                        "Neve trasformata",
+                        "Neve artificiale",
+                        "Neve bagnata",
+                        "Neve secca",
+                        "Mista / variabile",
                     ]
 
-                umidita_min_default = (
-                    _input_numero_da_db(prodotto_edit.get("umidita_min"))
-                    if modalita_modifica else ""
-                )
-                umidita_max_default = (
-                    _input_numero_da_db(prodotto_edit.get("umidita_max"))
-                    if modalita_modifica else ""
-                )
+                    neve_default = []
+                    if modalita_modifica:
+                        neve_salvata = str(
+                            prodotto_edit.get("tipo_neve") or ""
+                        ).strip()
+                        neve_default = [
+                            voce.strip()
+                            for voce in neve_salvata.split(",")
+                            if voce.strip() in neve_opzioni
+                        ]
 
-                c_neve, c_umin, c_umax = st.columns([1.6, 1, 1])
-                with c_neve:
-                    tipo_neve_sel = st.multiselect(
-                        "Tipo di neve",
-                        neve_opzioni,
-                        default=neve_default,
-                        placeholder="Seleziona condizioni",
+                    umidita_min_default = (
+                        _input_numero_da_db(prodotto_edit.get("umidita_min"))
+                        if modalita_modifica else ""
                     )
-                    tipo_neve_val = ", ".join(tipo_neve_sel)
-                with c_umin:
-                    umidita_min_txt = st.text_input(
-                        "Umidità minima (%)",
-                        value=umidita_min_default,
-                        placeholder="70",
-                    )
-                with c_umax:
-                    umidita_max_txt = st.text_input(
-                        "Umidità massima (%)",
-                        value=umidita_max_default,
-                        placeholder="100",
+                    umidita_max_default = (
+                        _input_numero_da_db(prodotto_edit.get("umidita_max"))
+                        if modalita_modifica else ""
                     )
 
-            c_foto, c_descr, c_note = st.columns([1, 1.35, 1.35])
-
-            with c_foto:
-                foto_attuale = (
-                    str(prodotto_edit.get("foto_data") or "").strip()
-                    if modalita_modifica else ""
-                )
-                if modalita_modifica and foto_attuale:
-                    st.caption("Foto attuale")
-                    _mostra_foto_db(
-                        foto_attuale,
-                        use_container_width=False,
-                        width=105,
-                    )
-
-                foto_upload = st.file_uploader(
-                    "Nuova foto" if modalita_modifica else "Foto prodotto",
-                    type=["jpg", "jpeg", "png", "webp"],
-                    key=(
-                        f"upload_foto_edit_{categoria}_{edit_id}"
-                        if modalita_modifica
-                        else f"upload_foto_nuovo_{categoria}"
-                    ),
-                    help=(
-                        "JPG, PNG o WEBP. "
-                        + (
-                            "Se non scegli una nuova foto, quella attuale resta invariata. "
-                            if modalita_modifica else ""
+                    c_neve, c_umin, c_umax = st.columns([1.6, 1, 1])
+                    with c_neve:
+                        tipo_neve_sel = st.multiselect(
+                            "Tipo di neve",
+                            neve_opzioni,
+                            default=neve_default,
+                            placeholder="Seleziona condizioni",
                         )
-                        + f"Massimo {MAX_FOTO_PRODOTTO_MB} MB."
-                    ),
-                )
-                if foto_upload is not None:
-                    st.caption("Nuova foto")
-                    st.image(foto_upload, width=105)
+                        tipo_neve_val = ", ".join(tipo_neve_sel)
+                    with c_umin:
+                        umidita_min_txt = st.text_input(
+                            "Umidità minima (%)",
+                            value=umidita_min_default,
+                            placeholder="70",
+                        )
+                    with c_umax:
+                        umidita_max_txt = st.text_input(
+                            "Umidità massima (%)",
+                            value=umidita_max_default,
+                            placeholder="100",
+                        )
 
-            with c_descr:
-                descrizione = st.text_area(
-                    "Descrizione tecnica",
-                    value=(
-                        str(prodotto_edit.get("descrizione") or "")
+                c_foto, c_descr, c_note = st.columns([1, 1.35, 1.35])
+
+                with c_foto:
+                    foto_attuale = (
+                        str(prodotto_edit.get("foto_data") or "").strip()
                         if modalita_modifica else ""
-                    ),
-                    placeholder="Caratteristiche e indicazioni principali...",
-                    height=92,
-                )
+                    )
+                    if modalita_modifica and foto_attuale:
+                        st.caption("Foto attuale")
+                        _mostra_foto_db(
+                            foto_attuale,
+                            use_container_width=False,
+                            width=105,
+                        )
 
-            with c_note:
-                note = st.text_area(
-                    "Note personali",
-                    value=(
-                        str(prodotto_edit.get("note") or "")
-                        if modalita_modifica else ""
-                    ),
-                    placeholder="Osservazioni interne...",
-                    height=92,
-                )
+                    foto_upload = st.file_uploader(
+                        "Nuova foto" if modalita_modifica else "Foto prodotto",
+                        type=["jpg", "jpeg", "png", "webp"],
+                        key=(
+                            f"upload_foto_edit_{categoria}_{edit_id}"
+                            if modalita_modifica
+                            else f"upload_foto_nuovo_{categoria}"
+                        ),
+                        help=(
+                            "JPG, PNG o WEBP. "
+                            + (
+                                "Se non scegli una nuova foto, quella attuale resta invariata. "
+                                if modalita_modifica else ""
+                            )
+                            + f"Massimo {MAX_FOTO_PRODOTTO_MB} MB."
+                        ),
+                    )
+                    if foto_upload is not None:
+                        st.caption("Nuova foto")
+                        st.image(foto_upload, width=105)
 
-            if modalita_modifica:
-                c_submit, c_cancel = st.columns([2.2, 1])
-                with c_submit:
+                with c_descr:
+                    descrizione = st.text_area(
+                        "Descrizione tecnica",
+                        value=(
+                            str(prodotto_edit.get("descrizione") or "")
+                            if modalita_modifica else ""
+                        ),
+                        placeholder="Caratteristiche e indicazioni principali...",
+                        height=92,
+                    )
+
+                with c_note:
+                    note = st.text_area(
+                        "Note personali",
+                        value=(
+                            str(prodotto_edit.get("note") or "")
+                            if modalita_modifica else ""
+                        ),
+                        placeholder="Osservazioni interne...",
+                        height=92,
+                    )
+
+                if modalita_modifica:
+                    c_submit, c_cancel = st.columns([2.2, 1])
+                    with c_submit:
+                        submit = st.form_submit_button(
+                            "Modifica prodotto",
+                            type="primary",
+                            use_container_width=True,
+                        )
+                    with c_cancel:
+                        annulla_modifica = st.form_submit_button(
+                            "Annulla modifica",
+                            use_container_width=True,
+                        )
+                else:
                     submit = st.form_submit_button(
-                        "Modifica prodotto",
+                        "Salva prodotto",
                         type="primary",
                         use_container_width=True,
                     )
-                with c_cancel:
-                    annulla_modifica = st.form_submit_button(
-                        "Annulla modifica",
-                        use_container_width=True,
-                    )
-            else:
-                submit = st.form_submit_button(
-                    "Salva prodotto",
-                    type="primary",
-                    use_container_width=True,
-                )
-                annulla_modifica = False
+                    annulla_modifica = False
 
-            if annulla_modifica:
-                st.session_state.pop(edit_state_key, None)
-                st.rerun()
+                if annulla_modifica:
+                    st.session_state.pop(edit_state_key, None)
+                    st.rerun()
 
-            if submit:
-                errori = []
+                if submit:
+                    errori = []
 
-                if not nome.strip():
-                    errori.append("Inserisci il nome del prodotto.")
+                    if not nome.strip():
+                        errori.append("Inserisci il nome del prodotto.")
 
-                try:
-                    temp_min = _numero_opzionale(temp_min_txt)
-                    temp_max = _numero_opzionale(temp_max_txt)
-                    umidita_min = _numero_opzionale(umidita_min_txt)
-                    umidita_max = _numero_opzionale(umidita_max_txt)
-                except ValueError:
-                    temp_min = temp_max = umidita_min = umidita_max = None
-                    errori.append(
-                        "Temperature e umidità devono essere numeri "
-                        "(es. -8, -2, 70, 100)."
-                    )
-
-                if (
-                    temp_min is not None
-                    and temp_max is not None
-                    and temp_min > temp_max
-                ):
-                    errori.append(
-                        "La temperatura minima non può essere superiore alla massima."
-                    )
-
-                if (
-                    umidita_min is not None
-                    and umidita_max is not None
-                    and umidita_min > umidita_max
-                ):
-                    errori.append(
-                        "L'umidità minima non può essere superiore alla massima."
-                    )
-
-                if modalita_modifica:
-                    foto_data = str(prodotto_edit.get("foto_data") or "")
-                    foto_mime = str(prodotto_edit.get("foto_mime") or "")
-                    foto_nome = str(prodotto_edit.get("foto_nome") or "")
-                else:
-                    foto_data = foto_mime = foto_nome = ""
-
-                if foto_upload is not None:
                     try:
-                        foto_data, foto_mime, foto_nome = _prepara_foto_upload(
-                            foto_upload
+                        temp_min = _numero_opzionale(temp_min_txt)
+                        temp_max = _numero_opzionale(temp_max_txt)
+                        umidita_min = _numero_opzionale(umidita_min_txt)
+                        umidita_max = _numero_opzionale(umidita_max_txt)
+                    except ValueError:
+                        temp_min = temp_max = umidita_min = umidita_max = None
+                        errori.append(
+                            "Temperature e umidità devono essere numeri "
+                            "(es. -8, -2, 70, 100)."
                         )
-                    except ValueError as exc:
-                        errori.append(str(exc))
 
-                if errori:
-                    for errore in errori:
-                        st.error(errore)
-                else:
+                    if (
+                        temp_min is not None
+                        and temp_max is not None
+                        and temp_min > temp_max
+                    ):
+                        errori.append(
+                            "La temperatura minima non può essere superiore alla massima."
+                        )
+
+                    if (
+                        umidita_min is not None
+                        and umidita_max is not None
+                        and umidita_min > umidita_max
+                    ):
+                        errori.append(
+                            "L'umidità minima non può essere superiore alla massima."
+                        )
+
                     if modalita_modifica:
-                        esegui("""
-                            UPDATE catalogo_prodotti
-                            SET
-                                nome = ?,
-                                marca = ?,
-                                tipo = ?,
-                                descrizione = ?,
-                                note = ?,
-                                foto_data = ?,
-                                foto_mime = ?,
-                                foto_nome = ?,
-                                temp_min = ?,
-                                temp_max = ?,
-                                tipo_temperatura = ?,
-                                tipo_neve = ?,
-                                umidita_min = ?,
-                                umidita_max = ?
-                            WHERE id = ? AND categoria = ?
-                        """, (
-                            nome.strip(),
-                            marca.strip(),
-                            tipo,
-                            descrizione.strip(),
-                            note.strip(),
-                            foto_data,
-                            foto_mime,
-                            foto_nome,
-                            temp_min,
-                            temp_max,
-                            tipo_temperatura if usa_condizioni else "",
-                            tipo_neve_val if usa_condizioni else "",
-                            umidita_min,
-                            umidita_max,
-                            int(edit_id),
-                            categoria,
-                        ))
-                        st.session_state.pop(edit_state_key, None)
-                        st.success("Prodotto modificato.")
-                        st.rerun()
-
+                        foto_data = str(prodotto_edit.get("foto_data") or "")
+                        foto_mime = str(prodotto_edit.get("foto_mime") or "")
+                        foto_nome = str(prodotto_edit.get("foto_nome") or "")
                     else:
-                        esegui("""
-                            INSERT INTO catalogo_prodotti (
-                                categoria, nome, marca, tipo,
-                                descrizione, note, creato_il,
-                                foto_data, foto_mime, foto_nome,
-                                temp_min, temp_max,
-                                tipo_temperatura, tipo_neve,
-                                umidita_min, umidita_max
+                        foto_data = foto_mime = foto_nome = ""
+
+                    if foto_upload is not None:
+                        try:
+                            foto_data, foto_mime, foto_nome = _prepara_foto_upload(
+                                foto_upload
                             )
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (
-                            categoria,
-                            nome.strip(),
-                            marca.strip(),
-                            tipo,
-                            descrizione.strip(),
-                            note.strip(),
-                            datetime.now().isoformat(timespec="seconds"),
-                            foto_data,
-                            foto_mime,
-                            foto_nome,
-                            temp_min,
-                            temp_max,
-                            tipo_temperatura if usa_condizioni else "",
-                            tipo_neve_val if usa_condizioni else "",
-                            umidita_min,
-                            umidita_max,
-                        ))
-                        st.success("Prodotto salvato.")
-                        st.rerun()
+                        except ValueError as exc:
+                            errori.append(str(exc))
+
+                    if errori:
+                        for errore in errori:
+                            st.error(errore)
+                    else:
+                        if modalita_modifica:
+                            esegui("""
+                                UPDATE catalogo_prodotti
+                                SET
+                                    nome = ?,
+                                    marca = ?,
+                                    tipo = ?,
+                                    descrizione = ?,
+                                    note = ?,
+                                    foto_data = ?,
+                                    foto_mime = ?,
+                                    foto_nome = ?,
+                                    temp_min = ?,
+                                    temp_max = ?,
+                                    tipo_temperatura = ?,
+                                    tipo_neve = ?,
+                                    umidita_min = ?,
+                                    umidita_max = ?
+                                WHERE id = ? AND categoria = ?
+                            """, (
+                                nome.strip(),
+                                marca.strip(),
+                                tipo,
+                                descrizione.strip(),
+                                note.strip(),
+                                foto_data,
+                                foto_mime,
+                                foto_nome,
+                                temp_min,
+                                temp_max,
+                                tipo_temperatura if usa_condizioni else "",
+                                tipo_neve_val if usa_condizioni else "",
+                                umidita_min,
+                                umidita_max,
+                                int(edit_id),
+                                categoria,
+                            ))
+                            st.session_state.pop(edit_state_key, None)
+                            st.success("Prodotto modificato.")
+                            st.rerun()
+
+                        else:
+                            esegui("""
+                                INSERT INTO catalogo_prodotti (
+                                    categoria, nome, marca, tipo,
+                                    descrizione, note, creato_il,
+                                    foto_data, foto_mime, foto_nome,
+                                    temp_min, temp_max,
+                                    tipo_temperatura, tipo_neve,
+                                    umidita_min, umidita_max
+                                )
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """, (
+                                categoria,
+                                nome.strip(),
+                                marca.strip(),
+                                tipo,
+                                descrizione.strip(),
+                                note.strip(),
+                                datetime.now().isoformat(timespec="seconds"),
+                                foto_data,
+                                foto_mime,
+                                foto_nome,
+                                temp_min,
+                                temp_max,
+                                tipo_temperatura if usa_condizioni else "",
+                                tipo_neve_val if usa_condizioni else "",
+                                umidita_min,
+                                umidita_max,
+                            ))
+                            st.success("Prodotto salvato.")
+                            st.rerun()
 
     st.markdown("### Catalogo prodotti")
 
@@ -2999,33 +3017,52 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
             )
 
         filtro_temp_attivo = False
-        filtro_temp = 0.0
-        filtro_neve = "Tutte"
+        filtro_temp_range = None
+        filtro_neve = []
 
         if usa_condizioni:
-            f4, f5 = st.columns([1, 2])
+            temp_min_num = pd.to_numeric(df["temp_min"], errors="coerce")
+            temp_max_num = pd.to_numeric(df["temp_max"], errors="coerce")
+            temp_valori = pd.concat([temp_min_num, temp_max_num]).dropna()
+
+            if not temp_valori.empty:
+                limite_min = math.floor(float(temp_valori.min()) * 2) / 2
+                limite_max = math.ceil(float(temp_valori.max()) * 2) / 2
+            else:
+                limite_min, limite_max = -20.0, 5.0
+
+            if limite_min == limite_max:
+                limite_min -= 0.5
+                limite_max += 0.5
+
+            neve_presenti = set()
+            for valore in df["tipo_neve"].fillna("").astype(str):
+                for voce in valore.split(","):
+                    voce = voce.strip()
+                    if voce:
+                        neve_presenti.add(voce)
+
+            f4, f5, f6 = st.columns([0.85, 2.15, 2.2])
             with f4:
                 filtro_temp_attivo = st.checkbox(
                     "Filtra per temperatura",
                     key=f"usa_temp_{categoria}",
                 )
-                if filtro_temp_attivo:
-                    filtro_temp = st.number_input(
-                        "Temperatura (°C)",
-                        value=-5.0,
-                        step=0.5,
-                        key=f"temp_catalogo_{categoria}",
-                    )
             with f5:
-                neve_presenti = set()
-                for valore in df["tipo_neve"].fillna("").astype(str):
-                    for voce in valore.split(","):
-                        voce = voce.strip()
-                        if voce:
-                            neve_presenti.add(voce)
-                filtro_neve = st.selectbox(
-                    "Tipo di neve",
-                    ["Tutte"] + sorted(neve_presenti, key=str.lower),
+                filtro_temp_range = st.slider(
+                    "Intervallo temperatura (°C)",
+                    min_value=float(limite_min),
+                    max_value=float(limite_max),
+                    value=(float(limite_min), float(limite_max)),
+                    step=0.5,
+                    disabled=not filtro_temp_attivo,
+                    key=f"temp_range_catalogo_{categoria}",
+                )
+            with f6:
+                filtro_neve = st.multiselect(
+                    "Tipi di neve",
+                    sorted(neve_presenti, key=str.lower),
+                    placeholder="Tutte le tipologie",
                     key=f"filtro_neve_{categoria}",
                 )
 
@@ -3052,20 +3089,35 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
     if filtro_tipo != "Tutti":
         filtrato = filtrato[filtrato["tipo"] == filtro_tipo]
 
-    if usa_condizioni and filtro_temp_attivo:
+    if usa_condizioni and filtro_temp_attivo and filtro_temp_range is not None:
+        filtro_temp_min, filtro_temp_max = filtro_temp_range
+        temp_min_prod = pd.to_numeric(filtrato["temp_min"], errors="coerce")
+        temp_max_prod = pd.to_numeric(filtrato["temp_max"], errors="coerce")
+        ha_temperatura = temp_min_prod.notna() | temp_max_prod.notna()
+        temp_min_eff = temp_min_prod.fillna(float("-inf"))
+        temp_max_eff = temp_max_prod.fillna(float("inf"))
+
+        # Mantiene i prodotti il cui intervallo di utilizzo si sovrappone
+        # almeno in parte all'intervallo scelto nel filtro.
         filtrato = filtrato[
-            filtrato["temp_min"].notna()
-            & filtrato["temp_max"].notna()
-            & (filtrato["temp_min"] <= filtro_temp)
-            & (filtrato["temp_max"] >= filtro_temp)
+            ha_temperatura
+            & (temp_min_eff <= float(filtro_temp_max))
+            & (temp_max_eff >= float(filtro_temp_min))
         ]
 
-    if usa_condizioni and filtro_neve != "Tutte":
+    if usa_condizioni and filtro_neve:
+        neve_selezionate = set(filtro_neve)
+
+        def _compatibile_neve(valore):
+            tipi_prodotto = {
+                voce.strip()
+                for voce in str(valore or "").split(",")
+                if voce.strip()
+            }
+            return bool(tipi_prodotto & neve_selezionate)
+
         filtrato = filtrato[
-            filtrato["tipo_neve"]
-            .fillna("")
-            .astype(str)
-            .str.contains(filtro_neve, case=False, regex=False)
+            filtrato["tipo_neve"].apply(_compatibile_neve)
         ]
 
     st.caption(f"{len(filtrato)} prodotti visualizzati su {len(df)}")
@@ -3137,8 +3189,20 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             prodotto.get("temp_max"),
                             "°C",
                         )
+                        tipo_temp_card = str(
+                            prodotto.get("tipo_temperatura") or ""
+                        ).strip().lower()
+                        if tipo_temp_card == "aria":
+                            riferimento_temp = "aria"
+                        elif tipo_temp_card == "neve":
+                            riferimento_temp = "neve"
+                        else:
+                            riferimento_temp = "n.d."
+
                         if temp_txt != "—":
-                            st.markdown(f"**Temperatura:** {temp_txt}")
+                            st.markdown(
+                                f"**Temperatura:** {temp_txt} · {riferimento_temp}"
+                            )
 
                     descrizione_prodotto = str(
                         prodotto.get("descrizione") or ""
