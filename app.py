@@ -821,6 +821,57 @@ div[class*="st-key-catalog_filter_panel_"] [data-testid="stMultiSelect"] div[dat
     height: 48px !important;
 }
 
+
+/* Il tema Streamlit è LIGHT; queste regole uniformano i campi a Sector G2 Lab. */
+[data-testid="stTextInput"] [data-baseweb="input"],
+[data-testid="stTextInput"] [data-baseweb="base-input"],
+[data-testid="stNumberInput"] [data-baseweb="input"],
+[data-testid="stNumberInput"] [data-baseweb="base-input"],
+[data-testid="stDateInput"] [data-baseweb="input"],
+[data-testid="stTimeInput"] [data-baseweb="input"],
+[data-testid="stSelectbox"] [data-baseweb="select"],
+[data-testid="stSelectbox"] [data-baseweb="select"] > div,
+[data-testid="stMultiSelect"] [data-baseweb="select"],
+[data-testid="stMultiSelect"] [data-baseweb="select"] > div,
+[data-testid="stTextArea"] [data-baseweb="textarea"],
+[data-testid="stTextArea"] textarea {
+    background: #eef1f4 !important;
+    background-color: #eef1f4 !important;
+    color: #1f2933 !important;
+    border-color: #c8d0d7 !important;
+}
+
+/* Copre gli strati BaseWeb interni che, col tema scuro, restavano neri. */
+[data-testid="stTextInput"] [data-baseweb="input"] > div,
+[data-testid="stTextInput"] [data-baseweb="base-input"] > div,
+[data-testid="stNumberInput"] [data-baseweb="input"] > div,
+[data-testid="stNumberInput"] [data-baseweb="base-input"] > div,
+[data-testid="stSelectbox"] [data-baseweb="select"] > div > div,
+[data-testid="stMultiSelect"] [data-baseweb="select"] > div > div {
+    background: #eef1f4 !important;
+    background-color: #eef1f4 !important;
+    color: #1f2933 !important;
+}
+
+[data-testid="stTextInput"] input,
+[data-testid="stNumberInput"] input,
+[data-testid="stDateInput"] input,
+[data-testid="stTimeInput"] input,
+[data-testid="stSelectbox"] input,
+[data-testid="stMultiSelect"] input,
+[data-testid="stTextArea"] textarea {
+    color: #1f2933 !important;
+    -webkit-text-fill-color: #1f2933 !important;
+}
+
+[data-testid="stSelectbox"] [data-baseweb="select"] span,
+[data-testid="stMultiSelect"] [data-baseweb="select"] span,
+[data-testid="stSelectbox"] [data-baseweb="select"] div,
+[data-testid="stMultiSelect"] [data-baseweb="select"] div {
+    color: #1f2933 !important;
+    -webkit-text-fill-color: #1f2933 !important;
+}
+
 </style>
 """).strip(), unsafe_allow_html=True)
 
