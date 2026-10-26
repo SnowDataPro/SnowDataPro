@@ -20,7 +20,35 @@ st.set_page_config(
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "ski_material_lab.db")
-VERSIONE_DATABASE_APP = 3
+VERSIONE_DATABASE_APP = 4
+
+PRODOTTI_IMG_DIR = os.path.join(BASE_DIR, "assets", "prodotti")
+ESTENSIONI_IMMAGINI_PRODOTTO = {".png", ".jpg", ".jpeg", ".webp"}
+
+
+def immagini_prodotti_disponibili():
+    """Restituisce i file immagine presenti nel repository in assets/prodotti."""
+    if not os.path.isdir(PRODOTTI_IMG_DIR):
+        return []
+    immagini = []
+    for nome_file in os.listdir(PRODOTTI_IMG_DIR):
+        percorso = os.path.join(PRODOTTI_IMG_DIR, nome_file)
+        estensione = os.path.splitext(nome_file)[1].lower()
+        if os.path.isfile(percorso) and estensione in ESTENSIONI_IMMAGINI_PRODOTTO:
+            immagini.append(nome_file)
+    return sorted(immagini, key=str.lower)
+
+
+def percorso_immagine_prodotto(nome_file):
+    """Ritorna un percorso locale sicuro per un'immagine prodotto."""
+    nome_file = os.path.basename(str(nome_file or "").strip())
+    if not nome_file:
+        return None
+    percorso = os.path.join(PRODOTTI_IMG_DIR, nome_file)
+    if os.path.isfile(percorso):
+        return percorso
+    return None
+
 
 
 # ============================================================
@@ -171,6 +199,7 @@ def inizializza_database():
             creato_il TEXT NOT NULL,
             codice TEXT,
             foto_url TEXT,
+            foto_file TEXT,
             temp_min REAL,
             temp_max REAL,
             tipo_temperatura TEXT,
@@ -188,6 +217,7 @@ def inizializza_database():
     nuove_colonne_catalogo = {
         "codice": "TEXT",
         "foto_url": "TEXT",
+        "foto_file": "TEXT",
         "temp_min": "REAL",
         "temp_max": "REAL",
         "tipo_temperatura": "TEXT",
@@ -754,39 +784,43 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
     mostra_banner(titolo, sottotitolo)
 
     usa_condizioni = categoria != "rigatura"
+    immagini_disponibili = immagini_prodotti_disponibili()
 
     with st.expander("➕ Aggiungi prodotto", expanded=False):
         with st.form(f"catalogo_{categoria}_form", clear_on_submit=True):
-            r1c1, r1c2, r1c3 = st.columns([1.4, 1, 1])
+            r1c1, r1c2 = st.columns([1.4, 1])
             with r1c1:
                 nome = st.text_input(
                     "Nome prodotto *",
-                    placeholder="es. TS7 Black",
+                    placeholder="es. UHX Block Middle 26",
                 )
             with r1c2:
-                codice = st.text_input(
-                    "Codice prodotto",
-                    placeholder="es. TS07B-4",
-                )
-            with r1c3:
                 marca = st.text_input(
                     "Marca",
-                    placeholder="es. Swix",
+                    placeholder="es. HWK",
                 )
 
             r2c1, r2c2 = st.columns([1, 2])
             with r2c1:
                 tipo = st.selectbox("Categoria prodotto", tipi)
             with r2c2:
-                foto_url = st.text_input(
-                    "URL foto prodotto",
-                    placeholder="https://.../prodotto.jpg",
+                opzioni_foto = ["Nessuna immagine"] + immagini_disponibili
+                foto_scelta = st.selectbox(
+                    "Foto prodotto",
+                    opzioni_foto,
                     help=(
-                        "Usa preferibilmente l'immagine ufficiale del produttore. "
-                        "Salviamo l'URL, non il file, così la foto resta disponibile "
-                        "anche su Streamlit Cloud."
+                        "Le immagini vengono lette dalla cartella assets/prodotti "
+                        "del repository GitHub. Carica lì la foto, attendi il nuovo "
+                        "deploy e poi selezionala da questo elenco."
                     ),
                 )
+
+            foto_file = "" if foto_scelta == "Nessuna immagine" else foto_scelta
+
+            if foto_file:
+                percorso_preview = percorso_immagine_prodotto(foto_file)
+                if percorso_preview:
+                    st.image(percorso_preview, width=220)
 
             tipo_neve_val = ""
             temp_min_txt = ""
@@ -846,21 +880,12 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
             descrizione = st.text_area(
                 "Descrizione tecnica",
                 placeholder=(
-                    "Sintesi tecnica/parafrasata delle indicazioni del produttore: "
+                    "Sintesi tecnica delle indicazioni del produttore: "
                     "caratteristiche, uso consigliato, applicazione, tipo di neve..."
                 ),
                 height=130,
             )
 
-            url_fonte = st.text_input(
-                "Pagina ufficiale del produttore",
-                placeholder="https://www.produttore.com/...",
-            )
-
-            condizioni = st.text_input(
-                "Altre condizioni / indicazioni",
-                placeholder="es. racing, base, top coat, neve aggressiva...",
-            )
             note = st.text_area(
                 "Note personali",
                 placeholder="Osservazioni interne, combinazioni, preparazioni, ecc.",
@@ -914,31 +939,28 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                 else:
                     esegui("""
                         INSERT INTO catalogo_prodotti (
-                            categoria, nome, marca, tipo, condizioni,
+                            categoria, nome, marca, tipo,
                             descrizione, note, creato_il,
-                            codice, foto_url, temp_min, temp_max,
+                            foto_file, temp_min, temp_max,
                             tipo_temperatura, tipo_neve,
-                            umidita_min, umidita_max, url_fonte
+                            umidita_min, umidita_max
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         categoria,
                         nome.strip(),
                         marca.strip(),
                         tipo,
-                        condizioni.strip(),
                         descrizione.strip(),
                         note.strip(),
                         datetime.now().isoformat(timespec="seconds"),
-                        codice.strip(),
-                        foto_url.strip(),
+                        foto_file,
                         temp_min,
                         temp_max,
                         tipo_temperatura if usa_condizioni else "",
                         tipo_neve_val if usa_condizioni else "",
                         umidita_min,
                         umidita_max,
-                        url_fonte.strip(),
                     ))
                     st.success("Prodotto aggiunto al catalogo.")
                     st.rerun()
@@ -947,10 +969,10 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
 
     df = leggi_df("""
         SELECT
-            id, nome, codice, marca, tipo, foto_url,
+            id, nome, marca, tipo, foto_file,
             temp_min, temp_max, tipo_temperatura, tipo_neve,
             umidita_min, umidita_max,
-            condizioni, descrizione, url_fonte, note
+            descrizione, note
         FROM catalogo_prodotti
         WHERE categoria = ?
         ORDER BY marca COLLATE NOCASE, nome COLLATE NOCASE
@@ -968,7 +990,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
             cerca = st.text_input(
                 "Cerca",
                 key=f"cerca_catalogo_{categoria}",
-                placeholder="Nome, codice, marca, descrizione...",
+                placeholder="Nome, marca, descrizione...",
             )
         with f2:
             marche = ["Tutte"] + sorted(
@@ -1026,13 +1048,17 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
 
     if cerca.strip():
         q = cerca.strip().lower()
-        colonne_testo = [
-            "nome", "codice", "marca", "tipo",
-            "condizioni", "descrizione", "note",
-        ]
+        colonne_testo = ["nome", "marca", "tipo", "descrizione", "note"]
         maschera = pd.Series(False, index=filtrato.index)
         for col in colonne_testo:
-            maschera = maschera | filtrato[col].fillna("").astype(str).str.lower().str.contains(q, regex=False)
+            maschera = (
+                maschera
+                | filtrato[col]
+                .fillna("")
+                .astype(str)
+                .str.lower()
+                .str.contains(q, regex=False)
+            )
         filtrato = filtrato[maschera]
 
     if filtro_marca != "Tutte":
@@ -1042,7 +1068,6 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
         filtrato = filtrato[filtrato["tipo"] == filtro_tipo]
 
     if usa_condizioni and filtro_temp_attivo:
-        # I prodotti senza range restano esclusi dal filtro temperatura.
         filtrato = filtrato[
             filtrato["temp_min"].notna()
             & filtrato["temp_max"].notna()
@@ -1071,12 +1096,10 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
         for indice, prodotto in enumerate(righe[start:start + 3]):
             with colonne[indice]:
                 with st.container(border=True):
-                    foto = str(prodotto.get("foto_url") or "").strip()
-                    if foto:
-                        try:
-                            st.image(foto, use_container_width=True)
-                        except Exception:
-                            st.caption("Immagine non disponibile")
+                    foto_file = str(prodotto.get("foto_file") or "").strip()
+                    percorso_foto = percorso_immagine_prodotto(foto_file)
+                    if percorso_foto:
+                        st.image(percorso_foto, use_container_width=True)
 
                     nome_prodotto = str(prodotto.get("nome") or "Prodotto")
                     st.markdown(f"### {nome_prodotto}")
@@ -1084,7 +1107,6 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                     meta = []
                     marca_prodotto = str(prodotto.get("marca") or "").strip()
                     tipo_prodotto = str(prodotto.get("tipo") or "").strip()
-                    codice_prodotto = str(prodotto.get("codice") or "").strip()
 
                     if marca_prodotto:
                         meta.append(marca_prodotto)
@@ -1092,9 +1114,6 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                         meta.append(tipo_prodotto)
                     if meta:
                         st.caption(" · ".join(meta))
-
-                    if codice_prodotto:
-                        st.caption(f"Codice: {codice_prodotto}")
 
                     if usa_condizioni:
                         temp_txt = _testo_range(
@@ -1113,9 +1132,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             )
                             st.markdown(f"**Temperatura:** {temp_txt}{suffisso}")
 
-                        neve_txt = str(
-                            prodotto.get("tipo_neve") or ""
-                        ).strip()
+                        neve_txt = str(prodotto.get("tipo_neve") or "").strip()
                         if neve_txt:
                             st.markdown(f"**Neve:** {neve_txt}")
 
@@ -1141,13 +1158,6 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             st.markdown("**Descrizione tecnica**")
                             st.write(descrizione_prodotto)
 
-                        condizioni_prodotto = str(
-                            prodotto.get("condizioni") or ""
-                        ).strip()
-                        if condizioni_prodotto:
-                            st.markdown("**Altre condizioni**")
-                            st.write(condizioni_prodotto)
-
                         note_prodotto = str(
                             prodotto.get("note") or ""
                         ).strip()
@@ -1155,14 +1165,40 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             st.markdown("**Note personali**")
                             st.write(note_prodotto)
 
-                        url_fonte = str(
-                            prodotto.get("url_fonte") or ""
-                        ).strip()
-                        if url_fonte:
-                            st.link_button(
-                                "Pagina ufficiale del produttore",
-                                url_fonte,
+                        immagini_attuali = immagini_prodotti_disponibili()
+                        if immagini_attuali:
+                            opzioni = ["Nessuna immagine"] + immagini_attuali
+                            valore_attuale = (
+                                foto_file
+                                if foto_file in immagini_attuali
+                                else "Nessuna immagine"
+                            )
+                            nuova_foto = st.selectbox(
+                                "Immagine associata",
+                                opzioni,
+                                index=opzioni.index(valore_attuale),
+                                key=f"foto_prodotto_{categoria}_{prodotto['id']}",
+                            )
+                            if st.button(
+                                "Salva immagine",
+                                key=f"salva_foto_{categoria}_{prodotto['id']}",
                                 use_container_width=True,
+                            ):
+                                valore_db = (
+                                    ""
+                                    if nuova_foto == "Nessuna immagine"
+                                    else nuova_foto
+                                )
+                                esegui(
+                                    "UPDATE catalogo_prodotti SET foto_file = ? WHERE id = ?",
+                                    (valore_db, int(prodotto["id"])),
+                                )
+                                st.success("Immagine aggiornata.")
+                                st.rerun()
+                        else:
+                            st.caption(
+                                "Per associare una foto, carica prima un file PNG/JPG/WEBP "
+                                "nella cartella assets/prodotti del repository GitHub."
                             )
 
 
