@@ -721,6 +721,106 @@ st.markdown(textwrap.dedent("""
         border-radius: 5px !important;
     }
 
+
+/* ======================================================
+   CAMPI DI INSERIMENTO — IDENTICI A SECTOR G2 LAB
+   Compatibile con i componenti BaseWeb usati da Streamlit Cloud.
+   ====================================================== */
+
+[data-testid="stTextInput"] div[data-baseweb="input"],
+[data-testid="stNumberInput"] div[data-baseweb="input"],
+[data-testid="stDateInput"] div[data-baseweb="input"],
+[data-testid="stTimeInput"] div[data-baseweb="input"],
+[data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+[data-testid="stMultiSelect"] div[data-baseweb="select"] > div,
+div[data-baseweb="input"],
+div[data-baseweb="base-input"],
+div[data-baseweb="select"] > div,
+[data-testid="stTextArea"] textarea {
+    background-color: #eef1f4 !important;
+    color: #1f2933 !important;
+    border-color: #c8d0d7 !important;
+    box-shadow: none !important;
+}
+
+input,
+textarea,
+div[data-baseweb="input"] input,
+div[data-baseweb="base-input"] input,
+div[data-baseweb="select"] input {
+    background-color: transparent !important;
+    color: #1f2933 !important;
+    -webkit-text-fill-color: #1f2933 !important;
+    caret-color: #1f2933 !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+    color: #78848d !important;
+    -webkit-text-fill-color: #78848d !important;
+    opacity: 1 !important;
+}
+
+div[data-baseweb="select"] span,
+div[data-baseweb="select"] [role="button"],
+div[data-baseweb="input"] span {
+    color: #1f2933 !important;
+    -webkit-text-fill-color: #1f2933 !important;
+}
+
+div[data-baseweb="select"] svg,
+[data-testid="stDateInput"] svg,
+[data-testid="stTimeInput"] svg,
+[data-testid="stNumberInput"] svg {
+    color: #4d5961 !important;
+    fill: #4d5961 !important;
+}
+
+[data-testid="stNumberInput"] button {
+    background-color: #e2e7eb !important;
+    color: #1f2933 !important;
+    border-color: #c8d0d7 !important;
+}
+
+[data-testid="stFileUploaderDropzone"] {
+    background-color: #eef1f4 !important;
+    color: #1f2933 !important;
+    border-color: #c8d0d7 !important;
+}
+
+[data-testid="stFileUploaderDropzone"] * {
+    color: #1f2933 !important;
+}
+
+div[data-baseweb="popover"] ul,
+div[role="listbox"] {
+    background-color: #ffffff !important;
+    color: #1f2933 !important;
+}
+
+div[role="option"] {
+    background-color: #ffffff !important;
+    color: #1f2933 !important;
+}
+
+div[role="option"]:hover,
+div[role="option"][aria-selected="true"] {
+    background-color: #e7edf1 !important;
+}
+
+/* Mantiene le dimensioni standardizzate della pagina Prodotti */
+div[class*="st-key-catalog_form_panel_"] [data-testid="stTextInput"] div[data-baseweb="input"],
+div[class*="st-key-catalog_form_panel_"] [data-testid="stNumberInput"] div[data-baseweb="input"],
+div[class*="st-key-catalog_form_panel_"] [data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+div[class*="st-key-catalog_form_panel_"] [data-testid="stMultiSelect"] div[data-baseweb="select"] > div,
+div[class*="st-key-catalog_filter_panel_"] [data-testid="stTextInput"] div[data-baseweb="input"],
+div[class*="st-key-catalog_filter_panel_"] [data-testid="stNumberInput"] div[data-baseweb="input"],
+div[class*="st-key-catalog_filter_panel_"] [data-testid="stSelectbox"] div[data-baseweb="select"] > div,
+div[class*="st-key-catalog_filter_panel_"] [data-testid="stMultiSelect"] div[data-baseweb="select"] > div {
+    min-height: 48px !important;
+    height: 48px !important;
+}
+
 </style>
 """).strip(), unsafe_allow_html=True)
 
