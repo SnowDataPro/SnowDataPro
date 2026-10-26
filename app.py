@@ -21,7 +21,7 @@ st.set_page_config(
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "ski_material_lab.db")
-VERSIONE_DATABASE_APP = 5
+VERSIONE_DATABASE_APP = 6
 
 
 # ============================================================
@@ -182,6 +182,7 @@ def inizializza_database():
             tipo_neve TEXT,
             umidita_min REAL,
             umidita_max REAL,
+            temp_applicazione REAL,
             url_fonte TEXT
         )
     """)
@@ -203,6 +204,7 @@ def inizializza_database():
         "tipo_neve": "TEXT",
         "umidita_min": "REAL",
         "umidita_max": "REAL",
+        "temp_applicazione": "REAL",
         "url_fonte": "TEXT",
     }
     for nome_colonna, tipo_colonna in nuove_colonne_catalogo.items():
@@ -2566,7 +2568,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                 id, nome, marca, tipo,
                 foto_data, foto_mime, foto_nome,
                 temp_min, temp_max, tipo_temperatura, tipo_neve,
-                umidita_min, umidita_max,
+                umidita_min, umidita_max, temp_applicazione,
                 descrizione, note
             FROM catalogo_prodotti
             WHERE id = ? AND categoria = ?
@@ -2769,7 +2771,9 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             placeholder="100",
                         )
 
-                c_foto, c_descr, c_note = st.columns([1, 1.35, 1.35])
+                st.markdown("#### Note")
+
+                c_foto, c_descr = st.columns([1, 2.25])
 
                 with c_foto:
                     foto_attuale = (
@@ -2813,8 +2817,28 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             if modalita_modifica else ""
                         ),
                         placeholder="Caratteristiche e indicazioni principali...",
-                        height=92,
+                        height=108,
                     )
+
+                temp_applicazione_txt = ""
+                c_tapp, c_note = st.columns([1, 2.25])
+
+                with c_tapp:
+                    if usa_condizioni:
+                        temp_applicazione_default = (
+                            _input_numero_da_db(
+                                prodotto_edit.get("temp_applicazione")
+                            )
+                            if modalita_modifica else ""
+                        )
+                        temp_applicazione_txt = st.text_input(
+                            "Temperatura di applicazione / ferro (°C)",
+                            value=temp_applicazione_default,
+                            placeholder="es. 150",
+                            help="Temperatura consigliata per applicare il prodotto con il ferro.",
+                        )
+                    else:
+                        st.empty()
 
                 with c_note:
                     note = st.text_area(
@@ -2863,11 +2887,15 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                         temp_max = _numero_opzionale(temp_max_txt)
                         umidita_min = _numero_opzionale(umidita_min_txt)
                         umidita_max = _numero_opzionale(umidita_max_txt)
+                        temp_applicazione = _numero_opzionale(
+                            temp_applicazione_txt
+                        )
                     except ValueError:
                         temp_min = temp_max = umidita_min = umidita_max = None
+                        temp_applicazione = None
                         errori.append(
                             "Temperature e umidità devono essere numeri "
-                            "(es. -8, -2, 70, 100)."
+                            "(es. -8, -2, 70, 100, 150)."
                         )
 
                     if (
@@ -2924,7 +2952,8 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                     tipo_temperatura = ?,
                                     tipo_neve = ?,
                                     umidita_min = ?,
-                                    umidita_max = ?
+                                    umidita_max = ?,
+                                    temp_applicazione = ?
                                 WHERE id = ? AND categoria = ?
                             """, (
                                 nome.strip(),
@@ -2941,6 +2970,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                 tipo_neve_val if usa_condizioni else "",
                                 umidita_min,
                                 umidita_max,
+                                temp_applicazione if usa_condizioni else None,
                                 int(edit_id),
                                 categoria,
                             ))
@@ -2956,9 +2986,10 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                     foto_data, foto_mime, foto_nome,
                                     temp_min, temp_max,
                                     tipo_temperatura, tipo_neve,
-                                    umidita_min, umidita_max
+                                    umidita_min, umidita_max,
+                                    temp_applicazione
                                 )
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             """, (
                                 categoria,
                                 nome.strip(),
@@ -2976,6 +3007,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                 tipo_neve_val if usa_condizioni else "",
                                 umidita_min,
                                 umidita_max,
+                                temp_applicazione if usa_condizioni else None,
                             ))
                             st.success("Prodotto salvato.")
                             st.rerun()
@@ -2987,7 +3019,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
             id, nome, marca, tipo,
             foto_data, foto_mime, foto_nome,
             temp_min, temp_max, tipo_temperatura, tipo_neve,
-            umidita_min, umidita_max,
+            umidita_min, umidita_max, temp_applicazione,
             descrizione, note
         FROM catalogo_prodotti
         WHERE categoria = ?
@@ -3232,6 +3264,28 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             st.write(note_prodotto)
 
                         if usa_condizioni:
+                            temp_applicazione = prodotto.get(
+                                "temp_applicazione"
+                            )
+                            if (
+                                temp_applicazione is not None
+                                and not pd.isna(temp_applicazione)
+                            ):
+                                try:
+                                    valore_tapp = float(temp_applicazione)
+                                    testo_tapp = (
+                                        str(int(valore_tapp))
+                                        if valore_tapp.is_integer()
+                                        else str(valore_tapp).rstrip("0").rstrip(".")
+                                    )
+                                except Exception:
+                                    testo_tapp = str(temp_applicazione)
+
+                                st.markdown(
+                                    f"**Temperatura di applicazione / ferro:** "
+                                    f"{testo_tapp} °C"
+                                )
+
                             umidita_txt = _testo_range(
                                 prodotto.get("umidita_min"),
                                 prodotto.get("umidita_max"),
@@ -4043,7 +4097,7 @@ with st.container(key="sector_page_content"):
             "scorrimento",
             "Prodotti di scorrimento",
             "Catalogo di paraffine, liquidi, polveri e altri prodotti da scorrimento.",
-            ["Paraffina", "Liquido", "Polvere", "Top finish", "Additivo", "Altro"],
+            ["Paraffina", "Polvere", "Top finish", "Liquido tampone", "Spray"],
         )
 
 
