@@ -2059,6 +2059,145 @@ st.markdown(
 
 
 
+
+st.markdown(
+    """
+    <style>
+    /* ======================================================
+       SNOWDATAPRO — ALLINEAMENTO NATIVO AL TEMA SECTOR
+       Ultimo livello della cascata: evita che il tema browser
+       renda scuri i wrapper interni BaseWeb.
+       ====================================================== */
+
+    html,
+    body,
+    :root,
+    [data-testid="stAppViewContainer"],
+    [data-testid="stApp"] {
+        --primary-color: #00a7e1 !important;
+        --background-color: #f4f6f8 !important;
+        --secondary-background-color: #eef1f4 !important;
+        --text-color: #1f2933 !important;
+        color-scheme: light !important;
+    }
+
+    /* Wrapper esterni dei widget */
+    [data-testid="stTextInput"] [data-baseweb="input"],
+    [data-testid="stNumberInput"] [data-baseweb="input"],
+    [data-testid="stDateInput"] [data-baseweb="input"],
+    [data-testid="stTimeInput"] [data-baseweb="input"],
+    [data-testid="stSelectbox"] [data-baseweb="select"] > div,
+    [data-testid="stMultiSelect"] [data-baseweb="select"] > div,
+    [data-testid="stTextArea"] textarea {
+        background: #eef1f4 !important;
+        background-color: #eef1f4 !important;
+        color: #1f2933 !important;
+        border-color: #c8d0d7 !important;
+        box-shadow: none !important;
+        color-scheme: light !important;
+    }
+
+    /* Gli strati interni devono essere trasparenti, così mostrano
+       il grigio chiaro del wrapper invece del fondo scuro del tema. */
+    [data-testid="stTextInput"] [data-baseweb="input"] > *,
+    [data-testid="stNumberInput"] [data-baseweb="input"] > *,
+    [data-testid="stDateInput"] [data-baseweb="input"] > *,
+    [data-testid="stTimeInput"] [data-baseweb="input"] > *,
+    [data-testid="stSelectbox"] [data-baseweb="select"] > div > *,
+    [data-testid="stMultiSelect"] [data-baseweb="select"] > div > * {
+        background-color: transparent !important;
+        background: transparent !important;
+    }
+
+    /* Valori digitati e valori selezionati */
+    [data-testid="stTextInput"] input,
+    [data-testid="stNumberInput"] input,
+    [data-testid="stDateInput"] input,
+    [data-testid="stTimeInput"] input,
+    [data-testid="stSelectbox"] input,
+    [data-testid="stMultiSelect"] input,
+    [data-testid="stTextArea"] textarea,
+    [data-testid="stSelectbox"] [data-baseweb="select"] span,
+    [data-testid="stMultiSelect"] [data-baseweb="select"] span {
+        color: #1f2933 !important;
+        -webkit-text-fill-color: #1f2933 !important;
+        caret-color: #1f2933 !important;
+        color-scheme: light !important;
+    }
+
+    /* Placeholder */
+    [data-testid="stTextInput"] input::placeholder,
+    [data-testid="stNumberInput"] input::placeholder,
+    [data-testid="stDateInput"] input::placeholder,
+    [data-testid="stTimeInput"] input::placeholder,
+    [data-testid="stSelectbox"] input::placeholder,
+    [data-testid="stMultiSelect"] input::placeholder,
+    [data-testid="stTextArea"] textarea::placeholder {
+        color: #78848d !important;
+        -webkit-text-fill-color: #78848d !important;
+        opacity: 1 !important;
+    }
+
+    /* Frecce e icone dei controlli */
+    [data-testid="stSelectbox"] svg,
+    [data-testid="stMultiSelect"] svg,
+    [data-testid="stDateInput"] svg,
+    [data-testid="stTimeInput"] svg,
+    [data-testid="stNumberInput"] svg {
+        color: #4d5961 !important;
+        fill: #4d5961 !important;
+    }
+
+    /* Popup dei select */
+    div[data-baseweb="popover"],
+    div[data-baseweb="popover"] > div,
+    div[data-baseweb="popover"] ul,
+    div[role="listbox"] {
+        background: #ffffff !important;
+        background-color: #ffffff !important;
+        color: #1f2933 !important;
+        color-scheme: light !important;
+    }
+
+    div[role="option"] {
+        background: #ffffff !important;
+        background-color: #ffffff !important;
+        color: #1f2933 !important;
+    }
+
+    div[role="option"] * {
+        color: #1f2933 !important;
+        -webkit-text-fill-color: #1f2933 !important;
+    }
+
+    div[role="option"]:hover,
+    div[role="option"][aria-selected="true"] {
+        background: #e7edf1 !important;
+        background-color: #e7edf1 !important;
+    }
+
+    /* Upload foto coerente con Sector */
+    [data-testid="stFileUploaderDropzone"] {
+        background: #eef1f4 !important;
+        background-color: #eef1f4 !important;
+        color: #1f2933 !important;
+        border-color: #c8d0d7 !important;
+        color-scheme: light !important;
+    }
+
+    [data-testid="stFileUploaderDropzone"] p,
+    [data-testid="stFileUploaderDropzone"] small,
+    [data-testid="stFileUploaderDropzone"] span {
+        color: #1f2933 !important;
+        -webkit-text-fill-color: #1f2933 !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+
+
 def mostra_banner_fotografico():
     """Banner panoramico sticky: il contenuto della pagina gli scorre sopra."""
     percorso = os.path.join(BASE_DIR, "banner snowdatapro.jpg")
