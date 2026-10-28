@@ -2862,6 +2862,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                         )
 
                     neve_opzioni = [
+                        "Tutte",
                         "Neve fredda e fine",
                         "Neve nuova fredda",
                         "Neve nuova umida",
@@ -3303,7 +3304,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
             for valore in df["tipo_neve"].fillna("").astype(str):
                 for voce in valore.split(","):
                     voce = voce.strip()
-                    if voce:
+                    if voce and voce != "Tutte":
                         neve_presenti.add(voce)
 
             st.markdown(
@@ -3409,6 +3410,8 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                 for voce in str(valore or "").split(",")
                 if voce.strip()
             }
+            if "Tutte" in tipi_prodotto:
+                return True
             return bool(tipi_prodotto & neve_selezionate)
 
         filtrato = filtrato[
