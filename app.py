@@ -1918,9 +1918,86 @@ st.markdown(
         background: #ffffff !important;
         border: 1px solid var(--border) !important;
         border-radius: var(--radius-medium) !important;
-        padding: 0.95rem 1.05rem 0.75rem 1.05rem !important;
+        padding: 1.05rem 1.15rem 1rem 1.15rem !important;
         box-shadow: var(--shadow-soft) !important;
         margin-bottom: 1.05rem !important;
+    }
+
+    .catalog-filter-title {
+        color: var(--text-primary);
+        font-size: 1.02rem;
+        font-weight: 700;
+        line-height: 1.15;
+        margin: 0;
+    }
+
+    .catalog-filter-subtitle {
+        color: var(--text-light);
+        font-size: 0.78rem;
+        line-height: 1.25;
+        margin-top: 0.16rem;
+        margin-bottom: 0.10rem;
+    }
+
+    .catalog-filter-section-title {
+        color: var(--text-secondary);
+        font-size: 0.78rem;
+        font-weight: 700;
+        line-height: 1.2;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        margin: 0 0 0.45rem 0;
+    }
+
+    div[class*="st-key-filter_temp_group_"],
+    div[class*="st-key-filter_snow_group_"] {
+        background: #f7f9fa !important;
+        border: 1px solid #e1e6ea !important;
+        border-radius: 8px !important;
+        padding: 0.78rem 0.88rem 0.68rem 0.88rem !important;
+        min-height: 124px !important;
+    }
+
+    div[class*="st-key-filter_temp_group_"] [data-testid="stSlider"],
+    div[class*="st-key-filter_snow_group_"] [data-testid="stMultiSelect"] {
+        margin-top: 0.18rem !important;
+    }
+
+    div[class*="st-key-filter_temp_group_"] [data-testid="stCheckbox"],
+    div[class*="st-key-filter_temp_group_"] [data-testid="stToggle"] {
+        margin-bottom: 0.22rem !important;
+    }
+
+    div[class*="st-key-filter_reset_"] button {
+        min-height: 38px !important;
+        height: 38px !important;
+        padding-left: 0.85rem !important;
+        padding-right: 0.85rem !important;
+        border-radius: 6px !important;
+        background: #ffffff !important;
+        border: 1px solid var(--border-strong) !important;
+        box-shadow: none !important;
+    }
+
+    div[class*="st-key-filter_reset_"] button p {
+        color: var(--text-secondary) !important;
+        font-size: 0.82rem !important;
+        font-weight: 600 !important;
+        white-space: nowrap !important;
+    }
+
+    div[class*="st-key-filter_reset_"] button:hover {
+        background: #f5f7f8 !important;
+        border-color: #aeb8bf !important;
+    }
+
+    /* Slider più sobrio e coerente con il design Sector. */
+    div[class*="st-key-filter_temp_group_"] [data-testid="stSlider"] {
+        padding-top: 0.05rem !important;
+    }
+
+    div[class*="st-key-filter_temp_group_"] [data-testid="stSlider"] p {
+        font-size: 0.82rem !important;
     }
 
     div[class*="st-key-catalog_card_"] {
@@ -2791,7 +2868,6 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                         "Neve nuova lucida",
                         "Neve nuova bagnata",
                         "Neve cadente bagnata",
-                        "Neve fine sporca",
                         "Neve artificiale fine",
                         "Neve artificiale trasformata",
                         "Neve artificiale umida",
@@ -3124,16 +3200,60 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
         return
 
     with st.container(key=f"catalog_filter_panel_{categoria}"):
-        f1, f2, f3 = st.columns([1.8, 1, 1])
+        # -----------------------------------------------------
+        # Intestazione filtri + reset
+        # -----------------------------------------------------
+        h1, h2 = st.columns([4.2, 1], vertical_alignment="center")
+        with h1:
+            st.markdown(
+                '<div class="catalog-filter-title">Filtri catalogo</div>'
+                '<div class="catalog-filter-subtitle">'
+                'Affina rapidamente i prodotti visualizzati.'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
+        with h2:
+            if st.button(
+                "↺ Azzera filtri",
+                key=f"filter_reset_{categoria}",
+                use_container_width=True,
+            ):
+                chiavi_filtri = [
+                    f"cerca_catalogo_{categoria}",
+                    f"filtro_marca_{categoria}",
+                    f"filtro_tipo_{categoria}",
+                    f"usa_temp_{categoria}",
+                    f"temp_range_catalogo_{categoria}",
+                    f"filtro_neve_{categoria}",
+                ]
+                for chiave in chiavi_filtri:
+                    st.session_state.pop(chiave, None)
+                st.rerun()
+
+        st.markdown(
+            '<div style="height:0.45rem;"></div>',
+            unsafe_allow_html=True,
+        )
+
+        # -----------------------------------------------------
+        # Ricerca / marca / categoria
+        # -----------------------------------------------------
+        f1, f2, f3 = st.columns([2.05, 1.05, 1.05])
         with f1:
             cerca = st.text_input(
                 "Cerca",
                 key=f"cerca_catalogo_{categoria}",
-                placeholder="Nome, marca, descrizione...",
+                placeholder="Nome, marca o descrizione...",
             )
+
         with f2:
             marche = ["Tutte"] + sorted(
-                [x for x in df["marca"].dropna().astype(str).unique() if x.strip()],
+                [
+                    x
+                    for x in df["marca"].dropna().astype(str).unique()
+                    if x.strip()
+                ],
                 key=str.lower,
             )
             filtro_marca = st.selectbox(
@@ -3141,13 +3261,18 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                 marche,
                 key=f"filtro_marca_{categoria}",
             )
+
         with f3:
             tipi_presenti = ["Tutti"] + sorted(
-                [x for x in df["tipo"].dropna().astype(str).unique() if x.strip()],
+                [
+                    x
+                    for x in df["tipo"].dropna().astype(str).unique()
+                    if x.strip()
+                ],
                 key=str.lower,
             )
             filtro_tipo = st.selectbox(
-                "Tipo",
+                "Categoria",
                 tipi_presenti,
                 key=f"filtro_tipo_{categoria}",
             )
@@ -3156,6 +3281,9 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
         filtro_temp_range = None
         filtro_neve = []
 
+        # -----------------------------------------------------
+        # Condizioni di utilizzo
+        # -----------------------------------------------------
         if usa_condizioni:
             temp_min_num = pd.to_numeric(df["temp_min"], errors="coerce")
             temp_max_num = pd.to_numeric(df["temp_max"], errors="coerce")
@@ -3178,29 +3306,60 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                     if voce:
                         neve_presenti.add(voce)
 
-            f4, f5, f6 = st.columns([0.85, 2.15, 2.2])
-            with f4:
-                filtro_temp_attivo = st.checkbox(
-                    "Filtra per temperatura",
-                    key=f"usa_temp_{categoria}",
-                )
-            with f5:
-                filtro_temp_range = st.slider(
-                    "Intervallo temperatura (°C)",
-                    min_value=float(limite_min),
-                    max_value=float(limite_max),
-                    value=(float(limite_min), float(limite_max)),
-                    step=0.5,
-                    disabled=not filtro_temp_attivo,
-                    key=f"temp_range_catalogo_{categoria}",
-                )
-            with f6:
-                filtro_neve = st.multiselect(
-                    "Tipi di neve",
-                    sorted(neve_presenti, key=str.lower),
-                    placeholder="Tutte le tipologie",
-                    key=f"filtro_neve_{categoria}",
-                )
+            st.markdown(
+                '<div style="height:0.28rem;"></div>',
+                unsafe_allow_html=True,
+            )
+
+            c_temp, c_neve = st.columns([1.45, 1.55])
+
+            with c_temp:
+                with st.container(key=f"filter_temp_group_{categoria}"):
+                    st.markdown(
+                        '<div class="catalog-filter-section-title">'
+                        'Temperatura di utilizzo'
+                        '</div>',
+                        unsafe_allow_html=True,
+                    )
+
+                    filtro_temp_attivo = st.toggle(
+                        "Attiva intervallo",
+                        key=f"usa_temp_{categoria}",
+                        help=(
+                            "Mostra solo i prodotti compatibili con almeno "
+                            "una parte dell'intervallo selezionato."
+                        ),
+                    )
+
+                    filtro_temp_range = st.slider(
+                        "Intervallo (°C)",
+                        min_value=float(limite_min),
+                        max_value=float(limite_max),
+                        value=(float(limite_min), float(limite_max)),
+                        step=0.5,
+                        disabled=not filtro_temp_attivo,
+                        key=f"temp_range_catalogo_{categoria}",
+                    )
+
+            with c_neve:
+                with st.container(key=f"filter_snow_group_{categoria}"):
+                    st.markdown(
+                        '<div class="catalog-filter-section-title">'
+                        'Tipologie di neve'
+                        '</div>',
+                        unsafe_allow_html=True,
+                    )
+
+                    filtro_neve = st.multiselect(
+                        "Seleziona una o più condizioni",
+                        sorted(neve_presenti, key=str.lower),
+                        placeholder="Tutte le tipologie",
+                        key=f"filtro_neve_{categoria}",
+                        help=(
+                            "Con più condizioni selezionate vengono mostrati "
+                            "i prodotti compatibili con almeno una di esse."
+                        ),
+                    )
 
     filtrato = df.copy()
 
