@@ -180,6 +180,12 @@ def inizializza_database():
             temp_max REAL,
             tipo_temperatura TEXT,
             tipo_neve TEXT,
+            snow_origine TEXT,
+            snow_consistenza TEXT,
+            snow_umidita TEXT,
+            snow_forma_grano TEXT,
+            snow_granulometria TEXT,
+            snow_caratteristiche TEXT,
             umidita_min REAL,
             umidita_max REAL,
             temp_applicazione REAL,
@@ -203,6 +209,12 @@ def inizializza_database():
         "temp_max": "REAL",
         "tipo_temperatura": "TEXT",
         "tipo_neve": "TEXT",
+        "snow_origine": "TEXT",
+        "snow_consistenza": "TEXT",
+        "snow_umidita": "TEXT",
+        "snow_forma_grano": "TEXT",
+        "snow_granulometria": "TEXT",
+        "snow_caratteristiche": "TEXT",
         "umidita_min": "REAL",
         "umidita_max": "REAL",
         "temp_applicazione": "REAL",
@@ -1949,6 +1961,117 @@ st.markdown(
         margin: 0 0 0.45rem 0;
     }
 
+.snow-reference-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-large);
+    box-shadow: var(--shadow-soft);
+    overflow: hidden;
+    margin-top: 0.35rem;
+    margin-bottom: 0.9rem;
+}
+
+.snow-reference-header {
+    padding: 1rem 1.15rem 0.25rem 1.15rem;
+}
+
+.snow-reference-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.8rem;
+    margin-top: 0.2rem;
+}
+
+.snow-reference-mini {
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-medium);
+    padding: 0.9rem 1rem;
+}
+
+.snow-reference-mini-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+}
+
+.snow-reference-mini-text {
+    font-size: 0.95rem;
+    line-height: 1.45;
+    color: var(--text-main);
+}
+
+.snow-reference-table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    padding: 0 1.15rem 1.05rem 1.15rem;
+}
+
+.snow-reference-table {
+    width: 100%;
+    min-width: 1080px;
+    border-collapse: collapse;
+    table-layout: auto;
+}
+
+.snow-reference-table th,
+.snow-reference-table td {
+    border: 1px solid var(--border);
+    padding: 0.72rem 0.78rem;
+    vertical-align: top;
+    text-align: left;
+    white-space: normal !important;
+    word-break: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.4;
+    font-size: 0.95rem;
+}
+
+.snow-reference-table th {
+    background: #f1f5f7;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.snow-reference-note {
+    padding: 0 1.15rem 1rem 1.15rem;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    line-height: 1.45;
+}
+
+.snow-classification-card {
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-medium);
+    padding: 0.9rem 1rem;
+    margin-top: 0.25rem;
+    margin-bottom: 0.35rem;
+}
+
+.snow-classification-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: var(--text-main);
+    margin-bottom: 0.2rem;
+}
+
+.snow-classification-caption {
+    font-size: 0.86rem;
+    line-height: 1.45;
+    color: var(--text-secondary);
+    margin-bottom: 0.2rem;
+}
+
+@media (max-width: 900px) {
+    .snow-reference-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
     div[class*="st-key-filter_temp_group_"],
     div[class*="st-key-filter_snow_group_"] {
         background: #f7f9fa !important;
@@ -2671,6 +2794,8 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                 id, nome, marca, tipo,
                 foto_data, foto_mime, foto_nome,
                 temp_min, temp_max, tipo_temperatura, tipo_neve,
+                snow_origine, snow_consistenza, snow_umidita,
+                snow_forma_grano, snow_granulometria, snow_caratteristiche,
                 umidita_min, umidita_max, temp_applicazione,
                 tipo_applicazione,
                 descrizione, note
@@ -2705,6 +2830,55 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
             return opzioni.index(valore)
         except ValueError:
             return fallback
+
+    snow_option_groups = {
+        "Origine": ["Naturale", "Artificiale", "Mista"],
+        "Consistenza": [
+            "Compatta",
+            "Sfarinata / Soffice",
+            "Sgranata",
+            "Ghiacciata",
+            "Soffice su superficie dura",
+        ],
+        "Umidità neve": ["Secca", "Umida", "Bagnata", "Molto bagnata"],
+        "Forma grano": [
+            "Nuova (cristalli esagonali)",
+            "In trasformazione (forte gradiente)",
+            "In trasformazione (basso gradiente)",
+            "Trasformata (cristalli angolari)",
+            "Trasformata (grani arrotondati)",
+            "Mista nuova e trasformata",
+        ],
+        "Granulometria": ["Fine", "Media", "Grossa"],
+        "Caratteristiche": ["Sporca", "Salata", "Ventata", "Lucida", "Cadente"],
+    }
+
+    def _split_multi_values(valore):
+        return [voce.strip() for voce in str(valore or "").split(",") if voce.strip()]
+
+    def _default_snow_values(nome_colonna, opzioni, eredita=None):
+        eredita = eredita or []
+        valori = []
+        if modalita_modifica:
+            valori_salvati = _split_multi_values(prodotto_edit.get(nome_colonna))
+            valori = [voce for voce in valori_salvati if voce in opzioni]
+        if not valori:
+            valori = [voce for voce in eredita if voce in opzioni]
+        return valori
+
+    def _build_snow_summary(selezioni, tutte_condizioni=False):
+        if tutte_condizioni:
+            return "Tutte"
+        valori = []
+        for nome_gruppo in snow_option_groups:
+            valori.extend(selezioni.get(nome_gruppo, []))
+        visti = set()
+        ordinati = []
+        for voce in valori:
+            if voce not in visti:
+                ordinati.append(voce)
+                visti.add(voce)
+        return ", ".join(ordinati)
 
     if modalita_modifica:
         nome_exp = str(prodotto_edit.get("nome") or "").strip()
@@ -2814,6 +2988,12 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                     )
 
                 tipo_neve_val = ""
+                snow_origine_val = ""
+                snow_consistenza_val = ""
+                snow_umidita_val = ""
+                snow_forma_grano_val = ""
+                snow_granulometria_val = ""
+                snow_caratteristiche_val = ""
                 temp_min_txt = ""
                 temp_max_txt = ""
                 tipo_temperatura = ""
@@ -2822,6 +3002,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
 
                 if usa_condizioni:
                     st.markdown("#### Condizioni di utilizzo")
+                    st.caption("Definisci il campo di utilizzo del prodotto e la classificazione neve di riferimento.")
 
                     temp_min_default = (
                         _input_numero_da_db(prodotto_edit.get("temp_min"))
@@ -2861,33 +3042,136 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             ),
                         )
 
-                    neve_opzioni = [
-                        "Tutte",
-                        "Neve fredda e fine",
-                        "Neve nuova fredda",
-                        "Neve nuova umida",
-                        "Neve nuova lucida",
-                        "Neve nuova bagnata",
-                        "Neve cadente bagnata",
-                        "Neve artificiale fine",
-                        "Neve artificiale trasformata",
-                        "Neve artificiale umida",
-                        "Neve trasformata bagnata",
-                        "Neve trasformata ghiacciata",
-                        "Neve trasformata sporca",
-                        "Neve mista trasformata/nuova",
-                    ]
 
-                    neve_default = []
-                    if modalita_modifica:
-                        neve_salvata = str(
-                            prodotto_edit.get("tipo_neve") or ""
-                        ).strip()
-                        neve_default = [
-                            voce.strip()
-                            for voce in neve_salvata.split(",")
-                            if voce.strip() in neve_opzioni
-                        ]
+                    legacy_snow_tags = (
+                        _split_multi_values(prodotto_edit.get("tipo_neve"))
+                        if modalita_modifica else []
+                    )
+                    compatibile_tutte_default = (
+                        modalita_modifica and "Tutte" in legacy_snow_tags
+                    )
+
+                    snow_selection_map = {
+                        "Origine": [],
+                        "Consistenza": [],
+                        "Umidità neve": [],
+                        "Forma grano": [],
+                        "Granulometria": [],
+                        "Caratteristiche": [],
+                    }
+
+                    origini_default = _default_snow_values(
+                        "snow_origine",
+                        snow_option_groups["Origine"],
+                        legacy_snow_tags,
+                    )
+                    consistenza_default = _default_snow_values(
+                        "snow_consistenza",
+                        snow_option_groups["Consistenza"],
+                        legacy_snow_tags,
+                    )
+                    umidita_neve_default = _default_snow_values(
+                        "snow_umidita",
+                        snow_option_groups["Umidità neve"],
+                        legacy_snow_tags,
+                    )
+                    forma_grano_default = _default_snow_values(
+                        "snow_forma_grano",
+                        snow_option_groups["Forma grano"],
+                        legacy_snow_tags,
+                    )
+                    granulometria_default = _default_snow_values(
+                        "snow_granulometria",
+                        snow_option_groups["Granulometria"],
+                        legacy_snow_tags,
+                    )
+                    caratteristiche_default = _default_snow_values(
+                        "snow_caratteristiche",
+                        snow_option_groups["Caratteristiche"],
+                        legacy_snow_tags,
+                    )
+
+                    st.markdown("#### Classificazione neve target")
+                    st.markdown(
+                        '<div class="snow-classification-card">'
+                        '<div class="snow-classification-title">Parametri indipendenti</div>'
+                        '<div class="snow-classification-caption">'
+                        'Seleziona le qualità della neve per cui il prodotto risulta più adatto. '
+                        'I parametri sono indipendenti e seguono la stessa logica della pagina '
+                        '"Tipologie di neve".'
+                        '</div>'
+                        '</div>',
+                        unsafe_allow_html=True,
+                    )
+
+                    compatibile_tutte_condizioni = st.checkbox(
+                        "Compatibile con tutte le condizioni di neve",
+                        value=compatibile_tutte_default,
+                        help="Utile per basi o prodotti molto trasversali.",
+                    )
+
+                    c_snow_1, c_snow_2, c_snow_3 = st.columns(3)
+                    with c_snow_1:
+                        snow_selection_map["Origine"] = st.multiselect(
+                            "Origine",
+                            snow_option_groups["Origine"],
+                            default=origini_default,
+                            placeholder="Seleziona origine",
+                            disabled=compatibile_tutte_condizioni,
+                        )
+                    with c_snow_2:
+                        snow_selection_map["Consistenza"] = st.multiselect(
+                            "Consistenza",
+                            snow_option_groups["Consistenza"],
+                            default=consistenza_default,
+                            placeholder="Seleziona consistenza",
+                            disabled=compatibile_tutte_condizioni,
+                        )
+                    with c_snow_3:
+                        snow_selection_map["Umidità neve"] = st.multiselect(
+                            "Umidità neve",
+                            snow_option_groups["Umidità neve"],
+                            default=umidita_neve_default,
+                            placeholder="Seleziona umidità neve",
+                            disabled=compatibile_tutte_condizioni,
+                        )
+
+                    c_snow_4, c_snow_5, c_snow_6 = st.columns(3)
+                    with c_snow_4:
+                        snow_selection_map["Forma grano"] = st.multiselect(
+                            "Forma grano",
+                            snow_option_groups["Forma grano"],
+                            default=forma_grano_default,
+                            placeholder="Seleziona forma grano",
+                            disabled=compatibile_tutte_condizioni,
+                        )
+                    with c_snow_5:
+                        snow_selection_map["Granulometria"] = st.multiselect(
+                            "Granulometria",
+                            snow_option_groups["Granulometria"],
+                            default=granulometria_default,
+                            placeholder="Seleziona granulometria",
+                            disabled=compatibile_tutte_condizioni,
+                        )
+                    with c_snow_6:
+                        snow_selection_map["Caratteristiche"] = st.multiselect(
+                            "Caratteristiche",
+                            snow_option_groups["Caratteristiche"],
+                            default=caratteristiche_default,
+                            placeholder="Seleziona caratteristiche",
+                            disabled=compatibile_tutte_condizioni,
+                        )
+
+                    snow_origine_val = ", ".join(snow_selection_map["Origine"])
+                    snow_consistenza_val = ", ".join(snow_selection_map["Consistenza"])
+                    snow_umidita_val = ", ".join(snow_selection_map["Umidità neve"])
+                    snow_forma_grano_val = ", ".join(snow_selection_map["Forma grano"])
+                    snow_granulometria_val = ", ".join(snow_selection_map["Granulometria"])
+                    snow_caratteristiche_val = ", ".join(snow_selection_map["Caratteristiche"])
+                    tipo_neve_val = _build_snow_summary(
+                        snow_selection_map,
+                        tutte_condizioni=compatibile_tutte_condizioni,
+                    )
 
                     umidita_min_default = (
                         _input_numero_da_db(prodotto_edit.get("umidita_min"))
@@ -2898,15 +3182,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                         if modalita_modifica else ""
                     )
 
-                    c_neve, c_umin, c_umax = st.columns([1.6, 1, 1])
-                    with c_neve:
-                        tipo_neve_sel = st.multiselect(
-                            "Tipo di neve",
-                            neve_opzioni,
-                            default=neve_default,
-                            placeholder="Seleziona condizioni",
-                        )
-                        tipo_neve_val = ", ".join(tipo_neve_sel)
+                    c_umin, c_umax = st.columns(2)
                     with c_umin:
                         umidita_min_txt = st.text_input(
                             "Umidità minima (%)",
@@ -2919,7 +3195,6 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             value=umidita_max_default,
                             placeholder="100",
                         )
-
                 st.markdown("#### Note")
 
                 c_foto, c_descr = st.columns([1, 2.25])
@@ -3115,6 +3390,12 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                     temp_max = ?,
                                     tipo_temperatura = ?,
                                     tipo_neve = ?,
+                                    snow_origine = ?,
+                                    snow_consistenza = ?,
+                                    snow_umidita = ?,
+                                    snow_forma_grano = ?,
+                                    snow_granulometria = ?,
+                                    snow_caratteristiche = ?,
                                     umidita_min = ?,
                                     umidita_max = ?,
                                     temp_applicazione = ?,
@@ -3133,6 +3414,12 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                 temp_max,
                                 tipo_temperatura if usa_condizioni else "",
                                 tipo_neve_val if usa_condizioni else "",
+                                snow_origine_val if usa_condizioni else "",
+                                snow_consistenza_val if usa_condizioni else "",
+                                snow_umidita_val if usa_condizioni else "",
+                                snow_forma_grano_val if usa_condizioni else "",
+                                snow_granulometria_val if usa_condizioni else "",
+                                snow_caratteristiche_val if usa_condizioni else "",
                                 umidita_min,
                                 umidita_max,
                                 temp_applicazione if usa_applicazione else None,
@@ -3153,10 +3440,13 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                     foto_data, foto_mime, foto_nome,
                                     temp_min, temp_max,
                                     tipo_temperatura, tipo_neve,
+                                    snow_origine, snow_consistenza,
+                                    snow_umidita, snow_forma_grano,
+                                    snow_granulometria, snow_caratteristiche,
                                     umidita_min, umidita_max,
                                     temp_applicazione, tipo_applicazione
                                 )
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             """, (
                                 categoria,
                                 nome.strip(),
@@ -3172,6 +3462,12 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                 temp_max,
                                 tipo_temperatura if usa_condizioni else "",
                                 tipo_neve_val if usa_condizioni else "",
+                                snow_origine_val if usa_condizioni else "",
+                                snow_consistenza_val if usa_condizioni else "",
+                                snow_umidita_val if usa_condizioni else "",
+                                snow_forma_grano_val if usa_condizioni else "",
+                                snow_granulometria_val if usa_condizioni else "",
+                                snow_caratteristiche_val if usa_condizioni else "",
                                 umidita_min,
                                 umidita_max,
                                 temp_applicazione if usa_applicazione else None,
@@ -3188,6 +3484,8 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
             id, nome, marca, tipo,
             foto_data, foto_mime, foto_nome,
             temp_min, temp_max, tipo_temperatura, tipo_neve,
+            snow_origine, snow_consistenza, snow_umidita,
+            snow_forma_grano, snow_granulometria, snow_caratteristiche,
             umidita_min, umidita_max, temp_applicazione,
             tipo_applicazione,
             descrizione, note
@@ -3571,7 +3869,21 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             neve_completa = str(
                                 prodotto.get("tipo_neve") or ""
                             ).strip()
-                            if neve_completa:
+                            campi_neve_card = [
+                                ("Origine", str(prodotto.get("snow_origine") or "").strip()),
+                                ("Consistenza", str(prodotto.get("snow_consistenza") or "").strip()),
+                                ("Umidità neve", str(prodotto.get("snow_umidita") or "").strip()),
+                                ("Forma grano", str(prodotto.get("snow_forma_grano") or "").strip()),
+                                ("Granulometria", str(prodotto.get("snow_granulometria") or "").strip()),
+                                ("Caratteristiche", str(prodotto.get("snow_caratteristiche") or "").strip()),
+                            ]
+                            dettagli_neve_presenti = any(val for _, val in campi_neve_card)
+                            if dettagli_neve_presenti:
+                                st.markdown("**Classificazione neve**")
+                                for etichetta_campo, valore_campo in campi_neve_card:
+                                    if valore_campo:
+                                        st.markdown(f"- **{etichetta_campo}:** {valore_campo}")
+                            elif neve_completa:
                                 st.markdown(
                                     f"**Tipi di neve:** {neve_completa}"
                                 )
@@ -4403,6 +4715,7 @@ with st.container(key="sector_page_content"):
         )
 
 
+
     elif pagina == "Tipologie di neve":
         mostra_banner(
             "Tipologie di neve",
@@ -4411,68 +4724,103 @@ with st.container(key="sector_page_content"):
 
         st.markdown("### Parametri fondamentali della neve")
         st.caption(
-            "Ogni colonna rappresenta un parametro indipendente: le voci sulla stessa riga "
-            "non costituiscono necessariamente una combinazione obbligatoria."
+            "Ogni colonna rappresenta un parametro indipendente: le voci non devono essere lette come combinazioni obbligatorie, "
+            "ma come qualità da comporre tra loro per descrivere in modo preciso la neve."
         )
 
-        classificazione_neve = pd.DataFrame(
+        classificazione_rows = [
             {
-                "Origine": [
-                    "Naturale",
-                    "Artificiale",
-                    "Mista",
-                    "",
-                    "",
-                    "",
-                ],
-                "Consistenza": [
-                    "Compatta",
-                    "Sfarinata / Soffice",
-                    "Sgranata",
-                    "Ghiacciata",
-                    "Soffice su superficie dura",
-                    "",
-                ],
-                "Umidità": [
-                    "Secca",
-                    "Umida",
-                    "Bagnata",
-                    "Molto bagnata",
-                    "",
-                    "",
-                ],
-                "Forma grano": [
-                    "Nuova (cristalli esagonali)",
-                    "In trasformazione (forte gradiente)",
-                    "In trasformazione (basso gradiente)",
-                    "Trasformata (cristalli angolari)",
-                    "Trasformata (grani arrotondati)",
-                    "Mista nuova e trasformata",
-                ],
-                "Granulometria": [
-                    "Fine",
-                    "Media",
-                    "Grossa",
-                    "",
-                    "",
-                    "",
-                ],
-                "Caratteristiche": [
-                    "Sporca",
-                    "Salata",
-                    "Ventata",
-                    "Lucida",
-                    "Cadente",
-                    "",
-                ],
-            }
-        )
+                "Origine": "Naturale",
+                "Consistenza": "Compatta",
+                "Umidità": "Secca",
+                "Forma grano": "Nuova (cristalli esagonali)",
+                "Granulometria": "Fine",
+                "Caratteristiche": "Sporca",
+            },
+            {
+                "Origine": "Artificiale",
+                "Consistenza": "Sfarinata / Soffice",
+                "Umidità": "Umida",
+                "Forma grano": "In trasformazione (forte gradiente)",
+                "Granulometria": "Media",
+                "Caratteristiche": "Salata",
+            },
+            {
+                "Origine": "Mista",
+                "Consistenza": "Sgranata",
+                "Umidità": "Bagnata",
+                "Forma grano": "In trasformazione (basso gradiente)",
+                "Granulometria": "Grossa",
+                "Caratteristiche": "Ventata",
+            },
+            {
+                "Origine": "",
+                "Consistenza": "Ghiacciata",
+                "Umidità": "Molto bagnata",
+                "Forma grano": "Trasformata (cristalli angolari)",
+                "Granulometria": "",
+                "Caratteristiche": "Lucida",
+            },
+            {
+                "Origine": "",
+                "Consistenza": "Soffice su superficie dura",
+                "Umidità": "",
+                "Forma grano": "Trasformata (grani arrotondati)",
+                "Granulometria": "",
+                "Caratteristiche": "Cadente",
+            },
+            {
+                "Origine": "",
+                "Consistenza": "",
+                "Umidità": "",
+                "Forma grano": "Mista nuova e trasformata",
+                "Granulometria": "",
+                "Caratteristiche": "",
+            },
+        ]
 
-        st.dataframe(
-            classificazione_neve,
-            use_container_width=True,
-            hide_index=True,
-            height=260,
+        headers = ["Origine", "Consistenza", "Umidità", "Forma grano", "Granulometria", "Caratteristiche"]
+        html_rows = []
+        for row in classificazione_rows:
+            celle = "".join(f"<td>{row.get(col, '')}</td>" for col in headers)
+            html_rows.append(f"<tr>{celle}</tr>")
+        html_rows_render = "".join(html_rows)
+
+        st.markdown(
+            f"""
+            <div class="snow-reference-card">
+                <div class="snow-reference-header">
+                    <div class="snow-reference-grid">
+                        <div class="snow-reference-mini">
+                            <div class="snow-reference-mini-title">Logica di classificazione</div>
+                            <div class="snow-reference-mini-text">Ogni parametro descrive un aspetto diverso della neve: origine, struttura superficiale, presenza di acqua, evoluzione del grano e caratteristiche utili alla scelta del prodotto.</div>
+                        </div>
+                        <div class="snow-reference-mini">
+                            <div class="snow-reference-mini-title">Come usarla nei prodotti</div>
+                            <div class="snow-reference-mini-text">Nel catalogo prodotti di scorrimento puoi selezionare i parametri in modo indipendente, senza combinazioni predefinite, così da descrivere in modo più preciso il campo di utilizzo della paraffina.</div>
+                        </div>
+                        <div class="snow-reference-mini">
+                            <div class="snow-reference-mini-title">Lettura corretta</div>
+                            <div class="snow-reference-mini-text">Le righe sono solo un riferimento visivo per distribuire le voci nella tabella. Una descrizione completa della neve nasce combinando liberamente le celle delle diverse colonne.</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="snow-reference-table-wrap">
+                    <table class="snow-reference-table">
+                        <thead>
+                            <tr>{''.join(f'<th>{col}</th>' for col in headers)}</tr>
+                        </thead>
+                        <tbody>
+                            {html_rows_render}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="snow-reference-note">
+                    Le scritte sono completamente visibili e la tabella rimane leggibile anche con voci lunghe grazie all'impaginazione a larghezza automatica e al ritorno a capo nelle celle.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 
         st.markdown("### Come leggere la classificazione")
@@ -4495,6 +4843,7 @@ with st.container(key="sector_page_content"):
             st.caption("Dimensione prevalente dei grani, distinta dalla loro forma.")
             st.markdown("**Caratteristiche**")
             st.caption("Condizioni aggiuntive utili per descrivere la neve e scegliere il prodotto.")
+
 
 
     elif pagina == "Storico":
