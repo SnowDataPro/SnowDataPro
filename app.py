@@ -4430,7 +4430,7 @@ with st.container(key="sector_page_content"):
                     "Sfarinata / Soffice",
                     "Sgranata",
                     "Ghiacciata",
-                    "",
+                    "Soffice su superficie dura",
                     "",
                 ],
                 "Umidità": [
@@ -4462,7 +4462,7 @@ with st.container(key="sector_page_content"):
                     "Salata",
                     "Ventata",
                     "Lucida",
-                    "",
+                    "Cadente",
                     "",
                 ],
             }
