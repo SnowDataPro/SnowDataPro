@@ -7,6 +7,7 @@ import textwrap
 import base64
 from datetime import datetime, date
 import math
+from html import escape as html_escape
 
 # ============================================================
 # CONFIGURAZIONE
@@ -2066,6 +2067,91 @@ st.markdown(
     margin-bottom: 0.2rem;
 }
 
+
+.snow-detail-panel {
+    background: #f7f9fa;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-medium);
+    padding: 0.72rem;
+    margin: 0.55rem 0 0.80rem 0;
+}
+
+.snow-detail-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.58rem;
+}
+
+.snow-detail-title {
+    font-size: 0.84rem;
+    font-weight: 700;
+    color: var(--text-main);
+    letter-spacing: 0.01em;
+}
+
+.snow-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.48rem;
+}
+
+.snow-detail-item {
+    min-width: 0;
+    background: #ffffff;
+    border: 1px solid #dfe5e9;
+    border-radius: 8px;
+    padding: 0.52rem 0.58rem;
+}
+
+.snow-detail-item-wide {
+    grid-column: 1 / -1;
+}
+
+.snow-detail-label {
+    margin-bottom: 0.30rem;
+    color: var(--text-light);
+    font-size: 0.66rem;
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: 0.055em;
+    text-transform: uppercase;
+}
+
+.snow-detail-values {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.26rem;
+    min-width: 0;
+}
+
+.snow-detail-chip {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    padding: 0.22rem 0.42rem;
+    border: 1px solid #d6e0e5;
+    border-radius: 999px;
+    background: #eef3f5;
+    color: #33434d;
+    font-size: 0.74rem;
+    font-weight: 500;
+    line-height: 1.25;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+    .snow-detail-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .snow-detail-item-wide {
+        grid-column: auto;
+    }
+}
+
 @media (max-width: 900px) {
     .snow-reference-grid {
         grid-template-columns: 1fr;
@@ -3870,19 +3956,55 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                 prodotto.get("tipo_neve") or ""
                             ).strip()
                             campi_neve_card = [
-                                ("Origine", str(prodotto.get("snow_origine") or "").strip()),
-                                ("Consistenza", str(prodotto.get("snow_consistenza") or "").strip()),
-                                ("Umidità neve", str(prodotto.get("snow_umidita") or "").strip()),
-                                ("Forma grano", str(prodotto.get("snow_forma_grano") or "").strip()),
-                                ("Granulometria", str(prodotto.get("snow_granulometria") or "").strip()),
-                                ("Caratteristiche", str(prodotto.get("snow_caratteristiche") or "").strip()),
+                                ("Origine", str(prodotto.get("snow_origine") or "").strip(), False),
+                                ("Umidità neve", str(prodotto.get("snow_umidita") or "").strip(), False),
+                                ("Granulometria", str(prodotto.get("snow_granulometria") or "").strip(), False),
+                                ("Consistenza", str(prodotto.get("snow_consistenza") or "").strip(), True),
+                                ("Forma grano", str(prodotto.get("snow_forma_grano") or "").strip(), True),
+                                ("Caratteristiche", str(prodotto.get("snow_caratteristiche") or "").strip(), True),
                             ]
-                            dettagli_neve_presenti = any(val for _, val in campi_neve_card)
+                            dettagli_neve_presenti = any(
+                                valore for _, valore, _ in campi_neve_card
+                            )
+
                             if dettagli_neve_presenti:
-                                st.markdown("**Classificazione neve**")
-                                for etichetta_campo, valore_campo in campi_neve_card:
-                                    if valore_campo:
-                                        st.markdown(f"- **{etichetta_campo}:** {valore_campo}")
+                                elementi_neve_html = []
+
+                                for etichetta_campo, valore_campo, campo_largo in campi_neve_card:
+                                    if not valore_campo:
+                                        continue
+
+                                    valori_singoli = [
+                                        voce.strip()
+                                        for voce in valore_campo.split(",")
+                                        if voce.strip()
+                                    ]
+                                    badge_html = "".join(
+                                        f'<span class="snow-detail-chip">{html_escape(voce)}</span>'
+                                        for voce in valori_singoli
+                                    )
+                                    classe_larghezza = (
+                                        " snow-detail-item-wide"
+                                        if campo_largo else ""
+                                    )
+                                    elementi_neve_html.append(
+                                        f'<div class="snow-detail-item{classe_larghezza}">'
+                                        f'<div class="snow-detail-label">{html_escape(etichetta_campo)}</div>'
+                                        f'<div class="snow-detail-values">{badge_html}</div>'
+                                        f'</div>'
+                                    )
+
+                                st.markdown(
+                                    '<div class="snow-detail-panel">'
+                                    '<div class="snow-detail-heading">'
+                                    '<div class="snow-detail-title">Classificazione neve</div>'
+                                    '</div>'
+                                    '<div class="snow-detail-grid">'
+                                    + "".join(elementi_neve_html)
+                                    + '</div>'
+                                    '</div>',
+                                    unsafe_allow_html=True,
+                                )
                             elif neve_completa:
                                 st.markdown(
                                     f"**Tipi di neve:** {neve_completa}"
