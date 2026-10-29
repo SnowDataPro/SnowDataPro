@@ -4442,12 +4442,12 @@ with st.container(key="sector_page_content"):
                     "",
                 ],
                 "Forma grano": [
-                    "Nuova / Cristallo",
-                    "Grana fine",
-                    "In trasformazione forte gradiente",
-                    "In trasformazione basso gradiente",
-                    "Trasformata (granulosa)",
-                    "Trasformata (spigoli vivi)",
+                    "Nuova (cristalli esagonali)",
+                    "In trasformazione (forte gradiente)",
+                    "In trasformazione (basso gradiente)",
+                    "Trasformata (cristalli angolari)",
+                    "Trasformata (grani arrotondati)",
+                    "Mista nuova e trasformata",
                 ],
                 "Granulometria": [
                     "Fine",
