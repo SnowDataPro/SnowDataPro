@@ -2158,23 +2158,50 @@ st.markdown(
     }
 }
 
-    div[class*="st-key-filter_temp_group_"],
+    div[class*="st-key-filter_temp_aria_group_"],
+    div[class*="st-key-filter_temp_neve_group_"],
     div[class*="st-key-filter_snow_group_"] {
         background: #f7f9fa !important;
         border: 1px solid #e1e6ea !important;
-        border-radius: 8px !important;
-        padding: 0.78rem 0.88rem 0.68rem 0.88rem !important;
-        min-height: 124px !important;
+        border-radius: 10px !important;
+        padding: 0.90rem 0.95rem 0.78rem 0.95rem !important;
+        box-shadow: 0 1px 3px rgba(31, 41, 51, 0.025) !important;
     }
 
-    div[class*="st-key-filter_temp_group_"] [data-testid="stSlider"],
+    div[class*="st-key-filter_temp_aria_group_"],
+    div[class*="st-key-filter_temp_neve_group_"] {
+        min-height: 178px !important;
+    }
+
+    div[class*="st-key-filter_snow_group_"] {
+        min-height: 112px !important;
+    }
+
+    .catalog-temperature-card-title {
+        color: var(--text-main);
+        font-size: 0.93rem;
+        font-weight: 700;
+        line-height: 1.2;
+        margin-bottom: 0.14rem;
+    }
+
+    .catalog-temperature-card-subtitle {
+        color: var(--text-light);
+        font-size: 0.76rem;
+        line-height: 1.35;
+        min-height: 2.1rem;
+        margin-bottom: 0.28rem;
+    }
+
+    div[class*="st-key-filter_temp_aria_group_"] [data-testid="stSlider"],
+    div[class*="st-key-filter_temp_neve_group_"] [data-testid="stSlider"],
     div[class*="st-key-filter_snow_group_"] [data-testid="stMultiSelect"] {
         margin-top: 0.18rem !important;
     }
 
-    div[class*="st-key-filter_temp_group_"] [data-testid="stCheckbox"],
-    div[class*="st-key-filter_temp_group_"] [data-testid="stToggle"] {
-        margin-bottom: 0.22rem !important;
+    div[class*="st-key-filter_temp_aria_group_"] [data-testid="stToggle"],
+    div[class*="st-key-filter_temp_neve_group_"] [data-testid="stToggle"] {
+        margin-bottom: 0.20rem !important;
     }
 
     div[class*="st-key-filter_reset_"] button {
@@ -2201,11 +2228,13 @@ st.markdown(
     }
 
     /* Slider più sobrio e coerente con il design Sector. */
-    div[class*="st-key-filter_temp_group_"] [data-testid="stSlider"] {
+    div[class*="st-key-filter_temp_aria_group_"] [data-testid="stSlider"],
+    div[class*="st-key-filter_temp_neve_group_"] [data-testid="stSlider"] {
         padding-top: 0.05rem !important;
     }
 
-    div[class*="st-key-filter_temp_group_"] [data-testid="stSlider"] p {
+    div[class*="st-key-filter_temp_aria_group_"] [data-testid="stSlider"] p,
+    div[class*="st-key-filter_temp_neve_group_"] [data-testid="stSlider"] p {
         font-size: 0.82rem !important;
     }
 
@@ -3083,8 +3112,8 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                 temp_min_txt = ""
                 temp_max_txt = ""
                 tipo_temperatura = ""
-                umidita_min_txt = ""
-                umidita_max_txt = ""
+                umidita_min = None
+                umidita_max = None
 
                 if usa_condizioni:
                     st.markdown("#### Condizioni di utilizzo")
@@ -3259,28 +3288,6 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                         tutte_condizioni=compatibile_tutte_condizioni,
                     )
 
-                    umidita_min_default = (
-                        _input_numero_da_db(prodotto_edit.get("umidita_min"))
-                        if modalita_modifica else ""
-                    )
-                    umidita_max_default = (
-                        _input_numero_da_db(prodotto_edit.get("umidita_max"))
-                        if modalita_modifica else ""
-                    )
-
-                    c_umin, c_umax = st.columns(2)
-                    with c_umin:
-                        umidita_min_txt = st.text_input(
-                            "Umidità minima (%)",
-                            value=umidita_min_default,
-                            placeholder="70",
-                        )
-                    with c_umax:
-                        umidita_max_txt = st.text_input(
-                            "Umidità massima (%)",
-                            value=umidita_max_default,
-                            placeholder="100",
-                        )
                 st.markdown("#### Note")
 
                 c_foto, c_descr = st.columns([1, 2.25])
@@ -3407,8 +3414,6 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                     try:
                         temp_min = _numero_opzionale(temp_min_txt)
                         temp_max = _numero_opzionale(temp_max_txt)
-                        umidita_min = _numero_opzionale(umidita_min_txt)
-                        umidita_max = _numero_opzionale(umidita_max_txt)
                         temp_applicazione = (
                             _numero_opzionale(temp_applicazione_txt)
                             if usa_applicazione
@@ -3416,12 +3421,16 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             else None
                         )
                     except ValueError:
-                        temp_min = temp_max = umidita_min = umidita_max = None
+                        temp_min = temp_max = None
                         temp_applicazione = None
                         errori.append(
-                            "Temperature e umidità devono essere numeri "
-                            "(es. -8, -2, 70, 100, 150)."
+                            "Le temperature devono essere numeri "
+                            "(es. -8, -2, 150)."
                         )
+
+                    # I vecchi campi di umidità percentuale non vengono più usati.
+                    umidita_min = None
+                    umidita_max = None
 
                     if (
                         temp_min is not None
@@ -3430,15 +3439,6 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                     ):
                         errori.append(
                             "La temperatura minima non può essere superiore alla massima."
-                        )
-
-                    if (
-                        umidita_min is not None
-                        and umidita_max is not None
-                        and umidita_min > umidita_max
-                    ):
-                        errori.append(
-                            "L'umidità minima non può essere superiore alla massima."
                         )
 
                     if modalita_modifica:
@@ -3608,8 +3608,10 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                     f"cerca_catalogo_{categoria}",
                     f"filtro_marca_{categoria}",
                     f"filtro_tipo_{categoria}",
-                    f"usa_temp_{categoria}",
-                    f"temp_range_catalogo_{categoria}",
+                    f"usa_temp_aria_{categoria}",
+                    f"temp_aria_range_catalogo_{categoria}",
+                    f"usa_temp_neve_{categoria}",
+                    f"temp_neve_range_catalogo_{categoria}",
                     f"filtro_neve_{categoria}",
                 ]
                 for chiave in chiavi_filtri:
@@ -3662,27 +3664,48 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                 key=f"filtro_tipo_{categoria}",
             )
 
-        filtro_temp_attivo = False
-        filtro_temp_range = None
+        filtro_temp_aria_attivo = False
+        filtro_temp_aria_range = None
+        filtro_temp_neve_attivo = False
+        filtro_temp_neve_range = None
         filtro_neve = []
 
         # -----------------------------------------------------
         # Condizioni di utilizzo
         # -----------------------------------------------------
         if usa_condizioni:
-            temp_min_num = pd.to_numeric(df["temp_min"], errors="coerce")
-            temp_max_num = pd.to_numeric(df["temp_max"], errors="coerce")
-            temp_valori = pd.concat([temp_min_num, temp_max_num]).dropna()
+            tipo_temp_norm = (
+                df["tipo_temperatura"]
+                .fillna("")
+                .astype(str)
+                .str.strip()
+                .str.lower()
+            )
 
-            if not temp_valori.empty:
-                limite_min = math.floor(float(temp_valori.min()) * 2) / 2
-                limite_max = math.ceil(float(temp_valori.max()) * 2) / 2
-            else:
-                limite_min, limite_max = -20.0, 5.0
+            def _limiti_temperatura_per_riferimento(riferimento):
+                mask = tipo_temp_norm == riferimento.lower()
+                temp_min_ref = pd.to_numeric(
+                    df.loc[mask, "temp_min"], errors="coerce"
+                )
+                temp_max_ref = pd.to_numeric(
+                    df.loc[mask, "temp_max"], errors="coerce"
+                )
+                valori = pd.concat([temp_min_ref, temp_max_ref]).dropna()
 
-            if limite_min == limite_max:
-                limite_min -= 0.5
-                limite_max += 0.5
+                if not valori.empty:
+                    minimo = math.floor(float(valori.min()) * 2) / 2
+                    massimo = math.ceil(float(valori.max()) * 2) / 2
+                else:
+                    minimo, massimo = -25.0, 20.0
+
+                if minimo == massimo:
+                    minimo -= 0.5
+                    massimo += 0.5
+
+                return float(minimo), float(massimo)
+
+            aria_min, aria_max = _limiti_temperatura_per_riferimento("aria")
+            neve_min, neve_max = _limiti_temperatura_per_riferimento("neve")
 
             neve_presenti = set()
             for valore in df["tipo_neve"].fillna("").astype(str):
@@ -3696,55 +3719,89 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                 unsafe_allow_html=True,
             )
 
-            c_temp, c_neve = st.columns([1.45, 1.55])
+            st.markdown(
+                '<div class="catalog-filter-section-title">'
+                'Temperature di utilizzo'
+                '</div>',
+                unsafe_allow_html=True,
+            )
 
-            with c_temp:
-                with st.container(key=f"filter_temp_group_{categoria}"):
+            c_aria, c_neve_temp = st.columns(2)
+
+            with c_aria:
+                with st.container(key=f"filter_temp_aria_group_{categoria}"):
                     st.markdown(
-                        '<div class="catalog-filter-section-title">'
-                        'Temperatura di utilizzo'
+                        '<div class="catalog-temperature-card-title">'
+                        'Temperatura aria'
+                        '</div>'
+                        '<div class="catalog-temperature-card-subtitle">'
+                        'Filtra i prodotti con temperatura dichiarata rispetto all’aria.'
                         '</div>',
                         unsafe_allow_html=True,
                     )
-
-                    filtro_temp_attivo = st.toggle(
-                        "Attiva intervallo",
-                        key=f"usa_temp_{categoria}",
-                        help=(
-                            "Mostra solo i prodotti compatibili con almeno "
-                            "una parte dell'intervallo selezionato."
-                        ),
+                    filtro_temp_aria_attivo = st.toggle(
+                        "Attiva filtro aria",
+                        key=f"usa_temp_aria_{categoria}",
                     )
-
-                    filtro_temp_range = st.slider(
-                        "Intervallo (°C)",
-                        min_value=float(limite_min),
-                        max_value=float(limite_max),
-                        value=(float(limite_min), float(limite_max)),
+                    filtro_temp_aria_range = st.slider(
+                        "Intervallo aria (°C)",
+                        min_value=aria_min,
+                        max_value=aria_max,
+                        value=(aria_min, aria_max),
                         step=0.5,
-                        disabled=not filtro_temp_attivo,
-                        key=f"temp_range_catalogo_{categoria}",
+                        disabled=not filtro_temp_aria_attivo,
+                        key=f"temp_aria_range_catalogo_{categoria}",
                     )
 
-            with c_neve:
-                with st.container(key=f"filter_snow_group_{categoria}"):
+            with c_neve_temp:
+                with st.container(key=f"filter_temp_neve_group_{categoria}"):
                     st.markdown(
-                        '<div class="catalog-filter-section-title">'
-                        'Tipologie di neve'
+                        '<div class="catalog-temperature-card-title">'
+                        'Temperatura neve'
+                        '</div>'
+                        '<div class="catalog-temperature-card-subtitle">'
+                        'Filtra i prodotti con temperatura dichiarata rispetto alla neve.'
                         '</div>',
                         unsafe_allow_html=True,
                     )
-
-                    filtro_neve = st.multiselect(
-                        "Seleziona una o più condizioni",
-                        sorted(neve_presenti, key=str.lower),
-                        placeholder="Tutte le tipologie",
-                        key=f"filtro_neve_{categoria}",
-                        help=(
-                            "Con più condizioni selezionate vengono mostrati "
-                            "i prodotti compatibili con almeno una di esse."
-                        ),
+                    filtro_temp_neve_attivo = st.toggle(
+                        "Attiva filtro neve",
+                        key=f"usa_temp_neve_{categoria}",
                     )
+                    filtro_temp_neve_range = st.slider(
+                        "Intervallo neve (°C)",
+                        min_value=neve_min,
+                        max_value=neve_max,
+                        value=(neve_min, neve_max),
+                        step=0.5,
+                        disabled=not filtro_temp_neve_attivo,
+                        key=f"temp_neve_range_catalogo_{categoria}",
+                    )
+
+            st.markdown(
+                '<div style="height:0.35rem;"></div>',
+                unsafe_allow_html=True,
+            )
+
+            with st.container(key=f"filter_snow_group_{categoria}"):
+                st.markdown(
+                    '<div class="catalog-filter-section-title">'
+                    'Classificazione neve'
+                    '</div>',
+                    unsafe_allow_html=True,
+                )
+
+                filtro_neve = st.multiselect(
+                    "Seleziona una o più caratteristiche",
+                    sorted(neve_presenti, key=str.lower),
+                    placeholder="Tutte le caratteristiche",
+                    key=f"filtro_neve_{categoria}",
+                    help=(
+                        "Con più caratteristiche selezionate vengono mostrati "
+                        "i prodotti compatibili con almeno una di esse."
+                    ),
+                )
+
 
     filtrato = df.copy()
 
@@ -3769,21 +3826,48 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
     if filtro_tipo != "Tutti":
         filtrato = filtrato[filtrato["tipo"] == filtro_tipo]
 
-    if usa_condizioni and filtro_temp_attivo and filtro_temp_range is not None:
-        filtro_temp_min, filtro_temp_max = filtro_temp_range
+    if usa_condizioni and (
+        filtro_temp_aria_attivo or filtro_temp_neve_attivo
+    ):
         temp_min_prod = pd.to_numeric(filtrato["temp_min"], errors="coerce")
         temp_max_prod = pd.to_numeric(filtrato["temp_max"], errors="coerce")
-        ha_temperatura = temp_min_prod.notna() | temp_max_prod.notna()
-        temp_min_eff = temp_min_prod.fillna(float("-inf"))
-        temp_max_eff = temp_max_prod.fillna(float("inf"))
+        tipo_temp_prod = (
+            filtrato["tipo_temperatura"]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+            .str.lower()
+        )
 
-        # Mantiene i prodotti il cui intervallo di utilizzo si sovrappone
-        # almeno in parte all'intervallo scelto nel filtro.
-        filtrato = filtrato[
-            ha_temperatura
-            & (temp_min_eff <= float(filtro_temp_max))
-            & (temp_max_eff >= float(filtro_temp_min))
-        ]
+        maschera_temperatura = pd.Series(False, index=filtrato.index)
+
+        if filtro_temp_aria_attivo and filtro_temp_aria_range is not None:
+            aria_sel_min, aria_sel_max = filtro_temp_aria_range
+            aria_min_eff = temp_min_prod.fillna(float("-inf"))
+            aria_max_eff = temp_max_prod.fillna(float("inf"))
+            maschera_aria = (
+                (tipo_temp_prod == "aria")
+                & (temp_min_prod.notna() | temp_max_prod.notna())
+                & (aria_min_eff <= float(aria_sel_max))
+                & (aria_max_eff >= float(aria_sel_min))
+            )
+            maschera_temperatura = maschera_temperatura | maschera_aria
+
+        if filtro_temp_neve_attivo and filtro_temp_neve_range is not None:
+            neve_sel_min, neve_sel_max = filtro_temp_neve_range
+            neve_min_eff = temp_min_prod.fillna(float("-inf"))
+            neve_max_eff = temp_max_prod.fillna(float("inf"))
+            maschera_neve_temp = (
+                (tipo_temp_prod == "neve")
+                & (temp_min_prod.notna() | temp_max_prod.notna())
+                & (neve_min_eff <= float(neve_sel_max))
+                & (neve_max_eff >= float(neve_sel_min))
+            )
+            maschera_temperatura = (
+                maschera_temperatura | maschera_neve_temp
+            )
+
+        filtrato = filtrato[maschera_temperatura]
 
     if usa_condizioni and filtro_neve:
         neve_selezionate = set(filtro_neve)
@@ -3943,14 +4027,6 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                     st.markdown(
                                         f"**Applicazione:** {testo_applicazione}"
                                     )
-
-                            umidita_txt = _testo_range(
-                                prodotto.get("umidita_min"),
-                                prodotto.get("umidita_max"),
-                                "%",
-                            )
-                            if umidita_txt != "—":
-                                st.markdown(f"**Umidità:** {umidita_txt}")
 
                             neve_completa = str(
                                 prodotto.get("tipo_neve") or ""
