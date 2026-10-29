@@ -3782,6 +3782,16 @@ with st.sidebar.expander(
         cambia_pagina("Rigature manuali")
 
 
+if st.sidebar.button(
+    "Tipologie di neve",
+    icon=":material/ac_unit:",
+    key="menu_tipologie_neve",
+    use_container_width=True,
+    type="primary" if pagina == "Tipologie di neve" else "secondary",
+):
+    cambia_pagina("Tipologie di neve")
+
+
 # ============================================================
 # PAGINE
 # ============================================================
@@ -4391,6 +4401,100 @@ with st.container(key="sector_page_content"):
             "Catalogo degli utensili e delle configurazioni di rigatura manuale.",
             ["Lineare", "Incrociata", "V", "Rullo", "Utensile", "Altro"],
         )
+
+
+    elif pagina == "Tipologie di neve":
+        mostra_banner(
+            "Tipologie di neve",
+            "Riferimento per la classificazione standardizzata delle condizioni neve in SnowDataPro.",
+        )
+
+        st.markdown("### Parametri fondamentali della neve")
+        st.caption(
+            "Ogni colonna rappresenta un parametro indipendente: le voci sulla stessa riga "
+            "non costituiscono necessariamente una combinazione obbligatoria."
+        )
+
+        classificazione_neve = pd.DataFrame(
+            {
+                "Origine": [
+                    "Naturale",
+                    "Artificiale",
+                    "Mista",
+                    "",
+                    "",
+                    "",
+                ],
+                "Consistenza": [
+                    "Compatta",
+                    "Sfarinata / Soffice",
+                    "Sgranata",
+                    "Ghiacciata",
+                    "",
+                    "",
+                ],
+                "Umidità": [
+                    "Secca",
+                    "Umida",
+                    "Bagnata",
+                    "Molto bagnata",
+                    "",
+                    "",
+                ],
+                "Forma grano": [
+                    "Nuova / Cristallo",
+                    "Grana fine",
+                    "In trasformazione forte gradiente",
+                    "In trasformazione basso gradiente",
+                    "Trasformata (granulosa)",
+                    "Trasformata (spigoli vivi)",
+                ],
+                "Granulometria": [
+                    "Fine",
+                    "Media",
+                    "Grossa",
+                    "",
+                    "",
+                    "",
+                ],
+                "Caratteristiche": [
+                    "Sporca",
+                    "Salata",
+                    "Ventata",
+                    "Lucida",
+                    "",
+                    "",
+                ],
+            }
+        )
+
+        st.dataframe(
+            classificazione_neve,
+            use_container_width=True,
+            hide_index=True,
+            height=260,
+        )
+
+        st.markdown("### Come leggere la classificazione")
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.markdown("**Origine**")
+            st.caption("Provenienza della neve: naturale, artificiale o mista.")
+            st.markdown("**Consistenza**")
+            st.caption("Come si presenta meccanicamente la superficie nevosa.")
+
+        with c2:
+            st.markdown("**Umidità**")
+            st.caption("Stato della neve rispetto alla presenza di acqua liquida.")
+            st.markdown("**Forma grano**")
+            st.caption("Forma ed evoluzione del cristallo durante il metamorfismo.")
+
+        with c3:
+            st.markdown("**Granulometria**")
+            st.caption("Dimensione prevalente dei grani, distinta dalla loro forma.")
+            st.markdown("**Caratteristiche**")
+            st.caption("Condizioni aggiuntive utili per descrivere la neve e scegliere il prodotto.")
 
 
     elif pagina == "Storico":
