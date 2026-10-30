@@ -2092,9 +2092,9 @@ st.markdown(
 }
 
 .snow-detail-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.48rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.42rem;
 }
 
 .snow-detail-item {
@@ -2102,15 +2102,11 @@ st.markdown(
     background: #ffffff;
     border: 1px solid #dfe5e9;
     border-radius: 8px;
-    padding: 0.52rem 0.58rem;
-}
-
-.snow-detail-item-wide {
-    grid-column: 1 / -1;
+    padding: 0.58rem 0.62rem 0.62rem 0.62rem;
 }
 
 .snow-detail-label {
-    margin-bottom: 0.30rem;
+    margin-bottom: 0.34rem;
     color: var(--text-light);
     font-size: 0.66rem;
     font-weight: 700;
@@ -2122,7 +2118,8 @@ st.markdown(
 .snow-detail-values {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.26rem;
+    align-items: center;
+    gap: 0.28rem;
     min-width: 0;
 }
 
@@ -2130,7 +2127,7 @@ st.markdown(
     display: inline-flex;
     align-items: center;
     max-width: 100%;
-    padding: 0.22rem 0.42rem;
+    padding: 0.23rem 0.46rem;
     border: 1px solid #d6e0e5;
     border-radius: 999px;
     background: #eef3f5;
@@ -2140,16 +2137,6 @@ st.markdown(
     line-height: 1.25;
     white-space: normal;
     overflow-wrap: anywhere;
-}
-
-@media (max-width: 760px) {
-    .snow-detail-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .snow-detail-item-wide {
-        grid-column: auto;
-    }
 }
 
 @media (max-width: 900px) {
@@ -4032,21 +4019,21 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                 prodotto.get("tipo_neve") or ""
                             ).strip()
                             campi_neve_card = [
-                                ("Origine", str(prodotto.get("snow_origine") or "").strip(), False),
-                                ("Umidità neve", str(prodotto.get("snow_umidita") or "").strip(), False),
-                                ("Granulometria", str(prodotto.get("snow_granulometria") or "").strip(), False),
-                                ("Consistenza", str(prodotto.get("snow_consistenza") or "").strip(), True),
-                                ("Forma grano", str(prodotto.get("snow_forma_grano") or "").strip(), True),
-                                ("Caratteristiche", str(prodotto.get("snow_caratteristiche") or "").strip(), True),
+                                ("Origine", str(prodotto.get("snow_origine") or "").strip()),
+                                ("Consistenza", str(prodotto.get("snow_consistenza") or "").strip()),
+                                ("Umidità neve", str(prodotto.get("snow_umidita") or "").strip()),
+                                ("Forma grano", str(prodotto.get("snow_forma_grano") or "").strip()),
+                                ("Granulometria", str(prodotto.get("snow_granulometria") or "").strip()),
+                                ("Caratteristiche", str(prodotto.get("snow_caratteristiche") or "").strip()),
                             ]
                             dettagli_neve_presenti = any(
-                                valore for _, valore, _ in campi_neve_card
+                                valore for _, valore in campi_neve_card
                             )
 
                             if dettagli_neve_presenti:
                                 elementi_neve_html = []
 
-                                for etichetta_campo, valore_campo, campo_largo in campi_neve_card:
+                                for etichetta_campo, valore_campo in campi_neve_card:
                                     if not valore_campo:
                                         continue
 
@@ -4059,12 +4046,8 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                         f'<span class="snow-detail-chip">{html_escape(voce)}</span>'
                                         for voce in valori_singoli
                                     )
-                                    classe_larghezza = (
-                                        " snow-detail-item-wide"
-                                        if campo_largo else ""
-                                    )
                                     elementi_neve_html.append(
-                                        f'<div class="snow-detail-item{classe_larghezza}">'
+                                        f'<div class="snow-detail-item">'
                                         f'<div class="snow-detail-label">{html_escape(etichetta_campo)}</div>'
                                         f'<div class="snow-detail-values">{badge_html}</div>'
                                         f'</div>'
