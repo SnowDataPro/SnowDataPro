@@ -2934,6 +2934,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
 
     modalita_modifica = prodotto_edit is not None
     usa_applicazione = categoria == "scorrimento"
+    usa_temp_macchinetta = categoria == "tenuta"
 
     def _input_numero_da_db(valore):
         if valore is None or pd.isna(valore):
@@ -3400,6 +3401,36 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             placeholder="Osservazioni interne...",
                             height=92,
                         )
+                elif usa_temp_macchinetta:
+                    c_tapp, c_note = st.columns([1, 2.25])
+
+                    with c_tapp:
+                        temp_applicazione_default = (
+                            _input_numero_da_db(
+                                prodotto_edit.get("temp_applicazione")
+                            )
+                            if modalita_modifica else ""
+                        )
+                        temp_applicazione_txt = st.text_input(
+                            "Temperatura macchinetta (°C)",
+                            value=temp_applicazione_default,
+                            placeholder="es. 110",
+                            help=(
+                                "Campo opzionale. Indica la temperatura della "
+                                "macchinetta quando prevista per l'applicazione."
+                            ),
+                        )
+
+                    with c_note:
+                        note = st.text_area(
+                            "Note personali",
+                            value=(
+                                str(prodotto_edit.get("note") or "")
+                                if modalita_modifica else ""
+                            ),
+                            placeholder="Osservazioni interne...",
+                            height=92,
+                        )
                 else:
                     note = st.text_area(
                         "Note personali",
@@ -3447,8 +3478,10 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                         temp_max = _numero_opzionale(temp_max_txt)
                         temp_applicazione = (
                             _numero_opzionale(temp_applicazione_txt)
-                            if usa_applicazione
-                            and tipo_applicazione == "A caldo"
+                            if (
+                                (usa_applicazione and tipo_applicazione == "A caldo")
+                                or usa_temp_macchinetta
+                            )
                             else None
                         )
                     except ValueError:
@@ -3539,7 +3572,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                 snow_caratteristiche_val if usa_condizioni else "",
                                 umidita_min,
                                 umidita_max,
-                                temp_applicazione if usa_applicazione else None,
+                                temp_applicazione if (usa_applicazione or usa_temp_macchinetta) else None,
                                 tipo_applicazione if usa_applicazione else "",
                                 int(edit_id),
                                 categoria,
@@ -3587,7 +3620,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                 snow_caratteristiche_val if usa_condizioni else "",
                                 umidita_min,
                                 umidita_max,
-                                temp_applicazione if usa_applicazione else None,
+                                temp_applicazione if (usa_applicazione or usa_temp_macchinetta) else None,
                                 tipo_applicazione if usa_applicazione else "",
                             ))
                             st.session_state.pop(expander_keep_key, None)
@@ -4057,6 +4090,26 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
 
                                     st.markdown(
                                         f"**Applicazione:** {testo_applicazione}"
+                                    )
+
+                            if usa_temp_macchinetta:
+                                temp_macchinetta = prodotto.get("temp_applicazione")
+                                if (
+                                    temp_macchinetta is not None
+                                    and not pd.isna(temp_macchinetta)
+                                ):
+                                    try:
+                                        valore_macchinetta = float(temp_macchinetta)
+                                        testo_macchinetta = (
+                                            str(int(valore_macchinetta))
+                                            if valore_macchinetta.is_integer()
+                                            else str(valore_macchinetta).rstrip("0").rstrip(".")
+                                        )
+                                    except Exception:
+                                        testo_macchinetta = str(temp_macchinetta)
+
+                                    st.markdown(
+                                        f"**Temperatura macchinetta:** {testo_macchinetta} °C"
                                     )
 
                             neve_completa = str(
@@ -4939,8 +4992,8 @@ with st.container(key="sector_page_content"):
         pagina_catalogo_prodotti(
             "tenuta",
             "Scioline di tenuta",
-            "Catalogo di stick, klister, coperture e prodotti per la tenuta.",
-            ["Stick", "Klister", "Copertura", "Base", "Spray", "Altro"],
+            "Catalogo di basi, stick e klister con classificazione neve e condizioni di utilizzo.",
+            ["Base stick", "Base klister", "Base spray", "Stick", "Klister"],
         )
 
 
