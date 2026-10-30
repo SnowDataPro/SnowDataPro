@@ -2963,10 +2963,21 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
         valori = []
         if modalita_modifica:
             valori_salvati = _split_multi_values(prodotto_edit.get(nome_colonna))
+            if "Tutte" in valori_salvati:
+                return list(opzioni)
             valori = [voce for voce in valori_salvati if voce in opzioni]
         if not valori:
+            if "Tutte" in eredita:
+                return list(opzioni)
             valori = [voce for voce in eredita if voce in opzioni]
         return valori
+
+    def _snow_value_compact(nome_gruppo, selezioni):
+        opzioni = snow_option_groups.get(nome_gruppo, [])
+        valori = [voce for voce in selezioni if voce in opzioni]
+        if opzioni and len(valori) == len(opzioni) and set(valori) == set(opzioni):
+            return "Tutte"
+        return ", ".join(valori)
 
     def _build_snow_summary(selezioni, tutte_condizioni=False):
         if tutte_condizioni:
@@ -3264,12 +3275,24 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             disabled=compatibile_tutte_condizioni,
                         )
 
-                    snow_origine_val = ", ".join(snow_selection_map["Origine"])
-                    snow_consistenza_val = ", ".join(snow_selection_map["Consistenza"])
-                    snow_umidita_val = ", ".join(snow_selection_map["Umidità neve"])
-                    snow_forma_grano_val = ", ".join(snow_selection_map["Forma grano"])
-                    snow_granulometria_val = ", ".join(snow_selection_map["Granulometria"])
-                    snow_caratteristiche_val = ", ".join(snow_selection_map["Caratteristiche"])
+                    snow_origine_val = _snow_value_compact(
+                        "Origine", snow_selection_map["Origine"]
+                    )
+                    snow_consistenza_val = _snow_value_compact(
+                        "Consistenza", snow_selection_map["Consistenza"]
+                    )
+                    snow_umidita_val = _snow_value_compact(
+                        "Umidità neve", snow_selection_map["Umidità neve"]
+                    )
+                    snow_forma_grano_val = _snow_value_compact(
+                        "Forma grano", snow_selection_map["Forma grano"]
+                    )
+                    snow_granulometria_val = _snow_value_compact(
+                        "Granulometria", snow_selection_map["Granulometria"]
+                    )
+                    snow_caratteristiche_val = _snow_value_compact(
+                        "Caratteristiche", snow_selection_map["Caratteristiche"]
+                    )
                     tipo_neve_val = _build_snow_summary(
                         snow_selection_map,
                         tutte_condizioni=compatibile_tutte_condizioni,
@@ -4042,6 +4065,19 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                         for voce in valore_campo.split(",")
                                         if voce.strip()
                                     ]
+
+                                    opzioni_complete = snow_option_groups.get(
+                                        etichetta_campo, []
+                                    )
+                                    if (
+                                        "Tutte" in valori_singoli
+                                        or (
+                                            opzioni_complete
+                                            and set(valori_singoli) == set(opzioni_complete)
+                                        )
+                                    ):
+                                        valori_singoli = ["Tutte"]
+
                                     badge_html = "".join(
                                         f'<span class="snow-detail-chip">{html_escape(voce)}</span>'
                                         for voce in valori_singoli
