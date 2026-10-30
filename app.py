@@ -22,7 +22,7 @@ st.set_page_config(
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "ski_material_lab.db")
-VERSIONE_DATABASE_APP = 7
+VERSIONE_DATABASE_APP = 8
 
 
 # ============================================================
@@ -240,6 +240,26 @@ def inizializza_database():
         SET tipo = 'Liquido tampone'
         WHERE categoria = 'scorrimento'
           AND LOWER(TRIM(COALESCE(tipo, ''))) = 'liquido'
+    """)
+
+    # Aggiornamento nomenclatura consistenza neve.
+    conn.execute("""
+        UPDATE catalogo_prodotti
+        SET snow_consistenza = REPLACE(
+            snow_consistenza,
+            'Soffice su superficie dura',
+            'Soffice su fondo ghiacciato'
+        )
+        WHERE INSTR(COALESCE(snow_consistenza, ''), 'Soffice su superficie dura') > 0
+    """)
+    conn.execute("""
+        UPDATE catalogo_prodotti
+        SET tipo_neve = REPLACE(
+            tipo_neve,
+            'Soffice su superficie dura',
+            'Soffice su fondo ghiacciato'
+        )
+        WHERE INSTR(COALESCE(tipo_neve, ''), 'Soffice su superficie dura') > 0
     """)
 
     # I prodotti già dotati di temperatura ferro vengono interpretati
@@ -2940,7 +2960,8 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
             "Sfarinata / Soffice",
             "Sgranata",
             "Ghiacciata",
-            "Soffice su superficie dura",
+            "Soffice su fondo ghiacciato",
+            "Soffice su fondo compatto",
         ],
         "Umidità neve": ["Secca", "Umida", "Bagnata", "Molto bagnata"],
         "Forma grano": [
@@ -4980,7 +5001,7 @@ with st.container(key="sector_page_content"):
             },
             {
                 "Origine": "",
-                "Consistenza": "Soffice su superficie dura",
+                "Consistenza": "Soffice su fondo ghiacciato",
                 "Umidità": "",
                 "Forma grano": "Trasformata (grani arrotondati)",
                 "Granulometria": "",
@@ -4988,7 +5009,7 @@ with st.container(key="sector_page_content"):
             },
             {
                 "Origine": "",
-                "Consistenza": "",
+                "Consistenza": "Soffice su fondo compatto",
                 "Umidità": "",
                 "Forma grano": "Mista nuova e trasformata",
                 "Granulometria": "",
