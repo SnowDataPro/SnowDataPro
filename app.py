@@ -2345,6 +2345,37 @@ st.markdown(
         text-transform: uppercase;
     }
 
+    .catalog-temperature-lines {
+        margin: 0.10rem 0 0.08rem 0;
+    }
+
+    .catalog-temperature-line {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.34rem;
+        margin: 0.18rem 0;
+        color: var(--text-primary);
+        font-size: 0.84rem;
+        line-height: 1.30;
+    }
+
+    .catalog-temperature-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        margin-top: 0.02rem;
+        color: #395b68;
+    }
+
+    .catalog-temperature-text {
+        color: var(--text-primary);
+    }
+
+    .catalog-temperature-label {
+        font-weight: 600;
+    }
+
     div[class*="st-key-catalog_card_"] h3 {
         min-height: 2.55rem !important;
         display: flex !important;
@@ -2894,12 +2925,10 @@ SNOW_ICON_NEW_SVG = """
 
 SNOW_ICON_TRANSFORMED_SVG = """
 <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"
-     style="display:inline-block;vertical-align:-4px;color:#395b68;margin-right:6px;">
-  <g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M12 2.7l6.3 3.65v7.3L12 17.3l-6.3-3.65v-7.3Z"/>
-    <path d="M12 5.35l4 2.3v4.7l-4 2.3-4-2.3v-4.7Z"/>
-    <path d="M12 5.35V2.7M18.3 6.35l2.25-1.3M18.3 13.65l2.25 1.3M12 17.3v2.65M5.7 13.65l-2.25 1.3M5.7 6.35l-2.25-1.3"/>
-    <path d="M12 8.4v5.2M9.75 9.7L14.25 12M14.25 9.7L9.75 12"/>
+     style="display:inline-block;vertical-align:-4px;color:#395b68;margin-right:4px;">
+  <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 2.8 19.45 7.1 19.45 15.9 12 20.2 4.55 15.9 4.55 7.1Z"/>
+    <path d="M12 6.9 15.9 9.15 15.9 13.85 12 16.1 8.1 13.85 8.1 9.15Z"/>
   </g>
 </svg>
 """
@@ -4468,8 +4497,9 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                             else SNOW_ICON_TRANSFORMED_SVG
                                         )
                                         st.markdown(
-                                            f'<div style="display:flex;align-items:center;gap:.28rem;margin:.18rem 0;">'
-                                            f'{icona_int}<span><strong>{html_escape(etichetta_int)}:</strong> {html_escape(valore_int)}</span>'
+                                            f'<div class="catalog-temperature-line">'
+                                            f'<span class="catalog-temperature-icon">{icona_int}</span>'
+                                            f'<span class="catalog-temperature-text"><span class="catalog-temperature-label">{html_escape(etichetta_int)}:</span> {html_escape(valore_int)}</span>'
                                             f'</div>',
                                             unsafe_allow_html=True,
                                         )
@@ -4609,8 +4639,9 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                                 else SNOW_ICON_TRANSFORMED_SVG
                                             )
                                             st.markdown(
-                                                f'<div style="display:flex;align-items:center;gap:.3rem;margin:.28rem 0;">'
-                                                f'{icona_int}<span><strong>{html_escape(etichetta_int)}:</strong> {html_escape(valore_int)}</span>'
+                                                f'<div class="catalog-temperature-line">'
+                                                f'<span class="catalog-temperature-icon">{icona_int}</span>'
+                                                f'<span class="catalog-temperature-text"><span class="catalog-temperature-label">{html_escape(etichetta_int)}:</span> {html_escape(valore_int)}</span>'
                                                 f'</div>',
                                                 unsafe_allow_html=True,
                                             )
