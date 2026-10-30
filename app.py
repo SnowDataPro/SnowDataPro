@@ -2895,11 +2895,11 @@ SNOW_ICON_NEW_SVG = """
 SNOW_ICON_TRANSFORMED_SVG = """
 <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"
      style="display:inline-block;vertical-align:-4px;color:#395b68;margin-right:6px;">
-  <g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="12" cy="12" r="3.2"/>
-    <path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4"/>
-    <path d="M5.3 5.3l2.8 2.8M15.9 15.9l2.8 2.8M18.7 5.3l-2.8 2.8M8.1 15.9l-2.8 2.8"/>
-    <path d="M12 8.8l1.5 1.7-.6 2.2-2.2.6-1.7-1.5.6-2.2z"/>
+  <g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 2.7l6.3 3.65v7.3L12 17.3l-6.3-3.65v-7.3Z"/>
+    <path d="M12 5.35l4 2.3v4.7l-4 2.3-4-2.3v-4.7Z"/>
+    <path d="M12 5.35V2.7M18.3 6.35l2.25-1.3M18.3 13.65l2.25 1.3M12 17.3v2.65M5.7 13.65l-2.25 1.3M5.7 6.35l-2.25-1.3"/>
+    <path d="M12 8.4v5.2M9.75 9.7L14.25 12M14.25 9.7L9.75 12"/>
   </g>
 </svg>
 """
