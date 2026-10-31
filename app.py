@@ -2283,8 +2283,8 @@ st.markdown(
         background: #ffffff !important;
         border: 1px solid var(--border) !important;
         border-radius: var(--radius-medium) !important;
-        padding: 0.9rem 0.95rem 0.8rem 0.95rem !important;
-        min-height: 335px !important;
+        padding: 0.9rem 0.95rem 0.85rem 0.95rem !important;
+        min-height: 365px !important;
         box-shadow: var(--shadow-soft) !important;
     }
 
@@ -2349,25 +2349,39 @@ st.markdown(
 
 
     .catalog-product-category {
+        height: 24px;
         min-height: 24px;
+        max-height: 24px;
         margin-bottom: 0.42rem;
         color: var(--text-secondary);
         font-size: 0.78rem;
         font-weight: 700;
-        line-height: 1.2;
+        line-height: 24px;
         letter-spacing: 0.035em;
         text-transform: uppercase;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
     }
 
-    .catalog-temperature-lines {
-        margin: 0.10rem 0 0.08rem 0;
+    /* Slot temperatura identico per tutte le card: 0, 1 o 2 righe non spostano il footer. */
+    .catalog-card-temperature-slot {
+        min-height: 4.05rem;
+        height: 4.05rem;
+        max-height: 4.05rem;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        margin-top: 0.04rem;
+        margin-bottom: 0.18rem;
     }
 
     .catalog-temperature-line {
         display: flex;
         align-items: flex-start;
-        gap: 0.34rem;
-        margin: 0.18rem 0;
+        gap: 0.30rem;
+        margin: 0.12rem 0;
         color: var(--text-primary);
         font-size: 0.84rem;
         line-height: 1.30;
@@ -2378,12 +2392,14 @@ st.markdown(
         align-items: center;
         justify-content: center;
         flex: 0 0 auto;
-        margin-top: 0.02rem;
+        margin-top: 0.01rem;
         color: #395b68;
     }
 
     .catalog-temperature-text {
         color: var(--text-primary);
+        font-size: 0.84rem;
+        line-height: 1.30;
     }
 
     .catalog-temperature-label {
@@ -2391,24 +2407,21 @@ st.markdown(
     }
 
     div[class*="st-key-catalog_card_"] h3 {
-        min-height: 2.55rem !important;
+        height: 3.0rem !important;
+        min-height: 3.0rem !important;
+        max-height: 3.0rem !important;
+        overflow: hidden !important;
         display: flex !important;
         align-items: flex-start !important;
-        font-size: 1.02rem !important;
-        line-height: 1.25 !important;
-        margin-top: 0.42rem !important;
-        margin-bottom: 0.42rem !important;
-    }
-
-    div[class*="st-key-catalog_card_"] [data-testid="stExpander"] {
-        margin-top: 0.55rem !important;
-    }
-
-    div[class*="st-key-catalog_card_"] h3 {
         font-size: 1.08rem !important;
         line-height: 1.22 !important;
         margin-top: 0.18rem !important;
-        margin-bottom: 0.20rem !important;
+        margin-bottom: 0.18rem !important;
+    }
+
+    div[class*="st-key-catalog_card_"] [data-testid="stExpander"] {
+        margin-top: 0.38rem !important;
+        margin-bottom: 0 !important;
     }
 
     div[class*="st-key-catalog_card_"]
@@ -4484,6 +4497,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                     )
                     st.markdown(f"### {titolo_card}")
 
+                    temp_card_html = ""
                     if usa_condizioni:
                         tipo_temp_card = str(
                             prodotto.get("tipo_temperatura") or ""
@@ -4495,38 +4509,30 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                         else:
                             riferimento_temp = "n.d."
 
-                        if categoria_tenuta:
-                            if tipo_temp_card == "neve":
-                                intervalli_card = _intervallo_duale_summary(
-                                    prodotto.get("temp_nuova_min"),
-                                    prodotto.get("temp_nuova_max"),
-                                    prodotto.get("temp_trasformata_min"),
-                                    prodotto.get("temp_trasformata_max"),
-                                )
-                                if intervalli_card:
-                                    for _, etichetta_int, valore_int in intervalli_card:
-                                        icona_int = (
-                                            SNOW_ICON_NEW_SVG
-                                            if "nuova" in etichetta_int.lower()
-                                            else SNOW_ICON_TRANSFORMED_SVG
-                                        )
-                                        st.markdown(
-                                            f'<div class="catalog-temperature-line">'
-                                            f'<span class="catalog-temperature-icon">{icona_int}</span>'
-                                            f'<span class="catalog-temperature-text"><span class="catalog-temperature-label">{html_escape(etichetta_int)}:</span> {html_escape(valore_int)}</span>'
-                                            f'</div>',
-                                            unsafe_allow_html=True,
-                                        )
-                                else:
-                                    temp_txt = _testo_range(
-                                        prodotto.get("temp_min"),
-                                        prodotto.get("temp_max"),
-                                        "°C",
+                        righe_temperatura = []
+
+                        if categoria_tenuta and tipo_temp_card == "neve":
+                            intervalli_card = _intervallo_duale_summary(
+                                prodotto.get("temp_nuova_min"),
+                                prodotto.get("temp_nuova_max"),
+                                prodotto.get("temp_trasformata_min"),
+                                prodotto.get("temp_trasformata_max"),
+                            )
+                            if intervalli_card:
+                                for _, etichetta_int, valore_int in intervalli_card:
+                                    icona_int = (
+                                        SNOW_ICON_NEW_SVG
+                                        if "nuova" in etichetta_int.lower()
+                                        else SNOW_ICON_TRANSFORMED_SVG
                                     )
-                                    if temp_txt != "—":
-                                        st.markdown(
-                                            f"**Temperatura:** {temp_txt} · neve"
-                                        )
+                                    righe_temperatura.append(
+                                        f'<div class="catalog-temperature-line">'
+                                        f'<span class="catalog-temperature-icon">{icona_int}</span>'
+                                        f'<span class="catalog-temperature-text">'
+                                        f'<span class="catalog-temperature-label">{html_escape(etichetta_int)}:</span> '
+                                        f'{html_escape(valore_int)}'
+                                        f'</span></div>'
+                                    )
                             else:
                                 temp_txt = _testo_range(
                                     prodotto.get("temp_min"),
@@ -4534,8 +4540,12 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                     "°C",
                                 )
                                 if temp_txt != "—":
-                                    st.markdown(
-                                        f"**Temperatura:** {temp_txt} · {riferimento_temp}"
+                                    righe_temperatura.append(
+                                        f'<div class="catalog-temperature-line">'
+                                        f'<span class="catalog-temperature-text">'
+                                        f'<span class="catalog-temperature-label">Temperatura:</span> '
+                                        f'{html_escape(temp_txt)} · neve'
+                                        f'</span></div>'
                                     )
                         else:
                             temp_txt = _testo_range(
@@ -4544,9 +4554,20 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                 "°C",
                             )
                             if temp_txt != "—":
-                                st.markdown(
-                                    f"**Temperatura:** {temp_txt} · {riferimento_temp}"
+                                righe_temperatura.append(
+                                    f'<div class="catalog-temperature-line">'
+                                    f'<span class="catalog-temperature-text">'
+                                    f'<span class="catalog-temperature-label">Temperatura:</span> '
+                                    f'{html_escape(temp_txt)} · {html_escape(riferimento_temp)}'
+                                    f'</span></div>'
                                 )
+
+                        temp_card_html = "".join(righe_temperatura)
+
+                    st.markdown(
+                        f'<div class="catalog-card-temperature-slot">{temp_card_html}</div>',
+                        unsafe_allow_html=True,
+                    )
 
                     descrizione_prodotto = str(
                         prodotto.get("descrizione") or ""
