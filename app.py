@@ -3094,6 +3094,7 @@ def pagina_trova_prodotto_migliore():
             "Ghiacciata",
             "Soffice su fondo ghiacciato",
             "Soffice su fondo compatto",
+            "Molle",
         ],
         "Umidità neve": ["Secca", "Umida", "Bagnata", "Molto bagnata"],
         "Forma grano": [
@@ -3403,6 +3404,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
             "Ghiacciata",
             "Soffice su fondo ghiacciato",
             "Soffice su fondo compatto",
+            "Molle",
         ],
         "Umidità neve": ["Secca", "Umida", "Bagnata", "Molto bagnata"],
         "Forma grano": [
@@ -6000,6 +6002,14 @@ with st.container(key="sector_page_content"):
                 "Consistenza": "Soffice su fondo compatto",
                 "Umidità": "",
                 "Forma grano": "Mista nuova e trasformata",
+                "Granulometria": "",
+                "Caratteristiche": "",
+            },
+            {
+                "Origine": "",
+                "Consistenza": "Molle",
+                "Umidità": "",
+                "Forma grano": "",
                 "Granulometria": "",
                 "Caratteristiche": "",
             },
