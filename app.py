@@ -69,7 +69,9 @@ def apri_connessione_database():
     return sqlite3.connect(DB_PATH)
 
 
+@st.cache_resource(show_spinner=False)
 def inizializza_database():
+    """Esegue creazione/migrazioni DB una sola volta per processo Streamlit."""
     conn = apri_connessione_database()
 
     conn.execute("""
@@ -2805,12 +2807,31 @@ def metric_card(label, value):
 # FUNZIONI DATI
 # ============================================================
 
+@st.cache_data(ttl=600, max_entries=160, show_spinner=False)
 def leggi_df(query, params=()):
+    """Cache breve delle letture DB: i filtri non riaprono Turso a ogni rerun."""
     conn = apri_connessione_database()
     try:
         return pd.read_sql_query(query, conn, params=params)
     finally:
         conn.close()
+
+
+def _invalida_cache_dati():
+    """Invalida i dati dopo ogni modifica reale al database."""
+    try:
+        leggi_df.clear()
+    except Exception:
+        pass
+
+    # Le foto del catalogo sono tenute in RAM di sessione per evitare
+    # trasferimento + decodifica base64 a ogni cambio filtro.
+    try:
+        for chiave in list(st.session_state.keys()):
+            if str(chiave).startswith("_catalog_photo_bytes_"):
+                st.session_state.pop(chiave, None)
+    except Exception:
+        pass
 
 
 def esegui(query, params=()):
@@ -2820,6 +2841,7 @@ def esegui(query, params=()):
         conn.commit()
     finally:
         conn.close()
+    _invalida_cache_dati()
 
 
 def sessioni_df():
@@ -3002,11 +3024,19 @@ def _prepara_foto_upload(file_caricato):
 
 
 def _mostra_foto_db(foto_data, use_container_width=True, width=None):
-    valore = str(foto_data or "").strip()
-    if not valore:
+    if foto_data is None:
         return False
     try:
-        dati = base64.b64decode(valore)
+        if isinstance(foto_data, (bytes, bytearray, memoryview)):
+            dati = bytes(foto_data)
+        else:
+            valore = str(foto_data or "").strip()
+            if not valore:
+                return False
+            dati = base64.b64decode(valore)
+
+        if not dati:
+            return False
         if width is not None:
             st.image(dati, width=width)
         else:
@@ -3016,6 +3046,34 @@ def _mostra_foto_db(foto_data, use_container_width=True, width=None):
         return False
 
 
+def _foto_catalogo_sessione(categoria):
+    """Carica e decodifica le foto una volta sola per catalogo e sessione."""
+    chiave = f"_catalog_photo_bytes_{categoria}"
+    if chiave in st.session_state:
+        return st.session_state[chiave]
+
+    foto_df = leggi_df("""
+        SELECT id, foto_data
+        FROM catalogo_prodotti
+        WHERE categoria = ?
+    """, (categoria,))
+
+    foto_bytes = {}
+    if not foto_df.empty:
+        for record in foto_df.to_dict("records"):
+            valore = str(record.get("foto_data") or "").strip()
+            if not valore:
+                continue
+            try:
+                foto_bytes[int(record["id"])] = base64.b64decode(valore)
+            except Exception:
+                continue
+
+    st.session_state[chiave] = foto_bytes
+    return foto_bytes
+
+
+@st.fragment
 def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
     mostra_banner(titolo, sottotitolo)
     usa_condizioni = categoria != "rigatura"
@@ -3933,7 +3991,6 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
     df = leggi_df("""
         SELECT
             id, nome, marca, tipo,
-            foto_data, foto_mime, foto_nome,
             temp_min, temp_max, tipo_temperatura, tipo_neve,
             snow_origine, snow_consistenza, snow_umidita,
             snow_forma_grano, snow_granulometria, snow_caratteristiche,
@@ -4440,6 +4497,10 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
         st.info("Nessun prodotto corrisponde ai filtri selezionati.")
         return
 
+    # Le foto non partecipano ai filtri: vengono recuperate separatamente
+    # e restano in RAM di sessione. Questo evita di trascinare decine di
+    # stringhe base64 dentro il DataFrame a ogni interazione.
+    foto_catalogo = _foto_catalogo_sessione(categoria)
     righe = filtrato.to_dict("records")
 
     for start_idx in range(0, len(righe), 3):
@@ -4476,9 +4537,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             unsafe_allow_html=True,
                         )
 
-                    foto_data = str(
-                        prodotto.get("foto_data") or ""
-                    ).strip()
+                    foto_data = foto_catalogo.get(prodotto_id)
 
                     if foto_data:
                         _mostra_foto_db(foto_data)
