@@ -280,6 +280,20 @@ def inizializza_database():
           AND TRIM(COALESCE(tipo_applicazione, '')) = ''
     """)
 
+    # Aggiornamento nomenclatura scioline di tenuta.
+    conn.execute("""
+        UPDATE catalogo_prodotti
+        SET tipo = 'Kick wax'
+        WHERE categoria = 'tenuta'
+          AND TRIM(COALESCE(tipo, '')) = 'Stick'
+    """)
+    conn.execute("""
+        UPDATE catalogo_prodotti
+        SET tipo = 'Base kick wax'
+        WHERE categoria = 'tenuta'
+          AND TRIM(COALESCE(tipo, '')) = 'Base stick'
+    """)
+
     # Backward compatibility: i vecchi intervalli tenuta vengono riportati
     # nel campo "neve nuova / cadente" se i nuovi campi dedicati sono ancora vuoti.
     conn.execute("""
@@ -5556,8 +5570,8 @@ with st.container(key="sector_page_content"):
         pagina_catalogo_prodotti(
             "tenuta",
             "Scioline di tenuta",
-            "Catalogo di basi, stick e klister con classificazione neve e condizioni di utilizzo.",
-            ["Base stick", "Base klister", "Base spray", "Stick", "Klister"],
+            "Catalogo di basi, kick wax e klister con classificazione neve e condizioni di utilizzo.",
+            ["Base kick wax", "Base klister", "Base spray", "Kick wax", "Klister"],
         )
 
 
