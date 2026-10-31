@@ -3073,6 +3073,269 @@ def _foto_catalogo_sessione(categoria):
     return foto_bytes
 
 
+def pagina_trova_prodotto_migliore():
+    mostra_banner(
+        "Trova prodotto migliore",
+        "Inserisci temperatura e caratteristiche della neve per individuare rapidamente i prodotti più compatibili.",
+    )
+
+    st.markdown("### Condizioni attuali")
+    st.caption(
+        "Prima versione del motore di suggerimento: la temperatura viene considerata come criterio principale, "
+        "mentre la classificazione neve aumenta o riduce il punteggio di compatibilità."
+    )
+
+    snow_option_groups = {
+        "Origine": ["Naturale", "Artificiale", "Mista"],
+        "Consistenza": [
+            "Compatta",
+            "Sfarinata / Soffice",
+            "Sgranata",
+            "Ghiacciata",
+            "Soffice su fondo ghiacciato",
+            "Soffice su fondo compatto",
+        ],
+        "Umidità neve": ["Secca", "Umida", "Bagnata", "Molto bagnata"],
+        "Forma grano": [
+            "Nuova (cristalli esagonali)",
+            "In trasformazione (forte gradiente)",
+            "In trasformazione (basso gradiente)",
+            "Trasformata (cristalli angolari)",
+            "Trasformata (grani arrotondati)",
+            "Mista nuova e trasformata",
+        ],
+        "Granulometria": ["Fine", "Media", "Grossa"],
+        "Caratteristiche": ["Sporca", "Salata", "Ventata", "Lucida", "Cadente"],
+    }
+    snow_field_map = {
+        "Origine": "snow_origine",
+        "Consistenza": "snow_consistenza",
+        "Umidità neve": "snow_umidita",
+        "Forma grano": "snow_forma_grano",
+        "Granulometria": "snow_granulometria",
+        "Caratteristiche": "snow_caratteristiche",
+    }
+
+    c_tipo, c_temp, c_rif = st.columns([1.1, 1, 1])
+    with c_tipo:
+        famiglia = st.selectbox(
+            "Famiglia prodotto",
+            ["Prodotti di scorrimento", "Scioline di tenuta"],
+            key="best_product_family",
+        )
+    with c_temp:
+        temperatura = st.number_input(
+            "Temperatura (°C)",
+            min_value=-40.0,
+            max_value=20.0,
+            value=-5.0,
+            step=0.5,
+            key="best_product_temperature",
+        )
+    with c_rif:
+        riferimento = st.selectbox(
+            "Temperatura riferita a",
+            ["Aria", "Neve", "Non specificato"],
+            key="best_product_temperature_ref",
+        )
+
+    st.markdown("#### Classificazione neve")
+    st.caption("Compila solo i parametri che conosci: quelli lasciati vuoti non penalizzano il prodotto.")
+
+    selezioni = {}
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        selezioni["Origine"] = st.multiselect(
+            "Origine", snow_option_groups["Origine"], key="best_snow_origin"
+        )
+    with c2:
+        selezioni["Consistenza"] = st.multiselect(
+            "Consistenza", snow_option_groups["Consistenza"], key="best_snow_consistency"
+        )
+    with c3:
+        selezioni["Umidità neve"] = st.multiselect(
+            "Umidità neve", snow_option_groups["Umidità neve"], key="best_snow_humidity"
+        )
+
+    c4, c5, c6 = st.columns(3)
+    with c4:
+        selezioni["Forma grano"] = st.multiselect(
+            "Forma grano", snow_option_groups["Forma grano"], key="best_snow_grain"
+        )
+    with c5:
+        selezioni["Granulometria"] = st.multiselect(
+            "Granulometria", snow_option_groups["Granulometria"], key="best_snow_size"
+        )
+    with c6:
+        selezioni["Caratteristiche"] = st.multiselect(
+            "Caratteristiche", snow_option_groups["Caratteristiche"], key="best_snow_features"
+        )
+
+    categoria = "scorrimento" if famiglia == "Prodotti di scorrimento" else "tenuta"
+
+    prodotti = leggi_df("""
+        SELECT
+            id, nome, marca, tipo, categoria,
+            temp_min, temp_max, tipo_temperatura,
+            temp_nuova_min, temp_nuova_max,
+            temp_trasformata_min, temp_trasformata_max,
+            tipo_neve,
+            snow_origine, snow_consistenza, snow_umidita,
+            snow_forma_grano, snow_granulometria, snow_caratteristiche
+        FROM catalogo_prodotti
+        WHERE categoria = ?
+        ORDER BY marca COLLATE NOCASE, nome COLLATE NOCASE
+    """, (categoria,))
+
+    def _lista_valori(valore):
+        return {
+            voce.strip()
+            for voce in str(valore or "").split(",")
+            if voce.strip()
+        }
+
+    def _intervallo_riga(riga):
+        tipo_ref = str(riga.get("tipo_temperatura") or "").strip().lower()
+        ref_richiesto = riferimento.strip().lower()
+
+        if ref_richiesto != "non specificato" and tipo_ref not in {ref_richiesto, "non specificato", ""}:
+            return None
+
+        if categoria == "tenuta" and ref_richiesto == "neve":
+            forma = set(selezioni.get("Forma grano", []))
+            caratteristiche = set(selezioni.get("Caratteristiche", []))
+            nuova_richiesta = bool(
+                "Nuova (cristalli esagonali)" in forma
+                or "Cadente" in caratteristiche
+            )
+            trasformata_richiesta = bool(
+                any("trasformat" in voce.lower() for voce in forma)
+                or any("in trasformazione" in voce.lower() for voce in forma)
+            )
+
+            intervalli = []
+            if nuova_richiesta or not trasformata_richiesta:
+                intervalli.append((riga.get("temp_nuova_min"), riga.get("temp_nuova_max"), "Neve nuova / cadente"))
+            if trasformata_richiesta or not nuova_richiesta:
+                intervalli.append((riga.get("temp_trasformata_min"), riga.get("temp_trasformata_max"), "Neve trasformata"))
+
+            validi = []
+            for minimo, massimo, etichetta in intervalli:
+                if pd.isna(minimo) and pd.isna(massimo):
+                    continue
+                min_eff = float("-inf") if pd.isna(minimo) else float(minimo)
+                max_eff = float("inf") if pd.isna(massimo) else float(massimo)
+                if min_eff <= float(temperatura) <= max_eff:
+                    validi.append((minimo, massimo, etichetta))
+            if validi:
+                return validi[0]
+
+            # Compatibilità retroattiva con scioline vecchie a intervallo unico.
+            minimo, massimo = riga.get("temp_min"), riga.get("temp_max")
+            if not (pd.isna(minimo) and pd.isna(massimo)):
+                min_eff = float("-inf") if pd.isna(minimo) else float(minimo)
+                max_eff = float("inf") if pd.isna(massimo) else float(massimo)
+                if min_eff <= float(temperatura) <= max_eff:
+                    return (minimo, massimo, "Intervallo neve")
+            return None
+
+        minimo, massimo = riga.get("temp_min"), riga.get("temp_max")
+        if pd.isna(minimo) and pd.isna(massimo):
+            return None
+        min_eff = float("-inf") if pd.isna(minimo) else float(minimo)
+        max_eff = float("inf") if pd.isna(massimo) else float(massimo)
+        if min_eff <= float(temperatura) <= max_eff:
+            return (minimo, massimo, riferimento)
+        return None
+
+    risultati = []
+    parametri_compilati = [nome for nome, valori in selezioni.items() if valori]
+
+    if not prodotti.empty:
+        for riga in prodotti.to_dict("records"):
+            intervallo = _intervallo_riga(riga)
+            if intervallo is None:
+                continue
+
+            score_neve = 0.0
+            dettagli_match = []
+            for nome_gruppo in parametri_compilati:
+                richiesti = set(selezioni[nome_gruppo])
+                prodotto_vals = _lista_valori(riga.get(snow_field_map[nome_gruppo]))
+                if not prodotto_vals:
+                    # fallback per prodotti più vecchi
+                    prodotto_vals = _lista_valori(riga.get("tipo_neve"))
+
+                if "Tutte" in prodotto_vals:
+                    quota = 1.0
+                else:
+                    quota = len(richiesti & prodotto_vals) / max(1, len(richiesti))
+                score_neve += quota
+                if quota > 0:
+                    dettagli_match.append(nome_gruppo)
+
+            if parametri_compilati:
+                compat_neve = score_neve / len(parametri_compilati)
+            else:
+                compat_neve = 1.0
+
+            minimo, massimo, etichetta_intervallo = intervallo
+            if not pd.isna(minimo) and not pd.isna(massimo):
+                centro = (float(minimo) + float(massimo)) / 2.0
+                ampiezza = max(1.0, abs(float(massimo) - float(minimo)))
+                centralita = max(0.0, 1.0 - abs(float(temperatura) - centro) / ampiezza)
+            else:
+                centralita = 0.5
+
+            # 70% temperatura / 30% neve. È volutamente semplice per la prima versione.
+            score_totale = 70.0 + 20.0 * compat_neve + 10.0 * centralita
+            risultati.append({
+                **riga,
+                "score": round(score_totale, 1),
+                "compat_neve": compat_neve,
+                "intervallo_usato": _testo_range(minimo, massimo, "°C"),
+                "tipo_intervallo": etichetta_intervallo,
+                "match": dettagli_match,
+            })
+
+    risultati.sort(key=lambda x: (-x["score"], str(x.get("marca") or ""), str(x.get("nome") or "")))
+
+    st.markdown("### Prodotti consigliati")
+    if not risultati:
+        st.info("Nessun prodotto del catalogo rientra nelle condizioni inserite.")
+        return
+
+    foto = _foto_catalogo_sessione(categoria)
+    migliori = risultati[:6]
+    for start_idx in range(0, len(migliori), 3):
+        colonne = st.columns(3)
+        for col_idx, prodotto in enumerate(migliori[start_idx:start_idx + 3]):
+            with colonne[col_idx]:
+                with st.container(border=True):
+                    categoria_prod = str(prodotto.get("tipo") or "").strip()
+                    if categoria_prod:
+                        st.caption(categoria_prod.upper())
+
+                    foto_prodotto = foto.get(int(prodotto["id"]))
+                    if foto_prodotto:
+                        st.image(foto_prodotto, use_container_width=True)
+
+                    marca = str(prodotto.get("marca") or "").strip()
+                    nome = str(prodotto.get("nome") or "Prodotto").strip()
+                    titolo = f"{marca} - {nome}" if marca else nome
+                    st.markdown(f"#### {titolo}")
+                    st.markdown(f"**Compatibilità stimata: {prodotto['score']:.0f}%**")
+                    st.caption(
+                        f"Temperatura: {prodotto['intervallo_usato']} · {prodotto['tipo_intervallo']}"
+                    )
+                    if prodotto["match"]:
+                        st.caption("Match neve: " + " · ".join(prodotto["match"]))
+
+    st.caption(
+        "Ranking provvisorio: lo useremo come base per definire successivamente pesi, priorità e logica specifica per gara/test."
+    )
+
+
 @st.fragment
 def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
     mostra_banner(titolo, sottotitolo)
@@ -5044,6 +5307,16 @@ with st.sidebar.expander(
 
 
 if st.sidebar.button(
+    "Trova prodotto migliore",
+    icon=":material/search:",
+    key="menu_trova_prodotto_migliore",
+    use_container_width=True,
+    type="primary" if pagina == "Trova prodotto migliore" else "secondary",
+):
+    cambia_pagina("Trova prodotto migliore")
+
+
+if st.sidebar.button(
     "Tipologie di neve",
     icon=":material/ac_unit:",
     key="menu_tipologie_neve",
@@ -5663,6 +5936,10 @@ with st.container(key="sector_page_content"):
             ["Lineare", "Incrociata", "V", "Rullo", "Utensile", "Altro"],
         )
 
+
+
+    elif pagina == "Trova prodotto migliore":
+        pagina_trova_prodotto_migliore()
 
 
     elif pagina == "Tipologie di neve":
