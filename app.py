@@ -2286,7 +2286,7 @@ st.markdown(
         border: 1px solid var(--border) !important;
         border-radius: var(--radius-medium) !important;
         padding: 0.9rem 0.95rem 0.85rem 0.95rem !important;
-        min-height: 365px !important;
+        min-height: 390px !important;
         box-shadow: var(--shadow-soft) !important;
     }
 
@@ -2368,9 +2368,9 @@ st.markdown(
 
     /* Slot temperatura identico per tutte le card. */
     .catalog-card-temperature-slot {
-        min-height: 5.15rem;
-        height: 5.15rem;
-        max-height: 5.15rem;
+        min-height: 5.55rem;
+        height: 5.55rem;
+        max-height: 5.55rem;
         overflow: hidden;
         display: flex;
         flex-direction: column;
@@ -2461,14 +2461,14 @@ st.markdown(
     }
 
     div[class*="st-key-catalog_card_"] h3 {
-        height: 3.0rem !important;
-        min-height: 3.0rem !important;
-        max-height: 3.0rem !important;
+        height: 4.0rem !important;
+        min-height: 4.0rem !important;
+        max-height: 4.0rem !important;
         overflow: hidden !important;
         display: flex !important;
         align-items: flex-start !important;
-        font-size: 1.08rem !important;
-        line-height: 1.22 !important;
+        font-size: 1.00rem !important;
+        line-height: 1.18 !important;
         margin-top: 0.18rem !important;
         margin-bottom: 0.18rem !important;
     }
@@ -3564,6 +3564,8 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
     tenuta_temp_nuova_max_key = f"tenuta_temp_nuova_max_{app_widget_suffix}"
     tenuta_temp_trasf_min_key = f"tenuta_temp_trasf_min_{app_widget_suffix}"
     tenuta_temp_trasf_max_key = f"tenuta_temp_trasf_max_{app_widget_suffix}"
+    tenuta_temp_tutte_min_key = f"tenuta_temp_tutte_min_{app_widget_suffix}"
+    tenuta_temp_tutte_max_key = f"tenuta_temp_tutte_max_{app_widget_suffix}"
     tenuta_ui_keys = [
         temp_ref_state_key,
         tenuta_nome_key,
@@ -3574,6 +3576,8 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
         tenuta_temp_nuova_max_key,
         tenuta_temp_trasf_min_key,
         tenuta_temp_trasf_max_key,
+        tenuta_temp_tutte_min_key,
+        tenuta_temp_tutte_max_key,
     ]
 
     if categoria_tenuta:
@@ -3630,12 +3634,30 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
         )
 
         condizioni_default = []
-        if nuova_min_db or nuova_max_db:
-            condizioni_default.append("Neve nuova")
-        if trasf_min_db or trasf_max_db:
-            condizioni_default.append("Neve trasformata")
+        tutte_min_db = ""
+        tutte_max_db = ""
+
+        range_tutte = (
+            (nuova_min_db or nuova_max_db)
+            and (trasf_min_db or trasf_max_db)
+            and nuova_min_db == trasf_min_db
+            and nuova_max_db == trasf_max_db
+        )
+
+        if range_tutte:
+            condizioni_default = ["Tutte le tipologie"]
+            tutte_min_db = nuova_min_db
+            tutte_max_db = nuova_max_db
+        else:
+            if nuova_min_db or nuova_max_db:
+                condizioni_default.append("Neve nuova")
+            if trasf_min_db or trasf_max_db:
+                condizioni_default.append("Neve trasformata")
+
         if modalita_modifica and not condizioni_default and (generic_min_db or generic_max_db):
-            condizioni_default = ["Neve nuova", "Neve trasformata"]
+            condizioni_default = ["Tutte le tipologie"]
+            tutte_min_db = generic_min_db
+            tutte_max_db = generic_max_db
             nuova_min_db = generic_min_db
             nuova_max_db = generic_max_db
             trasf_min_db = generic_min_db
@@ -3651,6 +3673,10 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
             st.session_state[tenuta_temp_trasf_min_key] = trasf_min_db
         if tenuta_temp_trasf_max_key not in st.session_state:
             st.session_state[tenuta_temp_trasf_max_key] = trasf_max_db
+        if tenuta_temp_tutte_min_key not in st.session_state:
+            st.session_state[tenuta_temp_tutte_min_key] = tutte_min_db
+        if tenuta_temp_tutte_max_key not in st.session_state:
+            st.session_state[tenuta_temp_tutte_max_key] = tutte_max_db
 
     expander_aperto = modalita_modifica or bool(
         st.session_state.get(expander_keep_key, False)
@@ -3697,6 +3723,8 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
         temp_nuova_max_txt = ""
         temp_trasformata_min_txt = ""
         temp_trasformata_max_txt = ""
+        temp_tutte_min_txt = ""
+        temp_tutte_max_txt = ""
 
         if categoria_tenuta:
             st.markdown("#### Dati prodotto")
@@ -3746,73 +3774,100 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
             with c_cond_range:
                 condizioni_range_tenuta = st.multiselect(
                     "Range valido con",
-                    ["Neve nuova", "Neve trasformata"],
+                    ["Neve nuova", "Neve trasformata", "Tutte le tipologie"],
                     key=tenuta_condizioni_key,
-                    placeholder="Seleziona una o entrambe",
+                    placeholder="Seleziona una o più opzioni",
                     help=(
-                        "Puoi assegnare un intervallo diverso alla neve nuova/cadente e alla "
-                        "neve trasformata, indipendentemente dal riferimento aria o neve."
+                        "Scegli se il range produttore vale per neve nuova, neve trasformata "
+                        "oppure per tutte le tipologie. Se selezioni 'Tutte le tipologie', "
+                        "inserirai un solo intervallo valido per entrambe."
                     ),
                 )
 
-            mostra_nuova = "Neve nuova" in condizioni_range_tenuta
-            mostra_trasformata = "Neve trasformata" in condizioni_range_tenuta
+            if "Tutte le tipologie" in condizioni_range_tenuta and len(condizioni_range_tenuta) > 1:
+                condizioni_range_tenuta = ["Tutte le tipologie"]
+                st.session_state[tenuta_condizioni_key] = condizioni_range_tenuta
 
-            if mostra_nuova and mostra_trasformata:
-                c_nuova_range, c_trasf_range = st.columns(2)
-            elif mostra_nuova:
-                c_nuova_range, c_trasf_range = st.container(), None
-            elif mostra_trasformata:
-                c_nuova_range, c_trasf_range = st.container(), None
+            mostra_tutte = "Tutte le tipologie" in condizioni_range_tenuta
+            mostra_nuova = ("Neve nuova" in condizioni_range_tenuta) and not mostra_tutte
+            mostra_trasformata = ("Neve trasformata" in condizioni_range_tenuta) and not mostra_tutte
+
+            if mostra_tutte:
+                st.markdown(
+                    f'<div style="display:flex;align-items:center;gap:.45rem;margin:.15rem 0 .55rem 0;">'
+                    f'{SNOW_ICON_NEW_SVG}{SNOW_ICON_TRANSFORMED_SVG}<strong>Tutte le tipologie</strong>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+                tt1, tt2 = st.columns(2)
+                with tt1:
+                    temp_tutte_min_txt = st.text_input(
+                        "Min tutte le tipologie (°C)",
+                        key=tenuta_temp_tutte_min_key,
+                        placeholder="-10",
+                    )
+                with tt2:
+                    temp_tutte_max_txt = st.text_input(
+                        "Max tutte le tipologie (°C)",
+                        key=tenuta_temp_tutte_max_key,
+                        placeholder="-2",
+                    )
             else:
-                c_nuova_range = c_trasf_range = None
-                st.info("Seleziona almeno una condizione neve per inserire il relativo range produttore.")
+                if mostra_nuova and mostra_trasformata:
+                    c_nuova_range, c_trasf_range = st.columns(2)
+                elif mostra_nuova:
+                    c_nuova_range, c_trasf_range = st.container(), None
+                elif mostra_trasformata:
+                    c_nuova_range, c_trasf_range = st.container(), None
+                else:
+                    c_nuova_range = c_trasf_range = None
+                    st.info("Seleziona almeno una condizione neve per inserire il relativo range produttore.")
 
-            if mostra_nuova:
-                target_col = c_nuova_range
-                with target_col:
-                    st.markdown(
-                        f'<div style="display:flex;align-items:center;gap:.45rem;margin:.15rem 0 .55rem 0;">'
-                        f'{SNOW_ICON_NEW_SVG}<strong>Neve nuova</strong>'
-                        f'</div>',
-                        unsafe_allow_html=True,
-                    )
-                    n1, n2 = st.columns(2)
-                    with n1:
-                        temp_nuova_min_txt = st.text_input(
-                            "Min nuova (°C)",
-                            key=tenuta_temp_nuova_min_key,
-                            placeholder="-10",
+                if mostra_nuova:
+                    target_col = c_nuova_range
+                    with target_col:
+                        st.markdown(
+                            f'<div style="display:flex;align-items:center;gap:.45rem;margin:.15rem 0 .55rem 0;">'
+                            f'{SNOW_ICON_NEW_SVG}<strong>Neve nuova</strong>'
+                            f'</div>',
+                            unsafe_allow_html=True,
                         )
-                    with n2:
-                        temp_nuova_max_txt = st.text_input(
-                            "Max nuova (°C)",
-                            key=tenuta_temp_nuova_max_key,
-                            placeholder="-2",
-                        )
+                        n1, n2 = st.columns(2)
+                        with n1:
+                            temp_nuova_min_txt = st.text_input(
+                                "Min neve nuova (°C)",
+                                key=tenuta_temp_nuova_min_key,
+                                placeholder="-10",
+                            )
+                        with n2:
+                            temp_nuova_max_txt = st.text_input(
+                                "Max neve nuova (°C)",
+                                key=tenuta_temp_nuova_max_key,
+                                placeholder="-2",
+                            )
 
-            if mostra_trasformata:
-                target_col = c_trasf_range if mostra_nuova else c_nuova_range
-                with target_col:
-                    st.markdown(
-                        f'<div style="display:flex;align-items:center;gap:.45rem;margin:.15rem 0 .55rem 0;">'
-                        f'{SNOW_ICON_TRANSFORMED_SVG}<strong>Neve trasformata</strong>'
-                        f'</div>',
-                        unsafe_allow_html=True,
-                    )
-                    t1, t2 = st.columns(2)
-                    with t1:
-                        temp_trasformata_min_txt = st.text_input(
-                            "Min trasformata (°C)",
-                            key=tenuta_temp_trasf_min_key,
-                            placeholder="-15",
+                if mostra_trasformata:
+                    target_col = c_trasf_range if mostra_nuova else c_nuova_range
+                    with target_col:
+                        st.markdown(
+                            f'<div style="display:flex;align-items:center;gap:.45rem;margin:.15rem 0 .55rem 0;">'
+                            f'{SNOW_ICON_TRANSFORMED_SVG}<strong>Neve trasformata</strong>'
+                            f'</div>',
+                            unsafe_allow_html=True,
                         )
-                    with t2:
-                        temp_trasformata_max_txt = st.text_input(
-                            "Max trasformata (°C)",
-                            key=tenuta_temp_trasf_max_key,
-                            placeholder="-5",
-                        )
+                        t1, t2 = st.columns(2)
+                        with t1:
+                            temp_trasformata_min_txt = st.text_input(
+                                "Min neve trasformata (°C)",
+                                key=tenuta_temp_trasf_min_key,
+                                placeholder="-15",
+                            )
+                        with t2:
+                            temp_trasformata_max_txt = st.text_input(
+                                "Max neve trasformata (°C)",
+                                key=tenuta_temp_trasf_max_key,
+                                placeholder="-5",
+                            )
 
         with st.container(key=f"catalog_form_panel_{categoria}"):
             with st.form(
@@ -4222,21 +4277,31 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
 
                     try:
                         if categoria_tenuta:
-                            if "Neve nuova" in condizioni_range_tenuta:
-                                temp_nuova_min = _numero_opzionale(temp_nuova_min_txt)
-                                temp_nuova_max = _numero_opzionale(temp_nuova_max_txt)
-                            if "Neve trasformata" in condizioni_range_tenuta:
-                                temp_trasformata_min = _numero_opzionale(temp_trasformata_min_txt)
-                                temp_trasformata_max = _numero_opzionale(temp_trasformata_max_txt)
+                            if "Tutte le tipologie" in condizioni_range_tenuta:
+                                temp_tutte_min = _numero_opzionale(temp_tutte_min_txt)
+                                temp_tutte_max = _numero_opzionale(temp_tutte_max_txt)
+                                temp_nuova_min = temp_tutte_min
+                                temp_nuova_max = temp_tutte_max
+                                temp_trasformata_min = temp_tutte_min
+                                temp_trasformata_max = temp_tutte_max
+                                temp_min = temp_tutte_min
+                                temp_max = temp_tutte_max
+                            else:
+                                if "Neve nuova" in condizioni_range_tenuta:
+                                    temp_nuova_min = _numero_opzionale(temp_nuova_min_txt)
+                                    temp_nuova_max = _numero_opzionale(temp_nuova_max_txt)
+                                if "Neve trasformata" in condizioni_range_tenuta:
+                                    temp_trasformata_min = _numero_opzionale(temp_trasformata_min_txt)
+                                    temp_trasformata_max = _numero_opzionale(temp_trasformata_max_txt)
 
-                            estremi_min = [
-                                v for v in [temp_nuova_min, temp_trasformata_min] if v is not None
-                            ]
-                            estremi_max = [
-                                v for v in [temp_nuova_max, temp_trasformata_max] if v is not None
-                            ]
-                            temp_min = min(estremi_min) if estremi_min else None
-                            temp_max = max(estremi_max) if estremi_max else None
+                                estremi_min = [
+                                    v for v in [temp_nuova_min, temp_trasformata_min] if v is not None
+                                ]
+                                estremi_max = [
+                                    v for v in [temp_nuova_max, temp_trasformata_max] if v is not None
+                                ]
+                                temp_min = min(estremi_min) if estremi_min else None
+                                temp_max = max(estremi_max) if estremi_max else None
                         else:
                             temp_min = _numero_opzionale(temp_min_txt)
                             temp_max = _numero_opzionale(temp_max_txt)
@@ -5123,7 +5188,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                     f'<div class="catalog-temperature-line">'
                                     f'<span class="catalog-temperature-icon">{SNOW_ICON_NEW_SVG}{SNOW_ICON_TRANSFORMED_SVG}</span>'
                                     f'<span class="catalog-temperature-text">'
-                                    f'<span class="catalog-temperature-label">Neve nuova + neve trasformata:</span> '
+                                    f'<span class="catalog-temperature-label">Tutte le tipologie:</span> '
                                     f'{html_escape(testo_nuova)}'
                                     f'</span></div>'
                                 )
@@ -5296,7 +5361,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                     dettaglio_temp_rows.append(
                                         f'<div class="catalog-temperature-line">'
                                         f'<span class="catalog-temperature-icon">{SNOW_ICON_NEW_SVG}{SNOW_ICON_TRANSFORMED_SVG}</span>'
-                                        f'<span class="catalog-temperature-text"><span class="catalog-temperature-label">Neve nuova + neve trasformata:</span> {html_escape(testo_nuova_det)}</span>'
+                                        f'<span class="catalog-temperature-text"><span class="catalog-temperature-label">Tutte le tipologie:</span> {html_escape(testo_nuova_det)}</span>'
                                         f'</div>'
                                     )
                                 else:
