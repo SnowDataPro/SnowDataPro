@@ -2393,7 +2393,7 @@ st.markdown(
         color: var(--text-light);
         font-size: 0.72rem;
         line-height: 1.15;
-        margin: 0 0 0.24rem 0;
+        margin: 0 0 0.42rem 0;
     }
 
     .catalog-temperature-line {
@@ -2447,7 +2447,7 @@ st.markdown(
 
     .catalog-temp-detail .catalog-temp-reference {
         font-size: 0.76rem;
-        margin-bottom: 0.28rem;
+        margin-bottom: 0.44rem;
     }
 
     .catalog-temp-detail .catalog-temperature-line,
