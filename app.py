@@ -3605,7 +3605,12 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
             str(prodotto_edit.get("tipo_temperatura") or "").strip()
             if modalita_modifica else "Aria"
         )
-        tipo_temp_ui = "Neve" if tipo_temp_db == "Neve" else "Aria / ambiente"
+        if tipo_temp_db == "Neve":
+            tipo_temp_ui = "Neve"
+        elif tipo_temp_db == "Non specificato":
+            tipo_temp_ui = "Non specificato"
+        else:
+            tipo_temp_ui = "Aria / ambiente"
         if temp_ref_state_key not in st.session_state:
             st.session_state[temp_ref_state_key] = tipo_temp_ui
 
@@ -3646,7 +3651,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
         )
 
         if range_tutte:
-            condizioni_default = ["Tutte le tipologie"]
+            condizioni_default = ["Tutte le tipologie di neve"]
             tutte_min_db = nuova_min_db
             tutte_max_db = nuova_max_db
         else:
@@ -3656,13 +3661,9 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                 condizioni_default.append("Neve trasformata")
 
         if modalita_modifica and not condizioni_default and (generic_min_db or generic_max_db):
-            condizioni_default = ["Tutte le tipologie"]
+            condizioni_default = ["Non specificato"]
             tutte_min_db = generic_min_db
             tutte_max_db = generic_max_db
-            nuova_min_db = generic_min_db
-            nuova_max_db = generic_max_db
-            trasf_min_db = generic_min_db
-            trasf_max_db = generic_max_db
 
         if tenuta_condizioni_key not in st.session_state:
             st.session_state[tenuta_condizioni_key] = condizioni_default
@@ -3762,7 +3763,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
             with c_ref_range:
                 riferimento_ui = st.selectbox(
                     "Temperatura riferita a",
-                    ["Aria / ambiente", "Neve"],
+                    ["Aria / ambiente", "Neve", "Non specificato"],
                     key=temp_ref_state_key,
                     on_change=_mantieni_aperto_dopo_tipo_temp,
                     help=(
@@ -3770,46 +3771,58 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                         "dell'aria/ambiente oppure alla temperatura della neve."
                     ),
                 )
-                tipo_temperatura_dinamica = "Aria" if riferimento_ui == "Aria / ambiente" else "Neve"
+                if riferimento_ui == "Aria / ambiente":
+                    tipo_temperatura_dinamica = "Aria"
+                elif riferimento_ui == "Neve":
+                    tipo_temperatura_dinamica = "Neve"
+                else:
+                    tipo_temperatura_dinamica = "Non specificato"
 
             with c_cond_range:
                 condizioni_range_tenuta = st.multiselect(
                     "Range valido con",
-                    ["Neve nuova", "Neve trasformata", "Tutte le tipologie"],
+                    ["Neve nuova", "Neve trasformata", "Tutte le tipologie di neve", "Non specificato"],
                     key=tenuta_condizioni_key,
                     placeholder="Seleziona una o più opzioni",
                     help=(
-                        "Scegli se il range produttore vale per neve nuova, neve trasformata "
-                        "oppure per tutte le tipologie. Se selezioni 'Tutte le tipologie', "
-                        "inserirai un solo intervallo valido per entrambe."
+                        "Scegli se il range produttore vale per neve nuova, neve trasformata, "
+                        "per tutte le tipologie di neve oppure se il produttore non lo specifica. "
+                        "Se selezioni 'Tutte le tipologie di neve' o 'Non specificato', "
+                        "inserirai un solo intervallo."
                     ),
                 )
 
-            if "Tutte le tipologie" in condizioni_range_tenuta and len(condizioni_range_tenuta) > 1:
-                condizioni_range_tenuta = ["Tutte le tipologie"]
+            if "Tutte le tipologie di neve" in condizioni_range_tenuta and len(condizioni_range_tenuta) > 1:
+                condizioni_range_tenuta = ["Tutte le tipologie di neve"]
+                st.session_state[tenuta_condizioni_key] = condizioni_range_tenuta
+            if "Non specificato" in condizioni_range_tenuta and len(condizioni_range_tenuta) > 1:
+                condizioni_range_tenuta = ["Non specificato"]
                 st.session_state[tenuta_condizioni_key] = condizioni_range_tenuta
 
-            mostra_tutte = "Tutte le tipologie" in condizioni_range_tenuta
-            mostra_nuova = ("Neve nuova" in condizioni_range_tenuta) and not mostra_tutte
-            mostra_trasformata = ("Neve trasformata" in condizioni_range_tenuta) and not mostra_tutte
+            mostra_tutte = "Tutte le tipologie di neve" in condizioni_range_tenuta
+            mostra_non_specificato = "Non specificato" in condizioni_range_tenuta
+            mostra_nuova = ("Neve nuova" in condizioni_range_tenuta) and not mostra_tutte and not mostra_non_specificato
+            mostra_trasformata = ("Neve trasformata" in condizioni_range_tenuta) and not mostra_tutte and not mostra_non_specificato
 
-            if mostra_tutte:
-                st.markdown(
-                    f'<div style="display:flex;align-items:center;gap:.45rem;margin:.15rem 0 .55rem 0;">'
-                    f'{SNOW_ICON_NEW_SVG}{SNOW_ICON_TRANSFORMED_SVG}<strong>Tutte le tipologie</strong>'
-                    f'</div>',
-                    unsafe_allow_html=True,
-                )
+            if mostra_tutte or mostra_non_specificato:
+                intestazione_range = "Tutte le tipologie di neve" if mostra_tutte else "Non specificato"
+                if mostra_tutte:
+                    st.markdown(
+                        f'<div style="display:flex;align-items:center;gap:.45rem;margin:.15rem 0 .55rem 0;">'
+                        f'{SNOW_ICON_NEW_SVG}{SNOW_ICON_TRANSFORMED_SVG}<strong>{intestazione_range}</strong>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
                 tt1, tt2 = st.columns(2)
                 with tt1:
                     temp_tutte_min_txt = st.text_input(
-                        "Min tutte le tipologie (°C)",
+                        "Temperatura minima (°C)",
                         key=tenuta_temp_tutte_min_key,
                         placeholder="-10",
                     )
                 with tt2:
                     temp_tutte_max_txt = st.text_input(
-                        "Max tutte le tipologie (°C)",
+                        "Temperatura massima (°C)",
                         key=tenuta_temp_tutte_max_key,
                         placeholder="-2",
                     )
@@ -4278,13 +4291,18 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
 
                     try:
                         if categoria_tenuta:
-                            if "Tutte le tipologie" in condizioni_range_tenuta:
+                            if "Tutte le tipologie di neve" in condizioni_range_tenuta:
                                 temp_tutte_min = _numero_opzionale(temp_tutte_min_txt)
                                 temp_tutte_max = _numero_opzionale(temp_tutte_max_txt)
                                 temp_nuova_min = temp_tutte_min
                                 temp_nuova_max = temp_tutte_max
                                 temp_trasformata_min = temp_tutte_min
                                 temp_trasformata_max = temp_tutte_max
+                                temp_min = temp_tutte_min
+                                temp_max = temp_tutte_max
+                            elif "Non specificato" in condizioni_range_tenuta:
+                                temp_tutte_min = _numero_opzionale(temp_tutte_min_txt)
+                                temp_tutte_max = _numero_opzionale(temp_tutte_max_txt)
                                 temp_min = temp_tutte_min
                                 temp_max = temp_tutte_max
                             else:
@@ -5151,13 +5169,13 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             prodotto.get("tipo_temperatura") or ""
                         ).strip().lower()
                         if tipo_temp_card == "aria":
-                            riferimento_temp = "aria / ambiente"
+                            riferimento_temp = "ad aria/ambiente"
                         elif tipo_temp_card == "neve":
-                            riferimento_temp = "neve"
+                            riferimento_temp = "a neve"
                         elif tipo_temp_card == "range produttore":
-                            riferimento_temp = "range produttore"
+                            riferimento_temp = "al range produttore"
                         else:
-                            riferimento_temp = "n.d."
+                            riferimento_temp = ""
 
                         righe_temperatura = []
 
@@ -5165,9 +5183,10 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             righe_temperatura.append(
                                 '<div class="catalog-temp-block-title">Range temperatura produttore</div>'
                             )
-                            righe_temperatura.append(
-                                f'<div class="catalog-temp-reference">Riferito a {html_escape(riferimento_temp)}</div>'
-                            )
+                            if riferimento_temp:
+                                righe_temperatura.append(
+                                    f'<div class="catalog-temp-reference">Riferito {html_escape(riferimento_temp)}</div>'
+                                )
 
                             testo_nuova = _testo_range(
                                 prodotto.get("temp_nuova_min"),
@@ -5189,7 +5208,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                     f'<div class="catalog-temperature-line">'
                                     f'<span class="catalog-temperature-icon">{SNOW_ICON_NEW_SVG}{SNOW_ICON_TRANSFORMED_SVG}</span>'
                                     f'<span class="catalog-temperature-text">'
-                                    f'<span class="catalog-temperature-label">Tutte le tipologie:</span> '
+                                    f'<span class="catalog-temperature-label">Con tutte le tipologie di neve:</span> '
                                     f'{html_escape(testo_nuova)}'
                                     f'</span></div>'
                                 )
@@ -5199,7 +5218,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                         f'<div class="catalog-temperature-line">'
                                         f'<span class="catalog-temperature-icon">{SNOW_ICON_NEW_SVG}</span>'
                                         f'<span class="catalog-temperature-text">'
-                                        f'<span class="catalog-temperature-label">Neve nuova:</span> '
+                                        f'<span class="catalog-temperature-label">Con neve nuova:</span> '
                                         f'{html_escape(testo_nuova)}'
                                         f'</span></div>'
                                     )
@@ -5208,7 +5227,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                         f'<div class="catalog-temperature-line">'
                                         f'<span class="catalog-temperature-icon">{SNOW_ICON_TRANSFORMED_SVG}</span>'
                                         f'<span class="catalog-temperature-text">'
-                                        f'<span class="catalog-temperature-label">Neve trasformata:</span> '
+                                        f'<span class="catalog-temperature-label">Con neve trasformata:</span> '
                                         f'{html_escape(testo_trasf)}'
                                         f'</span></div>'
                                     )
@@ -5329,13 +5348,13 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                 prodotto.get("tipo_temperatura") or ""
                             ).strip().lower()
                             if tipo_temp_scheda == "aria":
-                                riferimento_temp_scheda = "aria / ambiente"
+                                riferimento_temp_scheda = "ad aria/ambiente"
                             elif tipo_temp_scheda == "neve":
-                                riferimento_temp_scheda = "neve"
+                                riferimento_temp_scheda = "a neve"
                             elif tipo_temp_scheda == "range produttore":
-                                riferimento_temp_scheda = "range produttore"
+                                riferimento_temp_scheda = "al range produttore"
                             else:
-                                riferimento_temp_scheda = "n.d."
+                                riferimento_temp_scheda = ""
 
                             if categoria_tenuta:
                                 # Il range temperatura produttore è già visibile nella card.
