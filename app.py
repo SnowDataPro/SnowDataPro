@@ -2390,7 +2390,7 @@ st.markdown(
     }
 
     .catalog-temp-reference {
-        color: var(--text-light);
+        color: var(--text-secondary);
         font-size: 0.72rem;
         line-height: 1.15;
         margin: 0 0 0.42rem 0;
@@ -2401,7 +2401,7 @@ st.markdown(
         align-items: center;
         gap: 0.22rem;
         margin: 0.16rem 0;
-        color: var(--text-primary);
+        color: var(--text-secondary);
         font-size: 0.76rem;
         line-height: 1.18;
         min-width: 0;
@@ -2412,7 +2412,7 @@ st.markdown(
         align-items: center;
         justify-content: center;
         flex: 0 0 auto;
-        color: #395b68;
+        color: var(--text-secondary);
     }
 
     .catalog-temperature-icon svg {
@@ -2423,13 +2423,14 @@ st.markdown(
     }
 
     .catalog-temperature-text {
-        color: var(--text-primary);
+        color: var(--text-secondary);
         font-size: 0.76rem;
         line-height: 1.18;
         min-width: 0;
     }
 
     .catalog-temperature-label {
+        color: var(--text-secondary);
         font-weight: 600;
     }
 
