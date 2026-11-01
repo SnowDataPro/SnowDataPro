@@ -2393,14 +2393,14 @@ st.markdown(
         color: var(--text-light);
         font-size: 0.72rem;
         line-height: 1.15;
-        margin: 0 0 0.18rem 0;
+        margin: 0 0 0.24rem 0;
     }
 
     .catalog-temperature-line {
         display: flex;
         align-items: center;
         gap: 0.22rem;
-        margin: 0.08rem 0;
+        margin: 0.16rem 0;
         color: var(--text-primary);
         font-size: 0.76rem;
         line-height: 1.18;
@@ -2453,6 +2453,11 @@ st.markdown(
     .catalog-temp-detail .catalog-temperature-line,
     .catalog-temp-detail .catalog-temperature-text {
         font-size: 0.80rem;
+    }
+
+    .catalog-temp-detail .catalog-temperature-line {
+        margin-top: 0.20rem;
+        margin-bottom: 0.20rem;
     }
 
     div[class*="st-key-catalog_card_"] h3 {
@@ -3034,7 +3039,7 @@ def _intervallo_duale_summary(temp_nuova_min, temp_nuova_max, temp_trasf_min, te
     testo_nuova = _testo_range(temp_nuova_min, temp_nuova_max, "°C")
     testo_trasf = _testo_range(temp_trasf_min, temp_trasf_max, "°C")
     if testo_nuova != "—":
-        intervalli.append(("❄️", "Neve nuova / cadente", testo_nuova))
+        intervalli.append(("❄️", "Neve nuova", testo_nuova))
     if testo_trasf != "—":
         intervalli.append(("✳️", "Neve trasformata", testo_trasf))
     return intervalli
@@ -3273,7 +3278,7 @@ def pagina_trova_prodotto_migliore():
                 intervalli.append((
                     riga.get("temp_nuova_min"),
                     riga.get("temp_nuova_max"),
-                    "Neve nuova / cadente",
+                    "Neve nuova",
                 ))
             if trasformata_richiesta or not nuova_richiesta:
                 intervalli.append((
@@ -3626,11 +3631,11 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
 
         condizioni_default = []
         if nuova_min_db or nuova_max_db:
-            condizioni_default.append("Neve nuova / cadente")
+            condizioni_default.append("Neve nuova")
         if trasf_min_db or trasf_max_db:
             condizioni_default.append("Neve trasformata")
         if modalita_modifica and not condizioni_default and (generic_min_db or generic_max_db):
-            condizioni_default = ["Neve nuova / cadente", "Neve trasformata"]
+            condizioni_default = ["Neve nuova", "Neve trasformata"]
             nuova_min_db = generic_min_db
             nuova_max_db = generic_max_db
             trasf_min_db = generic_min_db
@@ -3741,7 +3746,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
             with c_cond_range:
                 condizioni_range_tenuta = st.multiselect(
                     "Range valido con",
-                    ["Neve nuova / cadente", "Neve trasformata"],
+                    ["Neve nuova", "Neve trasformata"],
                     key=tenuta_condizioni_key,
                     placeholder="Seleziona una o entrambe",
                     help=(
@@ -3750,7 +3755,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                     ),
                 )
 
-            mostra_nuova = "Neve nuova / cadente" in condizioni_range_tenuta
+            mostra_nuova = "Neve nuova" in condizioni_range_tenuta
             mostra_trasformata = "Neve trasformata" in condizioni_range_tenuta
 
             if mostra_nuova and mostra_trasformata:
@@ -3768,7 +3773,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                 with target_col:
                     st.markdown(
                         f'<div style="display:flex;align-items:center;gap:.45rem;margin:.15rem 0 .55rem 0;">'
-                        f'{SNOW_ICON_NEW_SVG}<strong>Neve nuova / cadente</strong>'
+                        f'{SNOW_ICON_NEW_SVG}<strong>Neve nuova</strong>'
                         f'</div>',
                         unsafe_allow_html=True,
                     )
@@ -4217,7 +4222,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
 
                     try:
                         if categoria_tenuta:
-                            if "Neve nuova / cadente" in condizioni_range_tenuta:
+                            if "Neve nuova" in condizioni_range_tenuta:
                                 temp_nuova_min = _numero_opzionale(temp_nuova_min_txt)
                                 temp_nuova_max = _numero_opzionale(temp_nuova_max_txt)
                             if "Neve trasformata" in condizioni_range_tenuta:
@@ -4652,7 +4657,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                     with st.container(key=f"filter_temp_nuova_group_{categoria}"):
                         st.markdown(
                             f'<div class="catalog-temperature-card-title">'
-                            f'{SNOW_ICON_NEW_SVG}Neve nuova / cadente'
+                            f'{SNOW_ICON_NEW_SVG}Neve nuova'
                             f'</div>'
                             '<div class="catalog-temperature-card-subtitle">'
                             'Per prodotti con temperatura riferita alla neve.'
@@ -5128,7 +5133,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                         f'<div class="catalog-temperature-line">'
                                         f'<span class="catalog-temperature-icon">{SNOW_ICON_NEW_SVG}</span>'
                                         f'<span class="catalog-temperature-text">'
-                                        f'<span class="catalog-temperature-label">Nuova / cadente:</span> '
+                                        f'<span class="catalog-temperature-label">Neve nuova:</span> '
                                         f'{html_escape(testo_nuova)}'
                                         f'</span></div>'
                                     )
@@ -5299,7 +5304,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                         dettaglio_temp_rows.append(
                                             f'<div class="catalog-temperature-line">'
                                             f'<span class="catalog-temperature-icon">{SNOW_ICON_NEW_SVG}</span>'
-                                            f'<span class="catalog-temperature-text"><span class="catalog-temperature-label">Nuova / cadente:</span> {html_escape(testo_nuova_det)}</span>'
+                                            f'<span class="catalog-temperature-text"><span class="catalog-temperature-label">Neve nuova:</span> {html_escape(testo_nuova_det)}</span>'
                                             f'</div>'
                                         )
                                     if testo_trasf_det != "—":
