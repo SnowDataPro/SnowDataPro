@@ -3136,7 +3136,7 @@ def pagina_trova_prodotto_migliore():
     with c_rif:
         riferimento = st.selectbox(
             "Temperatura riferita a",
-            ["Aria", "Neve", "Non specificato"],
+            ["Aria", "Neve", "Range produttore", "Non specificato"],
             key="best_product_temperature_ref",
         )
 
@@ -3246,7 +3246,8 @@ def pagina_trova_prodotto_migliore():
         min_eff = float("-inf") if pd.isna(minimo) else float(minimo)
         max_eff = float("inf") if pd.isna(massimo) else float(massimo)
         if min_eff <= float(temperatura) <= max_eff:
-            return (minimo, massimo, riferimento)
+            etichetta = "Range produttore" if ref_richiesto == "range produttore" else riferimento
+            return (minimo, massimo, etichetta)
         return None
 
     risultati = []
@@ -3493,7 +3494,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
             str(prodotto_edit.get("tipo_temperatura") or "").strip()
             if modalita_modifica else "Aria"
         )
-        if tipo_temp_db not in ["Aria", "Neve", "Non specificato"]:
+        if tipo_temp_db not in ["Aria", "Neve", "Range produttore", "Non specificato"]:
             tipo_temp_db = "Aria"
         if temp_ref_state_key not in st.session_state:
             st.session_state[temp_ref_state_key] = tipo_temp_db
@@ -3545,12 +3546,12 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
             st.markdown("#### Impostazione temperatura")
             tipo_temperatura_dinamica = st.selectbox(
                 "Temperatura riferita a",
-                ["Aria", "Neve", "Non specificato"],
+                ["Aria", "Neve", "Range produttore", "Non specificato"],
                 key=temp_ref_state_key,
                 on_change=_mantieni_aperto_dopo_tipo_temp,
                 help=(
                     "Con 'Neve' puoi inserire due intervalli distinti: neve nuova/cadente "
-                    "e neve trasformata. Con 'Aria' o 'Non specificato' viene usato un solo intervallo."
+                    "e neve trasformata. Con 'Aria', 'Range produttore' o 'Non specificato' viene usato un solo intervallo."
                 ),
             )
 
@@ -3621,7 +3622,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                         _input_numero_da_db(prodotto_edit.get("temp_max"))
                         if modalita_modifica else ""
                     )
-                    tipo_temp_opzioni = ["Aria", "Neve", "Non specificato"]
+                    tipo_temp_opzioni = ["Aria", "Neve", "Range produttore", "Non specificato"]
                     tipo_temp_default = (
                         str(prodotto_edit.get("tipo_temperatura") or "")
                         if modalita_modifica else "Aria"
@@ -4300,6 +4301,8 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                     f"temp_aria_range_catalogo_{categoria}",
                     f"usa_temp_neve_{categoria}",
                     f"temp_neve_range_catalogo_{categoria}",
+                    f"usa_temp_produttore_{categoria}",
+                    f"temp_produttore_range_catalogo_{categoria}",
                     f"usa_temp_nuova_{categoria}",
                     f"temp_nuova_range_catalogo_{categoria}",
                     f"usa_temp_trasformata_{categoria}",
@@ -4360,6 +4363,8 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
         filtro_temp_aria_range = None
         filtro_temp_neve_attivo = False
         filtro_temp_neve_range = None
+        filtro_temp_produttore_attivo = False
+        filtro_temp_produttore_range = None
         filtro_temp_nuova_attivo = False
         filtro_temp_nuova_range = None
         filtro_temp_trasformata_attivo = False
@@ -4518,11 +4523,37 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             disabled=not filtro_temp_trasformata_attivo,
                             key=f"temp_trasformata_range_catalogo_{categoria}",
                         )
+
+                produttore_min, produttore_max = _limiti_temperatura_per_riferimento("range produttore")
+                with st.container(key=f"filter_temp_produttore_group_{categoria}"):
+                    st.markdown(
+                        '<div class="catalog-temperature-card-title">'
+                        'Range produttore'
+                        '</div>'
+                        '<div class="catalog-temperature-card-subtitle">'
+                        'Usa il range dichiarato dal produttore quando non è specificato se si riferisce ad aria o neve.'
+                        '</div>',
+                        unsafe_allow_html=True,
+                    )
+                    filtro_temp_produttore_attivo = st.toggle(
+                        "Attiva filtro range produttore",
+                        key=f"usa_temp_produttore_{categoria}",
+                    )
+                    filtro_temp_produttore_range = st.slider(
+                        "Intervallo produttore (°C)",
+                        min_value=produttore_min,
+                        max_value=produttore_max,
+                        value=(produttore_min, produttore_max),
+                        step=0.5,
+                        disabled=not filtro_temp_produttore_attivo,
+                        key=f"temp_produttore_range_catalogo_{categoria}",
+                    )
             else:
                 aria_min, aria_max = _limiti_temperatura_per_riferimento("aria")
                 neve_min, neve_max = _limiti_temperatura_per_riferimento("neve")
+                produttore_min, produttore_max = _limiti_temperatura_per_riferimento("range produttore")
 
-                c_aria, c_neve_temp = st.columns(2)
+                c_aria, c_neve_temp, c_produttore = st.columns(3)
 
                 with c_aria:
                     with st.container(key=f"filter_temp_aria_group_{categoria}"):
@@ -4572,6 +4603,31 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             step=0.5,
                             disabled=not filtro_temp_neve_attivo,
                             key=f"temp_neve_range_catalogo_{categoria}",
+                        )
+
+                with c_produttore:
+                    with st.container(key=f"filter_temp_produttore_group_{categoria}"):
+                        st.markdown(
+                            '<div class="catalog-temperature-card-title">'
+                            'Range produttore'
+                            '</div>'
+                            '<div class="catalog-temperature-card-subtitle">'
+                            'Filtra i prodotti usando il range dichiarato dal produttore.'
+                            '</div>',
+                            unsafe_allow_html=True,
+                        )
+                        filtro_temp_produttore_attivo = st.toggle(
+                            "Attiva range produttore",
+                            key=f"usa_temp_produttore_{categoria}",
+                        )
+                        filtro_temp_produttore_range = st.slider(
+                            "Intervallo produttore (°C)",
+                            min_value=produttore_min,
+                            max_value=produttore_max,
+                            value=(produttore_min, produttore_max),
+                            step=0.5,
+                            disabled=not filtro_temp_produttore_attivo,
+                            key=f"temp_produttore_range_catalogo_{categoria}",
                         )
 
             st.markdown(
@@ -4627,6 +4683,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
             filtro_temp_aria_attivo
             or filtro_temp_nuova_attivo
             or filtro_temp_trasformata_attivo
+            or filtro_temp_produttore_attivo
         ):
             temp_min_prod = pd.to_numeric(filtrato["temp_min"], errors="coerce")
             temp_max_prod = pd.to_numeric(filtrato["temp_max"], errors="coerce")
@@ -4697,8 +4754,18 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                 )
                 maschera_temperatura = maschera_temperatura | mask_trasf
 
+            if filtro_temp_produttore_attivo and filtro_temp_produttore_range is not None:
+                prod_sel_min, prod_sel_max = filtro_temp_produttore_range
+                mask_produttore = (
+                    (tipo_temp_prod == "range produttore")
+                    & (temp_min_prod.notna() | temp_max_prod.notna())
+                    & (temp_min_prod.fillna(float("-inf")) <= float(prod_sel_max))
+                    & (temp_max_prod.fillna(float("inf")) >= float(prod_sel_min))
+                )
+                maschera_temperatura = maschera_temperatura | mask_produttore
+
             filtrato = filtrato[maschera_temperatura]
-        elif (filtro_temp_aria_attivo or filtro_temp_neve_attivo):
+        elif (filtro_temp_aria_attivo or filtro_temp_neve_attivo or filtro_temp_produttore_attivo):
             temp_min_prod = pd.to_numeric(filtrato["temp_min"], errors="coerce")
             temp_max_prod = pd.to_numeric(filtrato["temp_max"], errors="coerce")
             tipo_temp_prod = (
@@ -4736,6 +4803,18 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                 maschera_temperatura = (
                     maschera_temperatura | maschera_neve_temp
                 )
+
+            if filtro_temp_produttore_attivo and filtro_temp_produttore_range is not None:
+                prod_sel_min, prod_sel_max = filtro_temp_produttore_range
+                prod_min_eff = temp_min_prod.fillna(float("-inf"))
+                prod_max_eff = temp_max_prod.fillna(float("inf"))
+                maschera_produttore = (
+                    (tipo_temp_prod == "range produttore")
+                    & (temp_min_prod.notna() | temp_max_prod.notna())
+                    & (prod_min_eff <= float(prod_sel_max))
+                    & (prod_max_eff >= float(prod_sel_min))
+                )
+                maschera_temperatura = maschera_temperatura | maschera_produttore
 
             filtrato = filtrato[maschera_temperatura]
 
@@ -4830,6 +4909,8 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             riferimento_temp = "aria"
                         elif tipo_temp_card == "neve":
                             riferimento_temp = "neve"
+                        elif tipo_temp_card == "range produttore":
+                            riferimento_temp = "range produttore"
                         else:
                             riferimento_temp = "n.d."
 
@@ -4978,6 +5059,8 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                 riferimento_temp_scheda = "aria"
                             elif tipo_temp_scheda == "neve":
                                 riferimento_temp_scheda = "neve"
+                            elif tipo_temp_scheda == "range produttore":
+                                riferimento_temp_scheda = "range produttore"
                             else:
                                 riferimento_temp_scheda = "n.d."
 
