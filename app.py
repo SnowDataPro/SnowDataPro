@@ -5123,7 +5123,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                     f'<div class="catalog-temperature-line">'
                                     f'<span class="catalog-temperature-icon">{SNOW_ICON_NEW_SVG}{SNOW_ICON_TRANSFORMED_SVG}</span>'
                                     f'<span class="catalog-temperature-text">'
-                                    f'<span class="catalog-temperature-label">Nuova + trasformata:</span> '
+                                    f'<span class="catalog-temperature-label">Neve nuova + neve trasformata:</span> '
                                     f'{html_escape(testo_nuova)}'
                                     f'</span></div>'
                                 )
@@ -5142,7 +5142,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                         f'<div class="catalog-temperature-line">'
                                         f'<span class="catalog-temperature-icon">{SNOW_ICON_TRANSFORMED_SVG}</span>'
                                         f'<span class="catalog-temperature-text">'
-                                        f'<span class="catalog-temperature-label">Trasformata:</span> '
+                                        f'<span class="catalog-temperature-label">Neve trasformata:</span> '
                                         f'{html_escape(testo_trasf)}'
                                         f'</span></div>'
                                     )
@@ -5296,7 +5296,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                     dettaglio_temp_rows.append(
                                         f'<div class="catalog-temperature-line">'
                                         f'<span class="catalog-temperature-icon">{SNOW_ICON_NEW_SVG}{SNOW_ICON_TRANSFORMED_SVG}</span>'
-                                        f'<span class="catalog-temperature-text"><span class="catalog-temperature-label">Nuova + trasformata:</span> {html_escape(testo_nuova_det)}</span>'
+                                        f'<span class="catalog-temperature-text"><span class="catalog-temperature-label">Neve nuova + neve trasformata:</span> {html_escape(testo_nuova_det)}</span>'
                                         f'</div>'
                                     )
                                 else:
@@ -5311,7 +5311,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                         dettaglio_temp_rows.append(
                                             f'<div class="catalog-temperature-line">'
                                             f'<span class="catalog-temperature-icon">{SNOW_ICON_TRANSFORMED_SVG}</span>'
-                                            f'<span class="catalog-temperature-text"><span class="catalog-temperature-label">Trasformata:</span> {html_escape(testo_trasf_det)}</span>'
+                                            f'<span class="catalog-temperature-text"><span class="catalog-temperature-label">Neve trasformata:</span> {html_escape(testo_trasf_det)}</span>'
                                             f'</div>'
                                         )
 
@@ -5722,7 +5722,7 @@ with st.container(key="sector_page_content"):
                 tipo_neve = st.selectbox(
                     "Tipo neve",
                     [
-                        "Nuova", "Vecchia", "Trasformata", "Artificiale",
+                        "Nuova", "Vecchia", "Neve trasformata", "Artificiale",
                         "Mista", "Bagnata", "Ghiacciata", "Altro"
                     ],
                 )
