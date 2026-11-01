@@ -5338,65 +5338,9 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                 riferimento_temp_scheda = "n.d."
 
                             if categoria_tenuta:
-                                testo_nuova_det = _testo_range(
-                                    prodotto.get("temp_nuova_min"),
-                                    prodotto.get("temp_nuova_max"),
-                                    "°C",
-                                )
-                                testo_trasf_det = _testo_range(
-                                    prodotto.get("temp_trasformata_min"),
-                                    prodotto.get("temp_trasformata_max"),
-                                    "°C",
-                                )
-                                dettaglio_temp_rows = [
-                                    '<div class="catalog-temp-detail">',
-                                    '<div class="catalog-temp-block-title">Range temperatura produttore</div>',
-                                    f'<div class="catalog-temp-reference">Riferito a {html_escape(riferimento_temp_scheda)}</div>',
-                                ]
-
-                                if (
-                                    testo_nuova_det != "—"
-                                    and testo_trasf_det != "—"
-                                    and testo_nuova_det == testo_trasf_det
-                                ):
-                                    dettaglio_temp_rows.append(
-                                        f'<div class="catalog-temperature-line">'
-                                        f'<span class="catalog-temperature-icon">{SNOW_ICON_NEW_SVG}{SNOW_ICON_TRANSFORMED_SVG}</span>'
-                                        f'<span class="catalog-temperature-text"><span class="catalog-temperature-label">Tutte le tipologie:</span> {html_escape(testo_nuova_det)}</span>'
-                                        f'</div>'
-                                    )
-                                else:
-                                    if testo_nuova_det != "—":
-                                        dettaglio_temp_rows.append(
-                                            f'<div class="catalog-temperature-line">'
-                                            f'<span class="catalog-temperature-icon">{SNOW_ICON_NEW_SVG}</span>'
-                                            f'<span class="catalog-temperature-text"><span class="catalog-temperature-label">Neve nuova:</span> {html_escape(testo_nuova_det)}</span>'
-                                            f'</div>'
-                                        )
-                                    if testo_trasf_det != "—":
-                                        dettaglio_temp_rows.append(
-                                            f'<div class="catalog-temperature-line">'
-                                            f'<span class="catalog-temperature-icon">{SNOW_ICON_TRANSFORMED_SVG}</span>'
-                                            f'<span class="catalog-temperature-text"><span class="catalog-temperature-label">Neve trasformata:</span> {html_escape(testo_trasf_det)}</span>'
-                                            f'</div>'
-                                        )
-
-                                if testo_nuova_det == "—" and testo_trasf_det == "—":
-                                    temp_generica = _testo_range(
-                                        prodotto.get("temp_min"),
-                                        prodotto.get("temp_max"),
-                                        "°C",
-                                    )
-                                    if temp_generica != "—":
-                                        dettaglio_temp_rows.append(
-                                            f'<div class="catalog-temperature-line"><span class="catalog-temperature-text">{html_escape(temp_generica)}</span></div>'
-                                        )
-
-                                dettaglio_temp_rows.append('</div>')
-                                st.markdown(
-                                    ''.join(dettaglio_temp_rows),
-                                    unsafe_allow_html=True,
-                                )
+                                # Il range temperatura produttore è già visibile nella card.
+                                # Evitiamo di duplicarlo nella Scheda completa.
+                                pass
                             else:
                                 temp_generica = _testo_range(
                                     prodotto.get("temp_min"),
