@@ -3010,6 +3010,8 @@ def _testo_range(minimo, massimo, unita="°C"):
         return f"≤ {massimo:g} {unita}"
     if pd.isna(massimo):
         return f"≥ {minimo:g} {unita}"
+    if float(minimo) == float(massimo):
+        return f"{minimo:g} {unita}"
     return f"{minimo:g} / {massimo:g} {unita}"
 
 
@@ -3563,10 +3565,13 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
     tenuta_condizioni_key = f"tenuta_condizioni_range_{app_widget_suffix}"
     tenuta_temp_nuova_min_key = f"tenuta_temp_nuova_min_{app_widget_suffix}"
     tenuta_temp_nuova_max_key = f"tenuta_temp_nuova_max_{app_widget_suffix}"
+    tenuta_temp_nuova_unica_key = f"tenuta_temp_nuova_unica_{app_widget_suffix}"
     tenuta_temp_trasf_min_key = f"tenuta_temp_trasf_min_{app_widget_suffix}"
     tenuta_temp_trasf_max_key = f"tenuta_temp_trasf_max_{app_widget_suffix}"
+    tenuta_temp_trasf_unica_key = f"tenuta_temp_trasf_unica_{app_widget_suffix}"
     tenuta_temp_tutte_min_key = f"tenuta_temp_tutte_min_{app_widget_suffix}"
     tenuta_temp_tutte_max_key = f"tenuta_temp_tutte_max_{app_widget_suffix}"
+    tenuta_temp_tutte_unica_key = f"tenuta_temp_tutte_unica_{app_widget_suffix}"
     tenuta_ui_keys = [
         temp_ref_state_key,
         tenuta_nome_key,
@@ -3575,10 +3580,13 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
         tenuta_condizioni_key,
         tenuta_temp_nuova_min_key,
         tenuta_temp_nuova_max_key,
+        tenuta_temp_nuova_unica_key,
         tenuta_temp_trasf_min_key,
         tenuta_temp_trasf_max_key,
+        tenuta_temp_trasf_unica_key,
         tenuta_temp_tutte_min_key,
         tenuta_temp_tutte_max_key,
+        tenuta_temp_tutte_unica_key,
     ]
 
     if categoria_tenuta:
@@ -3642,6 +3650,9 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
         condizioni_default = []
         tutte_min_db = ""
         tutte_max_db = ""
+        nuova_unica_db = ""
+        trasf_unica_db = ""
+        tutte_unica_db = ""
 
         range_tutte = (
             (nuova_min_db or nuova_max_db)
@@ -3652,18 +3663,32 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
 
         if range_tutte:
             condizioni_default = ["Tutte le tipologie di neve"]
-            tutte_min_db = nuova_min_db
-            tutte_max_db = nuova_max_db
+            if nuova_min_db and nuova_max_db and nuova_min_db == nuova_max_db:
+                tutte_unica_db = nuova_min_db
+            else:
+                tutte_min_db = nuova_min_db
+                tutte_max_db = nuova_max_db
         else:
             if nuova_min_db or nuova_max_db:
                 condizioni_default.append("Neve nuova")
+                if nuova_min_db and nuova_max_db and nuova_min_db == nuova_max_db:
+                    nuova_unica_db = nuova_min_db
+                    nuova_min_db = ""
+                    nuova_max_db = ""
             if trasf_min_db or trasf_max_db:
                 condizioni_default.append("Neve trasformata")
+                if trasf_min_db and trasf_max_db and trasf_min_db == trasf_max_db:
+                    trasf_unica_db = trasf_min_db
+                    trasf_min_db = ""
+                    trasf_max_db = ""
 
         if modalita_modifica and not condizioni_default and (generic_min_db or generic_max_db):
             condizioni_default = ["Non specificato"]
-            tutte_min_db = generic_min_db
-            tutte_max_db = generic_max_db
+            if generic_min_db and generic_max_db and generic_min_db == generic_max_db:
+                tutte_unica_db = generic_min_db
+            else:
+                tutte_min_db = generic_min_db
+                tutte_max_db = generic_max_db
 
         if tenuta_condizioni_key not in st.session_state:
             st.session_state[tenuta_condizioni_key] = condizioni_default
@@ -3671,14 +3696,20 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
             st.session_state[tenuta_temp_nuova_min_key] = nuova_min_db
         if tenuta_temp_nuova_max_key not in st.session_state:
             st.session_state[tenuta_temp_nuova_max_key] = nuova_max_db
+        if tenuta_temp_nuova_unica_key not in st.session_state:
+            st.session_state[tenuta_temp_nuova_unica_key] = nuova_unica_db
         if tenuta_temp_trasf_min_key not in st.session_state:
             st.session_state[tenuta_temp_trasf_min_key] = trasf_min_db
         if tenuta_temp_trasf_max_key not in st.session_state:
             st.session_state[tenuta_temp_trasf_max_key] = trasf_max_db
+        if tenuta_temp_trasf_unica_key not in st.session_state:
+            st.session_state[tenuta_temp_trasf_unica_key] = trasf_unica_db
         if tenuta_temp_tutte_min_key not in st.session_state:
             st.session_state[tenuta_temp_tutte_min_key] = tutte_min_db
         if tenuta_temp_tutte_max_key not in st.session_state:
             st.session_state[tenuta_temp_tutte_max_key] = tutte_max_db
+        if tenuta_temp_tutte_unica_key not in st.session_state:
+            st.session_state[tenuta_temp_tutte_unica_key] = tutte_unica_db
 
     expander_aperto = modalita_modifica or bool(
         st.session_state.get(expander_keep_key, False)
@@ -3723,10 +3754,13 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
         condizioni_range_tenuta = []
         temp_nuova_min_txt = ""
         temp_nuova_max_txt = ""
+        temp_nuova_unica_txt = ""
         temp_trasformata_min_txt = ""
         temp_trasformata_max_txt = ""
+        temp_trasformata_unica_txt = ""
         temp_tutte_min_txt = ""
         temp_tutte_max_txt = ""
+        temp_tutte_unica_txt = ""
 
         if categoria_tenuta:
             st.markdown("#### Dati prodotto")
@@ -3813,7 +3847,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                         f'</div>',
                         unsafe_allow_html=True,
                     )
-                tt1, tt2 = st.columns(2)
+                tt1, tt2, tt3 = st.columns(3)
                 with tt1:
                     temp_tutte_min_txt = st.text_input(
                         "Temperatura minima (°C)",
@@ -3825,6 +3859,13 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                         "Temperatura massima (°C)",
                         key=tenuta_temp_tutte_max_key,
                         placeholder="-2",
+                    )
+                with tt3:
+                    temp_tutte_unica_txt = st.text_input(
+                        "Temperatura unica (°C)",
+                        key=tenuta_temp_tutte_unica_key,
+                        placeholder="0",
+                        help="Usa questo campo quando il produttore indica un solo valore di temperatura.",
                     )
             else:
                 if mostra_nuova and mostra_trasformata:
@@ -3846,7 +3887,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             f'</div>',
                             unsafe_allow_html=True,
                         )
-                        n1, n2 = st.columns(2)
+                        n1, n2, n3 = st.columns(3)
                         with n1:
                             temp_nuova_min_txt = st.text_input(
                                 "Min neve nuova (°C)",
@@ -3859,6 +3900,12 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                 key=tenuta_temp_nuova_max_key,
                                 placeholder="-2",
                             )
+                        with n3:
+                            temp_nuova_unica_txt = st.text_input(
+                                "Temperatura unica (°C)",
+                                key=tenuta_temp_nuova_unica_key,
+                                placeholder="0",
+                            )
 
                 if mostra_trasformata:
                     target_col = c_trasf_range if mostra_nuova else c_nuova_range
@@ -3869,7 +3916,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             f'</div>',
                             unsafe_allow_html=True,
                         )
-                        t1, t2 = st.columns(2)
+                        t1, t2, t3 = st.columns(3)
                         with t1:
                             temp_trasformata_min_txt = st.text_input(
                                 "Min neve trasformata (°C)",
@@ -3881,6 +3928,12 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                 "Max neve trasformata (°C)",
                                 key=tenuta_temp_trasf_max_key,
                                 placeholder="-5",
+                            )
+                        with t3:
+                            temp_trasformata_unica_txt = st.text_input(
+                                "Temperatura unica (°C)",
+                                key=tenuta_temp_trasf_unica_key,
+                                placeholder="0",
                             )
 
         with st.container(key=f"catalog_form_panel_{categoria}"):
@@ -4292,8 +4345,12 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                     try:
                         if categoria_tenuta:
                             if "Tutte le tipologie di neve" in condizioni_range_tenuta:
-                                temp_tutte_min = _numero_opzionale(temp_tutte_min_txt)
-                                temp_tutte_max = _numero_opzionale(temp_tutte_max_txt)
+                                temp_tutte_unica = _numero_opzionale(temp_tutte_unica_txt)
+                                if temp_tutte_unica is not None:
+                                    temp_tutte_min = temp_tutte_max = temp_tutte_unica
+                                else:
+                                    temp_tutte_min = _numero_opzionale(temp_tutte_min_txt)
+                                    temp_tutte_max = _numero_opzionale(temp_tutte_max_txt)
                                 temp_nuova_min = temp_tutte_min
                                 temp_nuova_max = temp_tutte_max
                                 temp_trasformata_min = temp_tutte_min
@@ -4301,17 +4358,29 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                 temp_min = temp_tutte_min
                                 temp_max = temp_tutte_max
                             elif "Non specificato" in condizioni_range_tenuta:
-                                temp_tutte_min = _numero_opzionale(temp_tutte_min_txt)
-                                temp_tutte_max = _numero_opzionale(temp_tutte_max_txt)
+                                temp_tutte_unica = _numero_opzionale(temp_tutte_unica_txt)
+                                if temp_tutte_unica is not None:
+                                    temp_tutte_min = temp_tutte_max = temp_tutte_unica
+                                else:
+                                    temp_tutte_min = _numero_opzionale(temp_tutte_min_txt)
+                                    temp_tutte_max = _numero_opzionale(temp_tutte_max_txt)
                                 temp_min = temp_tutte_min
                                 temp_max = temp_tutte_max
                             else:
                                 if "Neve nuova" in condizioni_range_tenuta:
-                                    temp_nuova_min = _numero_opzionale(temp_nuova_min_txt)
-                                    temp_nuova_max = _numero_opzionale(temp_nuova_max_txt)
+                                    temp_nuova_unica = _numero_opzionale(temp_nuova_unica_txt)
+                                    if temp_nuova_unica is not None:
+                                        temp_nuova_min = temp_nuova_max = temp_nuova_unica
+                                    else:
+                                        temp_nuova_min = _numero_opzionale(temp_nuova_min_txt)
+                                        temp_nuova_max = _numero_opzionale(temp_nuova_max_txt)
                                 if "Neve trasformata" in condizioni_range_tenuta:
-                                    temp_trasformata_min = _numero_opzionale(temp_trasformata_min_txt)
-                                    temp_trasformata_max = _numero_opzionale(temp_trasformata_max_txt)
+                                    temp_trasformata_unica = _numero_opzionale(temp_trasformata_unica_txt)
+                                    if temp_trasformata_unica is not None:
+                                        temp_trasformata_min = temp_trasformata_max = temp_trasformata_unica
+                                    else:
+                                        temp_trasformata_min = _numero_opzionale(temp_trasformata_min_txt)
+                                        temp_trasformata_max = _numero_opzionale(temp_trasformata_max_txt)
 
                                 estremi_min = [
                                     v for v in [temp_nuova_min, temp_trasformata_min] if v is not None
