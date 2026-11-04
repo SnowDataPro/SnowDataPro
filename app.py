@@ -22,7 +22,7 @@ st.set_page_config(
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "ski_material_lab.db")
-VERSIONE_DATABASE_APP = 8
+VERSIONE_DATABASE_APP = 9
 
 
 # ============================================================
@@ -296,17 +296,10 @@ def inizializza_database():
           AND TRIM(COALESCE(tipo, '')) = 'Base stick'
     """)
 
-    # Backward compatibility: i vecchi intervalli tenuta vengono riportati
-    # nel campo "neve nuova / cadente" se i nuovi campi dedicati sono ancora vuoti.
-    conn.execute("""
-        UPDATE catalogo_prodotti
-        SET temp_nuova_min = temp_min,
-            temp_nuova_max = temp_max
-        WHERE categoria = 'tenuta'
-          AND temp_nuova_min IS NULL
-          AND temp_nuova_max IS NULL
-          AND (temp_min IS NOT NULL OR temp_max IS NOT NULL)
-    """)
+    # Non convertire più automaticamente un range generico delle scioline di
+    # tenuta in "Neve nuova". Il range generico rappresenta intenzionalmente
+    # la scelta "Non specificato" e deve restare tale anche dopo refresh/redeploy.
+    # La vecchia migrazione è stata rimossa dalla versione 9.
 
     conn.execute("""
         INSERT INTO app_schema_meta (chiave, valore)
