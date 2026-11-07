@@ -98,6 +98,7 @@ def inizializza_database():
             snow_forma_grano TEXT,
             snow_granulometria TEXT,
             snow_caratteristiche TEXT,
+            zero_batteria TEXT,
             note TEXT,
             creato_il TEXT NOT NULL
         )
@@ -218,6 +219,7 @@ def inizializza_database():
         "snow_forma_grano": "TEXT",
         "snow_granulometria": "TEXT",
         "snow_caratteristiche": "TEXT",
+        "zero_batteria": "TEXT",
     }
     for nome_colonna, tipo_colonna in nuove_colonne_sessioni.items():
         if nome_colonna not in colonne_sessioni:
@@ -3303,7 +3305,8 @@ def salva_zero_test_matrice(sessione_id, righe, classificazione):
             """
             UPDATE sessioni
             SET snow_origine = ?, snow_consistenza = ?, snow_umidita = ?,
-                snow_forma_grano = ?, snow_granulometria = ?, snow_caratteristiche = ?
+                snow_forma_grano = ?, snow_granulometria = ?, snow_caratteristiche = ?,
+                zero_batteria = ?
             WHERE id = ?
             """,
             (
@@ -3313,6 +3316,7 @@ def salva_zero_test_matrice(sessione_id, righe, classificazione):
                 classificazione.get("snow_forma_grano", ""),
                 classificazione.get("snow_granulometria", ""),
                 classificazione.get("snow_caratteristiche", ""),
+                classificazione.get("zero_batteria", ""),
                 int(sessione_id),
             ),
         )
@@ -6273,453 +6277,560 @@ with st.container(key="sector_page_content"):
     elif pagina == "Inserimento test":
         mostra_banner(
             "Inserimento test",
-            "Area operativa dedicata alla registrazione e alla modifica dei test.",
+            "Seleziona la tipologia di test e registra i dati in un unico flusso ordinato.",
         )
 
         edit_zero_session_id = st.session_state.get("zero_edit_session_id")
+
+        st.markdown(
+            """
+            <style>
+            .insert-test-panel {
+                background:#ffffff;
+                border:1px solid #d8dde3;
+                border-radius:14px;
+                padding:1.15rem 1.25rem;
+                margin:0.7rem 0 1rem 0;
+                box-shadow:0 2px 10px rgba(15,23,42,.04);
+            }
+            .insert-test-title {
+                font-size:1.15rem;
+                font-weight:700;
+                color:#1f2933;
+                margin-bottom:.2rem;
+            }
+            .insert-test-caption {
+                color:#7a8a96;
+                font-size:.92rem;
+                margin-bottom:.85rem;
+            }
+            .insert-test-divider {
+                border-top:1px solid #e3e7eb;
+                margin:1.15rem 0 1rem 0;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # ------------------------------------------------------------
+        # 1. TIPOLOGIA TEST
+        # ------------------------------------------------------------
+        st.markdown('<div class="insert-test-title">Tipologia di test</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="insert-test-caption">Scegli il test effettuato. Il modulo sottostante cambia automaticamente.</div>',
+            unsafe_allow_html=True,
+        )
+
+        tipologie_test = [
+            "Zero test",
+            "Test prodotti scorrimento",
+            "Test rigature manuali",
+            "Test scioline",
+        ]
+
         if edit_zero_session_id is not None:
-            tipo_inserimento_test = "Zero test"
+            st.session_state["tipo_inserimento_test"] = "Zero test"
+        elif st.session_state.get("tipo_inserimento_test") not in tipologie_test:
+            st.session_state["tipo_inserimento_test"] = "Zero test"
+
+        tipo_inserimento_test = st.selectbox(
+            "Tipologia test",
+            tipologie_test,
+            key="tipo_inserimento_test",
+            label_visibility="collapsed",
+            disabled=edit_zero_session_id is not None,
+        )
+
+        if edit_zero_session_id is not None:
             st.markdown(
                 '<div class="catalog-edit-notice">'
                 'Modalità modifica attiva: stai aggiornando uno Zero Test già presente nello storico.'
                 '</div>',
                 unsafe_allow_html=True,
             )
-        else:
-            tipo_inserimento_test = st.selectbox(
-                "Tipologia test",
-                [
-                    "Zero test",
-                    "Test prodotti scorrimento",
-                    "Test scioline di tenuta",
-                    "Test rigature manuali",
-                ],
-                key="tipo_inserimento_test",
+
+        # Per ora sviluppiamo soltanto lo Zero test.
+        if tipo_inserimento_test != "Zero test":
+            st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
+            st.info(
+                "Questa tipologia di test verrà configurata nel prossimo passaggio. "
+                "Per ora il modulo operativo è disponibile solo per lo Zero test."
+            )
+            st.stop()
+
+        # ------------------------------------------------------------
+        # 2. DATI SESSIONE ZERO TEST
+        # ------------------------------------------------------------
+        df_sessioni_corrente = sessioni_df()
+        riga_sessione = None
+        if edit_zero_session_id is not None and not df_sessioni_corrente.empty:
+            match_sessione = df_sessioni_corrente[
+                df_sessioni_corrente["id"].astype(int) == int(edit_zero_session_id)
+            ]
+            if not match_sessione.empty:
+                riga_sessione = match_sessione.iloc[0]
+
+        if edit_zero_session_id is not None and riga_sessione is None:
+            st.error("Lo Zero test da modificare non è più disponibile.")
+            if st.button("Torna allo storico Zero test", use_container_width=True):
+                st.session_state.pop("zero_edit_session_id", None)
+                cambia_pagina("Zero test")
+            st.stop()
+
+        def _safe_float_zero(valore, default=0.0):
+            try:
+                if pd.isna(valore):
+                    return float(default)
+                return float(valore)
+            except Exception:
+                return float(default)
+
+        def _safe_date_zero(valore):
+            if valore is None or str(valore).strip() == "":
+                return date.today()
+            try:
+                return pd.to_datetime(valore).date()
+            except Exception:
+                return date.today()
+
+        def _safe_time_zero(valore):
+            if valore is None or str(valore).strip() == "":
+                return datetime.now().time().replace(second=0, microsecond=0)
+            try:
+                return datetime.strptime(str(valore)[:5], "%H:%M").time()
+            except Exception:
+                return datetime.now().time().replace(second=0, microsecond=0)
+
+        suffix_zero = f"edit_{int(edit_zero_session_id)}" if edit_zero_session_id is not None else "new"
+
+        st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
+        st.markdown('<div class="insert-test-title">Dati Zero test</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="insert-test-caption">Registra una volta sola le condizioni della sessione e scegli la batteria utilizzata.</div>',
+            unsafe_allow_html=True,
+        )
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            zero_data = st.date_input(
+                "Data",
+                value=_safe_date_zero(riga_sessione.get("data") if riga_sessione is not None else None),
+                key=f"insert_zero_date_{suffix_zero}",
+            )
+            zero_luogo = st.text_input(
+                "Luogo *",
+                value=str(riga_sessione.get("luogo") or "") if riga_sessione is not None else "",
+                key=f"insert_zero_place_{suffix_zero}",
+            )
+        with c2:
+            zero_ora = st.time_input(
+                "Ora",
+                value=_safe_time_zero(riga_sessione.get("ora") if riga_sessione is not None else None),
+                key=f"insert_zero_time_{suffix_zero}",
+            )
+            zero_t_aria = st.number_input(
+                "Temperatura aria (°C)",
+                value=_safe_float_zero(riga_sessione.get("temperatura_aria") if riga_sessione is not None else 0.0),
+                step=0.5,
+                key=f"insert_zero_air_{suffix_zero}",
+            )
+        with c3:
+            zero_t_neve = st.number_input(
+                "Temperatura neve (°C)",
+                value=_safe_float_zero(riga_sessione.get("temperatura_neve") if riga_sessione is not None else 0.0),
+                step=0.5,
+                key=f"insert_zero_snow_{suffix_zero}",
+            )
+            zero_ur = st.number_input(
+                "Umidità relativa (%)",
+                min_value=0.0,
+                max_value=100.0,
+                value=_safe_float_zero(riga_sessione.get("umidita") if riga_sessione is not None else 70.0, 70.0),
+                step=1.0,
+                key=f"insert_zero_rh_{suffix_zero}",
             )
 
-        if tipo_inserimento_test == "Zero test":
-            sessioni = dizionario_sessioni()
-            sci = dizionario_sci()
+        batteria_opzioni = [
+            "Batteria prodotti scorrimento",
+            "Batteria rigature manuali",
+        ]
+        batteria_db = (
+            str(riga_sessione.get("zero_batteria") or "").strip()
+            if riga_sessione is not None and "zero_batteria" in riga_sessione.index
+            else ""
+        )
+        batteria_index = batteria_opzioni.index(batteria_db) if batteria_db in batteria_opzioni else 0
+        zero_batteria = st.selectbox(
+            "Batteria",
+            batteria_opzioni,
+            index=batteria_index,
+            key=f"insert_zero_battery_{suffix_zero}",
+            help="Indica a quale gruppo di test verranno destinati i paia selezionati con questo Zero test.",
+        )
 
-            if not sessioni:
-                st.info("Non ci sono ancora sessioni. Crea qui la sessione dello Zero test.")
-                with st.form("zero_quick_session_form"):
-                    qs1, qs2, qs3 = st.columns(3)
-                    with qs1:
-                        zero_data = st.date_input("Data", value=date.today(), key="zero_quick_date")
-                        zero_luogo = st.text_input("Luogo *", key="zero_quick_place")
-                    with qs2:
-                        zero_t_aria = st.number_input("Temperatura aria (°C)", value=0.0, step=0.5, key="zero_quick_air")
-                        zero_t_neve = st.number_input("Temperatura neve (°C)", value=0.0, step=0.5, key="zero_quick_snow")
-                    with qs3:
-                        zero_ur = st.number_input("Umidità relativa (%)", min_value=0.0, max_value=100.0, value=70.0, step=1.0, key="zero_quick_rh")
-                        zero_ora = st.time_input("Ora", key="zero_quick_time")
-                    crea_sessione_zero = st.form_submit_button("Crea sessione Zero test", type="primary", use_container_width=True)
+        zero_note = st.text_area(
+            "Note sessione",
+            value=str(riga_sessione.get("note") or "") if riga_sessione is not None else "",
+            key=f"insert_zero_notes_{suffix_zero}",
+            placeholder="Note opzionali sulla giornata o sulle condizioni del test...",
+            height=80,
+        )
 
-                if crea_sessione_zero:
-                    if not zero_luogo.strip():
-                        st.error("Inserisci il luogo.")
-                    else:
+        # ------------------------------------------------------------
+        # 3. CLASSIFICAZIONE NEVE
+        # ------------------------------------------------------------
+        zero_snow_options = {
+            "Origine": ["Naturale", "Artificiale", "Mista"],
+            "Consistenza": [
+                "Compatta", "Sfarinata / Soffice", "Sgranata", "Ghiacciata",
+                "Soffice su fondo ghiacciato", "Soffice su fondo compatto", "Molle",
+            ],
+            "Umidità neve": ["Secca", "Umida", "Bagnata", "Molto bagnata"],
+            "Forma grano": [
+                "Nuova (cristalli esagonali)",
+                "In trasformazione (forte gradiente)",
+                "In trasformazione (basso gradiente)",
+                "Trasformata (cristalli angolari)",
+                "Trasformata (grani arrotondati)",
+                "Mista nuova e trasformata",
+            ],
+            "Granulometria": ["Fine", "Media", "Grossa"],
+            "Caratteristiche": ["Sporca", "Salata", "Ventata", "Lucida", "Cadente"],
+        }
+
+        st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
+        st.markdown('<div class="insert-test-title">Classificazione neve</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="insert-test-caption">Usa la stessa classificazione indipendente già adottata nel catalogo scioline.</div>',
+            unsafe_allow_html=True,
+        )
+
+        z1, z2, z3 = st.columns(3)
+        with z1:
+            zero_origine = st.multiselect(
+                "Origine",
+                zero_snow_options["Origine"],
+                default=_valori_sessione_neve(riga_sessione.get("snow_origine") if riga_sessione is not None else "", zero_snow_options["Origine"]),
+                key=f"insert_zero_origin_{suffix_zero}",
+                placeholder="Seleziona origine",
+            )
+        with z2:
+            zero_consistenza = st.multiselect(
+                "Consistenza",
+                zero_snow_options["Consistenza"],
+                default=_valori_sessione_neve(riga_sessione.get("snow_consistenza") if riga_sessione is not None else "", zero_snow_options["Consistenza"]),
+                key=f"insert_zero_consistency_{suffix_zero}",
+                placeholder="Seleziona consistenza",
+            )
+        with z3:
+            zero_umidita = st.multiselect(
+                "Umidità neve",
+                zero_snow_options["Umidità neve"],
+                default=_valori_sessione_neve(riga_sessione.get("snow_umidita") if riga_sessione is not None else "", zero_snow_options["Umidità neve"]),
+                key=f"insert_zero_humidity_{suffix_zero}",
+                placeholder="Seleziona umidità neve",
+            )
+
+        z4, z5, z6 = st.columns(3)
+        with z4:
+            zero_forma = st.multiselect(
+                "Forma grano",
+                zero_snow_options["Forma grano"],
+                default=_valori_sessione_neve(riga_sessione.get("snow_forma_grano") if riga_sessione is not None else "", zero_snow_options["Forma grano"]),
+                key=f"insert_zero_grain_{suffix_zero}",
+                placeholder="Seleziona forma grano",
+            )
+        with z5:
+            zero_granulometria = st.multiselect(
+                "Granulometria",
+                zero_snow_options["Granulometria"],
+                default=_valori_sessione_neve(riga_sessione.get("snow_granulometria") if riga_sessione is not None else "", zero_snow_options["Granulometria"]),
+                key=f"insert_zero_size_{suffix_zero}",
+                placeholder="Seleziona granulometria",
+            )
+        with z6:
+            zero_caratteristiche = st.multiselect(
+                "Caratteristiche",
+                zero_snow_options["Caratteristiche"],
+                default=_valori_sessione_neve(riga_sessione.get("snow_caratteristiche") if riga_sessione is not None else "", zero_snow_options["Caratteristiche"]),
+                key=f"insert_zero_features_{suffix_zero}",
+                placeholder="Seleziona caratteristiche",
+            )
+
+        # ------------------------------------------------------------
+        # 4. MATRICE 10 PAIA x 4 PASSAGGI
+        # ------------------------------------------------------------
+        risultati_esistenti = (
+            zero_test_sessione(int(edit_zero_session_id))
+            if edit_zero_session_id is not None
+            else pd.DataFrame()
+        )
+
+        gruppi_esistenti = {}
+        if not risultati_esistenti.empty:
+            paia_occupati = set()
+            prossimo_libero = 1
+            for sci_id, gruppo in risultati_esistenti.groupby("sci_id"):
+                gruppo = gruppo.sort_values("prova_numero")
+                tempi = {
+                    int(r["prova_numero"]): round(float(r["tempo_sec"]), 2)
+                    for _, r in gruppo.iterrows()
+                }
+                note_valide = [
+                    str(v).strip() for v in gruppo["note"].tolist()
+                    if str(v or "").strip()
+                ]
+                codice = str(gruppo.iloc[0]["sci"] or "").strip()
+                try:
+                    paio_num = int(codice)
+                    if paio_num < 1 or paio_num > 10 or paio_num in paia_occupati:
+                        raise ValueError
+                except (TypeError, ValueError):
+                    while prossimo_libero in paia_occupati and prossimo_libero <= 10:
+                        prossimo_libero += 1
+                    if prossimo_libero > 10:
+                        continue
+                    paio_num = prossimo_libero
+                paia_occupati.add(paio_num)
+                gruppi_esistenti[paio_num] = (tempi, note_valide[0] if note_valide else "")
+
+        righe_input = []
+        for paio in range(1, 11):
+            tempi, nota = gruppi_esistenti.get(paio, ({}, ""))
+            righe_input.append({
+                "Paio": paio,
+                "P1 (s)": tempi.get(1),
+                "P2 (s)": tempi.get(2),
+                "P3 (s)": tempi.get(3),
+                "P4 (s)": tempi.get(4),
+                "Note": nota,
+            })
+
+        def _applica_modifiche_editor_zero(df_base, stato_editor):
+            df_lavoro = df_base.copy()
+            if not isinstance(stato_editor, dict):
+                return df_lavoro
+            modifiche = stato_editor.get("edited_rows", {}) or {}
+            for indice_riga, valori in modifiche.items():
+                try:
+                    idx = int(indice_riga)
+                except (TypeError, ValueError):
+                    continue
+                if idx < 0 or idx >= len(df_lavoro) or not isinstance(valori, dict):
+                    continue
+                for colonna, valore in valori.items():
+                    if colonna in df_lavoro.columns:
+                        df_lavoro.at[idx, colonna] = valore
+            return df_lavoro
+
+        def _aggiungi_metriche_zero(df_tempi):
+            df_calc = df_tempi.copy().sort_values("Paio").reset_index(drop=True)
+            colonne_tempi = ["P1 (s)", "P2 (s)", "P3 (s)", "P4 (s)"]
+            for colonna in colonne_tempi:
+                df_calc[colonna] = pd.to_numeric(df_calc[colonna], errors="coerce")
+
+            df_calc["Media (s)"] = df_calc[colonne_tempi].mean(axis=1, skipna=True)
+            conteggio = df_calc[colonne_tempi].count(axis=1)
+            df_calc.loc[conteggio == 0, "Media (s)"] = pd.NA
+
+            df_calc["SD (s)"] = df_calc[colonne_tempi].std(axis=1, skipna=True, ddof=1)
+            df_calc.loc[conteggio == 1, "SD (s)"] = 0.0
+            df_calc.loc[conteggio == 0, "SD (s)"] = pd.NA
+
+            paio_simile = []
+            delta_simile = []
+            for idx, riga in df_calc.iterrows():
+                media_corrente = riga["Media (s)"]
+                if pd.isna(media_corrente):
+                    paio_simile.append(None)
+                    delta_simile.append(None)
+                    continue
+                candidati = df_calc.loc[
+                    (df_calc.index != idx) & df_calc["Media (s)"].notna(),
+                    ["Paio", "Media (s)"],
+                ].copy()
+                if candidati.empty:
+                    paio_simile.append(None)
+                    delta_simile.append(None)
+                    continue
+                candidati["delta"] = (candidati["Media (s)"] - float(media_corrente)).abs()
+                candidati = candidati.sort_values(["delta", "Paio"], ascending=[True, True])
+                match = candidati.iloc[0]
+                paio_simile.append(int(match["Paio"]))
+                delta_simile.append(float(match["delta"]))
+
+            df_calc["Paio più simile"] = paio_simile
+            df_calc["Δ dal più simile (s)"] = delta_simile
+            for colonna in colonne_tempi + ["Media (s)", "SD (s)", "Δ dal più simile (s)"]:
+                df_calc[colonna] = pd.to_numeric(df_calc[colonna], errors="coerce").round(2)
+            return df_calc[[
+                "Paio", "P1 (s)", "P2 (s)", "P3 (s)", "P4 (s)",
+                "Media (s)", "SD (s)", "Paio più simile", "Δ dal più simile (s)", "Note",
+            ]]
+
+        editor_key = f"insert_zero_matrix_{suffix_zero}"
+        df_base_zero = _applica_modifiche_editor_zero(
+            pd.DataFrame(righe_input),
+            st.session_state.get(editor_key),
+        )
+        df_zero_completo = _aggiungi_metriche_zero(df_base_zero)
+        coppia_top = coppia_zero_test_piu_vicina(df_zero_completo)
+        if coppia_top:
+            paio_a, paio_b, delta_top = coppia_top
+            coppia_label = f"{paio_a} ↔ {paio_b} · Δ {delta_top:.2f} s"
+        else:
+            coppia_label = "—"
+
+        st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
+        st.markdown('<div class="insert-test-title">Zero test · 10 paia × 4 passaggi</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="insert-test-caption">Inserisci i quattro tempi. Media, deviazione standard e paio più simile sono calcolati automaticamente.</div>',
+            unsafe_allow_html=True,
+        )
+
+        st.markdown(
+            f'<div class="zero-test-header-row">'
+            f'<div class="zero-test-chip"><div class="zero-test-chip-label">Paia</div><div class="zero-test-chip-value">10</div></div>'
+            f'<div class="zero-test-chip"><div class="zero-test-chip-label">Passaggi / paio</div><div class="zero-test-chip-value">4</div></div>'
+            f'<div class="zero-test-chip"><div class="zero-test-chip-label">Coppia più vicina</div><div class="zero-test-chip-value">{coppia_label}</div></div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+        editor_zero = st.data_editor(
+            df_zero_completo,
+            key=editor_key,
+            use_container_width=True,
+            hide_index=True,
+            num_rows="fixed",
+            height=455,
+            column_config={
+                "Paio": st.column_config.NumberColumn("Paio", width="small", format="%d"),
+                "P1 (s)": st.column_config.NumberColumn("P1", min_value=0.0, step=0.01, format="%.2f", width="small"),
+                "P2 (s)": st.column_config.NumberColumn("P2", min_value=0.0, step=0.01, format="%.2f", width="small"),
+                "P3 (s)": st.column_config.NumberColumn("P3", min_value=0.0, step=0.01, format="%.2f", width="small"),
+                "P4 (s)": st.column_config.NumberColumn("P4", min_value=0.0, step=0.01, format="%.2f", width="small"),
+                "Media (s)": st.column_config.NumberColumn("Media", format="%.2f", width="small"),
+                "SD (s)": st.column_config.NumberColumn("Dev. std.", format="%.2f", width="small"),
+                "Paio più simile": st.column_config.NumberColumn("Paio simile", format="%d", width="medium"),
+                "Δ dal più simile (s)": st.column_config.NumberColumn("Δ simile", format="%.2f", width="medium"),
+                "Note": st.column_config.TextColumn("Note", width="small"),
+            },
+            disabled=["Paio", "Media (s)", "SD (s)", "Paio più simile", "Δ dal più simile (s)"],
+        )
+
+        # ------------------------------------------------------------
+        # 5. SALVATAGGIO
+        # ------------------------------------------------------------
+        c_save, c_cancel = st.columns([3, 1])
+        with c_save:
+            salva_zero = st.button(
+                "Salva modifiche" if edit_zero_session_id is not None else "Salva Zero test",
+                type="primary",
+                use_container_width=True,
+                key=f"save_insert_zero_{suffix_zero}",
+            )
+        with c_cancel:
+            annulla_zero = False
+            if edit_zero_session_id is not None:
+                annulla_zero = st.button(
+                    "Annulla modifica",
+                    use_container_width=True,
+                    key=f"cancel_insert_zero_{suffix_zero}",
+                )
+
+        if annulla_zero:
+            st.session_state.pop("zero_edit_session_id", None)
+            cambia_pagina("Zero test")
+
+        if salva_zero:
+            if not zero_luogo.strip():
+                st.error("Inserisci il luogo dello Zero test.")
+            else:
+                righe_da_salvare = []
+                for _, riga in editor_zero.sort_values("Paio").iterrows():
+                    paio_num = int(riga["Paio"])
+                    valori_tempi = []
+                    for colonna in ["P1 (s)", "P2 (s)", "P3 (s)", "P4 (s)"]:
+                        valore = riga.get(colonna)
+                        if pd.isna(valore) or valore in ("", None):
+                            valori_tempi.append(None)
+                        else:
+                            numero = round(float(valore), 2)
+                            valori_tempi.append(numero if numero > 0 else None)
+                    if not any(v is not None for v in valori_tempi):
+                        continue
+                    righe_da_salvare.append({
+                        "codice_sci": str(paio_num),
+                        "tempi": valori_tempi,
+                        "note": str(riga.get("Note") or "").strip(),
+                    })
+
+                if not righe_da_salvare:
+                    st.error("Inserisci almeno un paio con un tempo valido.")
+                else:
+                    if edit_zero_session_id is None:
                         esegui(
                             """
                             INSERT INTO sessioni (
                                 data, ora, luogo, temperatura_aria, temperatura_neve,
-                                umidita, tipo_neve, condizione_pista, note, creato_il
-                            ) VALUES (?, ?, ?, ?, ?, ?, '', '', '', ?)
+                                umidita, tipo_neve, condizione_pista, note, zero_batteria, creato_il
+                            ) VALUES (?, ?, ?, ?, ?, ?, '', '', ?, ?, ?)
                             """,
                             (
-                                zero_data.isoformat(), zero_ora.strftime("%H:%M"), zero_luogo.strip(),
-                                float(zero_t_aria), float(zero_t_neve), float(zero_ur),
+                                zero_data.isoformat(),
+                                zero_ora.strftime("%H:%M"),
+                                zero_luogo.strip(),
+                                float(zero_t_aria),
+                                float(zero_t_neve),
+                                float(zero_ur),
+                                zero_note.strip(),
+                                zero_batteria,
                                 datetime.now().isoformat(timespec="seconds"),
                             ),
                         )
-                        st.success("Sessione Zero test creata.")
-                        st.rerun()
-                st.stop()
-
-            edit_zero_session_id = st.session_state.get("zero_edit_session_id")
-            opzioni_sessione_zero = list(sessioni.keys())
-            indice_sessione_zero = 0
-            if edit_zero_session_id is not None:
-                for idx_opzione, etichetta_opzione in enumerate(opzioni_sessione_zero):
-                    if int(sessioni[etichetta_opzione]) == int(edit_zero_session_id):
-                        indice_sessione_zero = idx_opzione
-                        st.session_state["insert_zero_session_select"] = etichetta_opzione
-                        break
-
-            c_sessione, c_nuova = st.columns([3.2, 1])
-            with c_sessione:
-                sessione_label = st.selectbox(
-                    "Sessione Zero test",
-                    opzioni_sessione_zero,
-                    index=indice_sessione_zero,
-                    disabled=edit_zero_session_id is not None,
-                    key="insert_zero_session_select",
-                )
-                sessione_id = sessioni[sessione_label]
-            with c_nuova:
-                st.markdown('<div style="height:1.76rem"></div>', unsafe_allow_html=True)
-                if edit_zero_session_id is None:
-                    if st.button("+ Nuova sessione", use_container_width=True, key="insert_zero_new_session_button"):
-                        cambia_pagina("Nuova sessione")
-                else:
-                    if st.button("Annulla modifica", use_container_width=True, key="cancel_zero_edit_button"):
-                        st.session_state.pop("zero_edit_session_id", None)
-                        cambia_pagina("Zero test")
-
-            df_sessioni_corrente = sessioni_df()
-            riga_sessione = df_sessioni_corrente[
-                df_sessioni_corrente["id"].astype(int) == int(sessione_id)
-            ].iloc[0]
-
-            zero_snow_options = {
-                "Origine": ["Naturale", "Artificiale", "Mista"],
-                "Consistenza": [
-                    "Compatta", "Sfarinata / Soffice", "Sgranata", "Ghiacciata",
-                    "Soffice su fondo ghiacciato", "Soffice su fondo compatto", "Molle",
-                ],
-                "Umidità neve": ["Secca", "Umida", "Bagnata", "Molto bagnata"],
-                "Forma grano": [
-                    "Nuova (cristalli esagonali)",
-                    "In trasformazione (forte gradiente)",
-                    "In trasformazione (basso gradiente)",
-                    "Trasformata (cristalli angolari)",
-                    "Trasformata (grani arrotondati)",
-                    "Mista nuova e trasformata",
-                ],
-                "Granulometria": ["Fine", "Media", "Grossa"],
-                "Caratteristiche": ["Sporca", "Salata", "Ventata", "Lucida", "Cadente"],
-            }
-
-            with st.container(key="zero_snow_panel", border=False):
-                st.markdown('<div class="zero-section-title">Condizioni e classificazione neve</div>', unsafe_allow_html=True)
-                st.markdown(
-                    '<div class="zero-section-caption">Gli stessi parametri indipendenti usati nelle scioline di tenuta. '
-                    'La classificazione viene salvata nella sessione.</div>',
-                    unsafe_allow_html=True,
-                )
-
-                def _fmt_zero_cond(valore, suffisso=""):
-                    try:
-                        if pd.isna(valore):
-                            return "—"
-                        numero = float(valore)
-                        testo = f"{numero:.1f}".rstrip("0").rstrip(".")
-                        return f"{testo}{suffisso}"
-                    except Exception:
-                        return "—"
-
-                st.markdown(
-                    f'<div class="zero-session-strip">'
-                    f'<span><strong>Data:</strong> {html_escape(str(riga_sessione.get("data") or "—"))}</span>'
-                    f'<span><strong>Luogo:</strong> {html_escape(str(riga_sessione.get("luogo") or "—"))}</span>'
-                    f'<span><strong>T aria:</strong> {_fmt_zero_cond(riga_sessione.get("temperatura_aria"), " °C")}</span>'
-                    f'<span><strong>T neve:</strong> {_fmt_zero_cond(riga_sessione.get("temperatura_neve"), " °C")}</span>'
-                    f'<span><strong>UR:</strong> {_fmt_zero_cond(riga_sessione.get("umidita"), " %")}</span>'
-                    f'</div>',
-                    unsafe_allow_html=True,
-                )
-
-                z1, z2, z3 = st.columns(3)
-                with z1:
-                    zero_origine = st.multiselect(
-                        "Origine", zero_snow_options["Origine"],
-                        default=_valori_sessione_neve(riga_sessione.get("snow_origine"), zero_snow_options["Origine"]),
-                        key=f"zero_snow_origin_{sessione_id}", placeholder="Seleziona origine",
-                    )
-                with z2:
-                    zero_consistenza = st.multiselect(
-                        "Consistenza", zero_snow_options["Consistenza"],
-                        default=_valori_sessione_neve(riga_sessione.get("snow_consistenza"), zero_snow_options["Consistenza"]),
-                        key=f"zero_snow_consistency_{sessione_id}", placeholder="Seleziona consistenza",
-                    )
-                with z3:
-                    zero_umidita = st.multiselect(
-                        "Umidità neve", zero_snow_options["Umidità neve"],
-                        default=_valori_sessione_neve(riga_sessione.get("snow_umidita"), zero_snow_options["Umidità neve"]),
-                        key=f"zero_snow_humidity_{sessione_id}", placeholder="Seleziona umidità neve",
-                    )
-
-                z4, z5, z6 = st.columns(3)
-                with z4:
-                    zero_forma = st.multiselect(
-                        "Forma grano", zero_snow_options["Forma grano"],
-                        default=_valori_sessione_neve(riga_sessione.get("snow_forma_grano"), zero_snow_options["Forma grano"]),
-                        key=f"zero_snow_grain_{sessione_id}", placeholder="Seleziona forma grano",
-                    )
-                with z5:
-                    zero_granulometria = st.multiselect(
-                        "Granulometria", zero_snow_options["Granulometria"],
-                        default=_valori_sessione_neve(riga_sessione.get("snow_granulometria"), zero_snow_options["Granulometria"]),
-                        key=f"zero_snow_size_{sessione_id}", placeholder="Seleziona granulometria",
-                    )
-                with z6:
-                    zero_caratteristiche = st.multiselect(
-                        "Caratteristiche", zero_snow_options["Caratteristiche"],
-                        default=_valori_sessione_neve(riga_sessione.get("snow_caratteristiche"), zero_snow_options["Caratteristiche"]),
-                        key=f"zero_snow_features_{sessione_id}", placeholder="Seleziona caratteristiche",
-                    )
-
-            risultati_esistenti = zero_test_sessione(sessione_id)
-            gruppi_esistenti = {}
-            if not risultati_esistenti.empty:
-                paia_occupati = set()
-                prossimo_libero = 1
-                for sci_id, gruppo in risultati_esistenti.groupby("sci_id"):
-                    gruppo = gruppo.sort_values("prova_numero")
-                    tempi = {
-                        int(r["prova_numero"]): round(float(r["tempo_sec"]), 2)
-                        for _, r in gruppo.iterrows()
-                    }
-                    note_valide = [
-                        str(v).strip() for v in gruppo["note"].tolist()
-                        if str(v or "").strip()
-                    ]
-                    codice = str(gruppo.iloc[0]["sci"] or "").strip()
-                    try:
-                        paio_num = int(codice)
-                        if paio_num < 1 or paio_num > 10 or paio_num in paia_occupati:
-                            raise ValueError
-                    except (TypeError, ValueError):
-                        while prossimo_libero in paia_occupati and prossimo_libero <= 10:
-                            prossimo_libero += 1
-                        if prossimo_libero > 10:
-                            continue
-                        paio_num = prossimo_libero
-                    paia_occupati.add(paio_num)
-                    gruppi_esistenti[paio_num] = (tempi, note_valide[0] if note_valide else "")
-
-            righe_input = []
-            for i in range(10):
-                tempi, nota = gruppi_esistenti.get(i + 1, ({}, ""))
-                righe_input.append({
-                    "Paio": i + 1,
-                    "P1 (s)": tempi.get(1),
-                    "P2 (s)": tempi.get(2),
-                    "P3 (s)": tempi.get(3),
-                    "P4 (s)": tempi.get(4),
-                    "Note": nota,
-                })
-
-            def _applica_modifiche_editor_zero(df_base, stato_editor):
-                """Riapplica le modifiche del data editor prima di calcolare le metriche."""
-                df_lavoro = df_base.copy()
-                if not isinstance(stato_editor, dict):
-                    return df_lavoro
-                modifiche = stato_editor.get("edited_rows", {}) or {}
-                for indice_riga, valori in modifiche.items():
-                    try:
-                        idx = int(indice_riga)
-                    except (TypeError, ValueError):
-                        continue
-                    if idx < 0 or idx >= len(df_lavoro) or not isinstance(valori, dict):
-                        continue
-                    for colonna, valore in valori.items():
-                        if colonna in df_lavoro.columns:
-                            df_lavoro.at[idx, colonna] = valore
-                return df_lavoro
-
-            def _aggiungi_metriche_zero(df_tempi):
-                """Calcola media, SD e abbinamento più simile senza creare classifiche."""
-                df_calc = df_tempi.copy().sort_values("Paio").reset_index(drop=True)
-                colonne_tempi = ["P1 (s)", "P2 (s)", "P3 (s)", "P4 (s)"]
-
-                for colonna in colonne_tempi:
-                    df_calc[colonna] = pd.to_numeric(df_calc[colonna], errors="coerce")
-
-                df_calc["Media (s)"] = df_calc[colonne_tempi].mean(axis=1, skipna=True)
-                df_calc["SD (s)"] = df_calc[colonne_tempi].std(axis=1, skipna=True)
-                df_calc.loc[df_calc[colonne_tempi].count(axis=1) <= 1, "SD (s)"] = 0.0
-
-                paio_simile = []
-                delta_simile = []
-                for idx, riga in df_calc.iterrows():
-                    media_corrente = riga["Media (s)"]
-                    if pd.isna(media_corrente):
-                        paio_simile.append(None)
-                        delta_simile.append(None)
-                        continue
-
-                    candidati = df_calc.loc[
-                        (df_calc.index != idx) & df_calc["Media (s)"].notna(),
-                        ["Paio", "Media (s)"],
-                    ].copy()
-                    if candidati.empty:
-                        paio_simile.append(None)
-                        delta_simile.append(None)
-                        continue
-
-                    candidati["delta"] = (candidati["Media (s)"] - float(media_corrente)).abs()
-                    candidati = candidati.sort_values(["delta", "Paio"], ascending=[True, True])
-                    migliore_match = candidati.iloc[0]
-                    paio_simile.append(int(migliore_match["Paio"]))
-                    delta_simile.append(float(migliore_match["delta"]))
-
-                df_calc["Paio più simile"] = paio_simile
-                df_calc["Δ dal più simile (s)"] = delta_simile
-
-                for colonna in colonne_tempi + ["Media (s)", "SD (s)", "Δ dal più simile (s)"]:
-                    df_calc[colonna] = df_calc[colonna].round(2)
-
-                ordine = [
-                    "Paio", "P1 (s)", "P2 (s)", "P3 (s)", "P4 (s)",
-                    "Media (s)", "SD (s)", "Paio più simile", "Δ dal più simile (s)", "Note",
-                ]
-                return df_calc[ordine]
-
-            editor_key = f"zero_matrix_editor_single_v2_{sessione_id}"
-            df_base_zero = pd.DataFrame(righe_input)
-            df_base_zero = _applica_modifiche_editor_zero(
-                df_base_zero,
-                st.session_state.get(editor_key),
-            )
-            df_zero_completo = _aggiungi_metriche_zero(df_base_zero)
-
-            # Coppie uniche più vicine, usate solo come riepilogo visivo sopra la tabella.
-            coppie_simili = {}
-            for _, riga in df_zero_completo.iterrows():
-                paio_a = riga.get("Paio")
-                paio_b = riga.get("Paio più simile")
-                delta = riga.get("Δ dal più simile (s)")
-                if pd.isna(paio_a) or pd.isna(paio_b) or pd.isna(delta):
-                    continue
-                coppia = tuple(sorted((int(paio_a), int(paio_b))))
-                if coppia[0] == coppia[1]:
-                    continue
-                delta_val = float(delta)
-                if coppia not in coppie_simili or delta_val < coppie_simili[coppia]:
-                    coppie_simili[coppia] = delta_val
-
-            coppie_ordinate = sorted(
-                coppie_simili.items(),
-                key=lambda item: (item[1], item[0][0], item[0][1]),
-            )
-            if coppie_ordinate:
-                (paio_a, paio_b), delta_top = coppie_ordinate[0]
-                match_top_html = f"{paio_a} ↔ {paio_b} · Δ {delta_top:.2f} s"
-            else:
-                match_top_html = "—"
-
-            with st.container(key="zero_table_panel", border=False):
-                st.markdown('<div class="zero-test-kicker">Zero test</div>', unsafe_allow_html=True)
-                st.markdown(
-                    '<div class="zero-section-title">Confronto tra 10 paia · 4 passaggi</div>',
-                    unsafe_allow_html=True,
-                )
-                st.markdown(
-                    '<div class="zero-section-caption">Inserisci i quattro tempi di ogni paio. '
-                    'L’ordine resta sempre 1–10; le metriche di confronto vengono calcolate automaticamente.</div>',
-                    unsafe_allow_html=True,
-                )
-
-                st.markdown(
-                    f'<div class="zero-test-header-row">'
-                    f'<div class="zero-test-chip"><div class="zero-test-chip-label">Paia</div><div class="zero-test-chip-value">10</div></div>'
-                    f'<div class="zero-test-chip"><div class="zero-test-chip-label">Passaggi / paio</div><div class="zero-test-chip-value">4</div></div>'
-                    f'<div class="zero-test-chip"><div class="zero-test-chip-label">Coppia più vicina</div><div class="zero-test-chip-value">{match_top_html}</div></div>'
-                    f'</div>',
-                    unsafe_allow_html=True,
-                )
-
-                st.markdown(
-                    '<div class="zero-test-guide">'
-                    '<span><strong>Media</strong> = tempo medio dei 4 passaggi</span>'
-                    '<span><strong>Dev. std.</strong> = ripetibilità del paio</span>'
-                    '<span><strong>Δ simile</strong> = distanza dalla media del paio più simile</span>'
-                    '</div>',
-                    unsafe_allow_html=True,
-                )
-
-                editor_zero = st.data_editor(
-                    df_zero_completo,
-                    key=editor_key,
-                    use_container_width=True,
-                    hide_index=True,
-                    num_rows="fixed",
-                    height=455,
-                    column_config={
-                        "Paio": st.column_config.NumberColumn("Paio", width="small", format="%d", help="Numero identificativo del paio nello Zero Test."),
-                        "P1 (s)": st.column_config.NumberColumn("P1", min_value=0.0, step=0.01, format="%.2f", width="small", help="Passaggio 1 · secondi"),
-                        "P2 (s)": st.column_config.NumberColumn("P2", min_value=0.0, step=0.01, format="%.2f", width="small", help="Passaggio 2 · secondi"),
-                        "P3 (s)": st.column_config.NumberColumn("P3", min_value=0.0, step=0.01, format="%.2f", width="small", help="Passaggio 3 · secondi"),
-                        "P4 (s)": st.column_config.NumberColumn("P4", min_value=0.0, step=0.01, format="%.2f", width="small", help="Passaggio 4 · secondi"),
-                        "Media (s)": st.column_config.NumberColumn("Media", format="%.2f", width="small", help="Media dei passaggi disponibili · secondi"),
-                        "SD (s)": st.column_config.NumberColumn("Dev. std.", format="%.2f", width="small", help="Deviazione standard dei passaggi: più è bassa, più il paio è ripetibile."),
-                        "Paio più simile": st.column_config.NumberColumn("Paio simile", format="%d", width="medium", help="Paio con la media più vicina."),
-                        "Δ dal più simile (s)": st.column_config.NumberColumn("Δ simile", format="%.2f", width="medium", help="Differenza assoluta, in secondi, tra la media del paio e quella del paio più simile."),
-                        "Note": st.column_config.TextColumn("Note", width="small"),
-                    },
-                    disabled=["Paio", "Media (s)", "SD (s)", "Paio più simile", "Δ dal più simile (s)"],
-                )
-
-                if st.button(
-                    "Salva zero test",
-                    type="primary",
-                    use_container_width=True,
-                    key=f"save_zero_matrix_{sessione_id}",
-                ):
-                    righe_da_salvare = []
-
-                    for _, riga in editor_zero.sort_values("Paio").iterrows():
-                        paio_num = int(riga["Paio"])
-                        valori_tempi = []
-                        for colonna in ["P1 (s)", "P2 (s)", "P3 (s)", "P4 (s)"]:
-                            valore = riga.get(colonna)
-                            if pd.isna(valore) or valore in ("", None):
-                                valori_tempi.append(None)
-                            else:
-                                numero = round(float(valore), 2)
-                                valori_tempi.append(numero if numero > 0 else None)
-
-                        if not any(v is not None for v in valori_tempi):
-                            continue
-
-                        righe_da_salvare.append({
-                            "codice_sci": str(paio_num),
-                            "tempi": valori_tempi,
-                            "note": str(riga.get("Note") or "").strip(),
-                        })
-
-                    if not righe_da_salvare:
-                        st.error("Inserisci almeno un paio di sci con un tempo valido.")
+                        df_nuova_sessione = leggi_df("SELECT MAX(id) AS id FROM sessioni")
+                        sessione_id = int(df_nuova_sessione.iloc[0]["id"])
                     else:
-                        classificazione = {
-                            "snow_origine": _compatta_neve_sessione(zero_origine, zero_snow_options["Origine"]),
-                            "snow_consistenza": _compatta_neve_sessione(zero_consistenza, zero_snow_options["Consistenza"]),
-                            "snow_umidita": _compatta_neve_sessione(zero_umidita, zero_snow_options["Umidità neve"]),
-                            "snow_forma_grano": _compatta_neve_sessione(zero_forma, zero_snow_options["Forma grano"]),
-                            "snow_granulometria": _compatta_neve_sessione(zero_granulometria, zero_snow_options["Granulometria"]),
-                            "snow_caratteristiche": _compatta_neve_sessione(zero_caratteristiche, zero_snow_options["Caratteristiche"]),
-                        }
-                        salva_zero_test_matrice(sessione_id, righe_da_salvare, classificazione)
-                        if st.session_state.get("zero_edit_session_id") is not None:
-                            st.session_state.pop("zero_edit_session_id", None)
-                            st.session_state["zero_history_notice"] = "Zero test modificato correttamente."
-                            st.session_state["pagina"] = "Zero test"
-                            st.rerun()
-                        else:
-                            st.success(f"Zero test salvato: {len(righe_da_salvare)} paia di sci.")
-                            st.rerun()
+                        sessione_id = int(edit_zero_session_id)
+                        esegui(
+                            """
+                            UPDATE sessioni
+                            SET data = ?, ora = ?, luogo = ?, temperatura_aria = ?,
+                                temperatura_neve = ?, umidita = ?, note = ?, zero_batteria = ?
+                            WHERE id = ?
+                            """,
+                            (
+                                zero_data.isoformat(),
+                                zero_ora.strftime("%H:%M"),
+                                zero_luogo.strip(),
+                                float(zero_t_aria),
+                                float(zero_t_neve),
+                                float(zero_ur),
+                                zero_note.strip(),
+                                zero_batteria,
+                                sessione_id,
+                            ),
+                        )
 
-        else:
-            st.markdown("#### Inserimento test")
-            st.info(
-                "Per questa tipologia il modulo operativo attuale è ancora nella relativa pagina Test. "
-                "La nuova area Inserimento test è già predisposta e verrà uniformata nello stesso modo dello Zero test."
-            )
-            destinazioni_test = {
-                "Test prodotti scorrimento": "Test prodotti scorrimento",
-                "Test scioline di tenuta": "Test scioline di tenuta",
-                "Test rigature manuali": "Test rigature manuali",
-            }
-            if st.button(
-                f"Apri {tipo_inserimento_test}",
-                type="primary",
-                use_container_width=True,
-                key="open_existing_test_insert",
-            ):
-                cambia_pagina(destinazioni_test[tipo_inserimento_test])
-
+                    classificazione = {
+                        "snow_origine": _compatta_neve_sessione(zero_origine, zero_snow_options["Origine"]),
+                        "snow_consistenza": _compatta_neve_sessione(zero_consistenza, zero_snow_options["Consistenza"]),
+                        "snow_umidita": _compatta_neve_sessione(zero_umidita, zero_snow_options["Umidità neve"]),
+                        "snow_forma_grano": _compatta_neve_sessione(zero_forma, zero_snow_options["Forma grano"]),
+                        "snow_granulometria": _compatta_neve_sessione(zero_granulometria, zero_snow_options["Granulometria"]),
+                        "snow_caratteristiche": _compatta_neve_sessione(zero_caratteristiche, zero_snow_options["Caratteristiche"]),
+                        "zero_batteria": zero_batteria,
+                    }
+                    salva_zero_test_matrice(sessione_id, righe_da_salvare, classificazione)
+                    st.session_state.pop("zero_edit_session_id", None)
+                    st.session_state["zero_history_notice"] = (
+                        "Zero test modificato correttamente."
+                        if edit_zero_session_id is not None
+                        else "Zero test salvato correttamente."
+                    )
+                    cambia_pagina("Zero test")
 
     elif pagina == "Zero test":
         # ============================================================
