@@ -6238,47 +6238,133 @@ with st.container(key="sector_page_content"):
             tempi, nota = gruppi_esistenti.get(i + 1, ({}, ""))
             righe_input.append({
                 "Paio": i + 1,
-                "Passaggio 1 (s)": tempi.get(1),
-                "Passaggio 2 (s)": tempi.get(2),
-                "Passaggio 3 (s)": tempi.get(3),
-                "Passaggio 4 (s)": tempi.get(4),
+                "P1 (s)": tempi.get(1),
+                "P2 (s)": tempi.get(2),
+                "P3 (s)": tempi.get(3),
+                "P4 (s)": tempi.get(4),
                 "Note": nota,
             })
 
+        def _applica_modifiche_editor_zero(df_base, stato_editor):
+            """Riapplica le modifiche del data editor prima di calcolare le metriche."""
+            df_lavoro = df_base.copy()
+            if not isinstance(stato_editor, dict):
+                return df_lavoro
+            modifiche = stato_editor.get("edited_rows", {}) or {}
+            for indice_riga, valori in modifiche.items():
+                try:
+                    idx = int(indice_riga)
+                except (TypeError, ValueError):
+                    continue
+                if idx < 0 or idx >= len(df_lavoro) or not isinstance(valori, dict):
+                    continue
+                for colonna, valore in valori.items():
+                    if colonna in df_lavoro.columns:
+                        df_lavoro.at[idx, colonna] = valore
+            return df_lavoro
+
+        def _aggiungi_metriche_zero(df_tempi):
+            """Calcola media, SD e abbinamento più simile senza creare classifiche."""
+            df_calc = df_tempi.copy().sort_values("Paio").reset_index(drop=True)
+            colonne_tempi = ["P1 (s)", "P2 (s)", "P3 (s)", "P4 (s)"]
+
+            for colonna in colonne_tempi:
+                df_calc[colonna] = pd.to_numeric(df_calc[colonna], errors="coerce")
+
+            df_calc["Media (s)"] = df_calc[colonne_tempi].mean(axis=1, skipna=True)
+            df_calc["SD (s)"] = df_calc[colonne_tempi].std(axis=1, skipna=True)
+            df_calc.loc[df_calc[colonne_tempi].count(axis=1) <= 1, "SD (s)"] = 0.0
+
+            paio_simile = []
+            delta_simile = []
+            for idx, riga in df_calc.iterrows():
+                media_corrente = riga["Media (s)"]
+                if pd.isna(media_corrente):
+                    paio_simile.append(None)
+                    delta_simile.append(None)
+                    continue
+
+                candidati = df_calc.loc[
+                    (df_calc.index != idx) & df_calc["Media (s)"].notna(),
+                    ["Paio", "Media (s)"],
+                ].copy()
+                if candidati.empty:
+                    paio_simile.append(None)
+                    delta_simile.append(None)
+                    continue
+
+                candidati["delta"] = (candidati["Media (s)"] - float(media_corrente)).abs()
+                candidati = candidati.sort_values(["delta", "Paio"], ascending=[True, True])
+                migliore_match = candidati.iloc[0]
+                paio_simile.append(int(migliore_match["Paio"]))
+                delta_simile.append(float(migliore_match["delta"]))
+
+            df_calc["Paio più simile"] = paio_simile
+            df_calc["Δ dal più simile (s)"] = delta_simile
+
+            for colonna in colonne_tempi + ["Media (s)", "SD (s)", "Δ dal più simile (s)"]:
+                df_calc[colonna] = df_calc[colonna].round(2)
+
+            ordine = [
+                "Paio", "P1 (s)", "P2 (s)", "P3 (s)", "P4 (s)",
+                "Media (s)", "SD (s)", "Paio più simile", "Δ dal più simile (s)", "Note",
+            ]
+            return df_calc[ordine]
+
+        editor_key = f"zero_matrix_editor_single_v2_{sessione_id}"
+        df_base_zero = pd.DataFrame(righe_input)
+        df_base_zero = _applica_modifiche_editor_zero(
+            df_base_zero,
+            st.session_state.get(editor_key),
+        )
+        df_zero_completo = _aggiungi_metriche_zero(df_base_zero)
+
         with st.container(key="zero_table_panel", border=False):
-            st.markdown('<div class="zero-section-title">Inserimento prove · 10 paia × 4 passaggi</div>', unsafe_allow_html=True)
             st.markdown(
-                '<div class="zero-section-caption">Una riga per ogni paio (1–10). I tempi sono in secondi con due decimali; '
-                'puoi lasciare vuoto un eventuale passaggio non eseguito.</div>',
+                '<div class="zero-section-title">Zero test · 10 paia × 4 passaggi</div>',
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                '<div class="zero-section-caption">Una sola tabella per tutto lo Zero Test. '
+                'I paia restano sempre in ordine 1–10; Media, SD, Paio più simile e Δ sono calcolati automaticamente. '
+                'I tempi sono espressi in secondi con due decimali.</div>',
                 unsafe_allow_html=True,
             )
 
             editor_zero = st.data_editor(
-                pd.DataFrame(righe_input),
-                key=f"zero_matrix_editor_{sessione_id}",
+                df_zero_completo,
+                key=editor_key,
                 use_container_width=True,
                 hide_index=True,
                 num_rows="fixed",
-                height=420,
+                height=455,
                 column_config={
                     "Paio": st.column_config.NumberColumn("Paio", width="small", format="%d"),
-                    "Passaggio 1 (s)": st.column_config.NumberColumn("Passaggio 1 (s)", min_value=0.0, step=0.01, format="%.2f"),
-                    "Passaggio 2 (s)": st.column_config.NumberColumn("Passaggio 2 (s)", min_value=0.0, step=0.01, format="%.2f"),
-                    "Passaggio 3 (s)": st.column_config.NumberColumn("Passaggio 3 (s)", min_value=0.0, step=0.01, format="%.2f"),
-                    "Passaggio 4 (s)": st.column_config.NumberColumn("Passaggio 4 (s)", min_value=0.0, step=0.01, format="%.2f"),
+                    "P1 (s)": st.column_config.NumberColumn("P1 (s)", min_value=0.0, step=0.01, format="%.2f", width="small"),
+                    "P2 (s)": st.column_config.NumberColumn("P2 (s)", min_value=0.0, step=0.01, format="%.2f", width="small"),
+                    "P3 (s)": st.column_config.NumberColumn("P3 (s)", min_value=0.0, step=0.01, format="%.2f", width="small"),
+                    "P4 (s)": st.column_config.NumberColumn("P4 (s)", min_value=0.0, step=0.01, format="%.2f", width="small"),
+                    "Media (s)": st.column_config.NumberColumn("Media (s)", format="%.2f", width="small"),
+                    "SD (s)": st.column_config.NumberColumn("SD (s)", format="%.2f", width="small", help="Deviazione standard dei passaggi del paio."),
+                    "Paio più simile": st.column_config.NumberColumn("Paio più simile", format="%d", width="small"),
+                    "Δ dal più simile (s)": st.column_config.NumberColumn("Δ dal più simile (s)", format="%.2f", width="small", help="Differenza assoluta tra la media del paio e quella del paio più simile."),
                     "Note": st.column_config.TextColumn("Note", width="medium"),
                 },
-                disabled=["Paio"],
+                disabled=["Paio", "Media (s)", "SD (s)", "Paio più simile", "Δ dal più simile (s)"],
             )
 
-            if st.button("Salva zero test", type="primary", use_container_width=True, key=f"save_zero_matrix_{sessione_id}"):
-                errori_zero = []
+            if st.button(
+                "Salva zero test",
+                type="primary",
+                use_container_width=True,
+                key=f"save_zero_matrix_{sessione_id}",
+            ):
                 righe_da_salvare = []
 
-                for _, riga in editor_zero.iterrows():
+                for _, riga in editor_zero.sort_values("Paio").iterrows():
                     paio_num = int(riga["Paio"])
                     valori_tempi = []
-                    for colonna in ["Passaggio 1 (s)", "Passaggio 2 (s)", "Passaggio 3 (s)", "Passaggio 4 (s)"]:
+                    for colonna in ["P1 (s)", "P2 (s)", "P3 (s)", "P4 (s)"]:
                         valore = riga.get(colonna)
                         if pd.isna(valore) or valore in ("", None):
                             valori_tempi.append(None)
@@ -6290,16 +6376,12 @@ with st.container(key="sector_page_content"):
                         continue
 
                     righe_da_salvare.append({
-                        # Il numero del paio è anche l'identificativo interno dello sci nello Zero test.
                         "codice_sci": str(paio_num),
                         "tempi": valori_tempi,
                         "note": str(riga.get("Note") or "").strip(),
                     })
 
-                if errori_zero:
-                    for errore in errori_zero:
-                        st.error(errore)
-                elif not righe_da_salvare:
+                if not righe_da_salvare:
                     st.error("Inserisci almeno un paio di sci con un tempo valido.")
                 else:
                     classificazione = {
@@ -6313,72 +6395,6 @@ with st.container(key="sector_page_content"):
                     salva_zero_test_matrice(sessione_id, righe_da_salvare, classificazione)
                     st.success(f"Zero test salvato: {len(righe_da_salvare)} paia di sci.")
                     st.rerun()
-
-        risultati = zero_test_sessione(sessione_id)
-        if risultati.empty:
-            st.info("Non ci sono ancora prove salvate per questa sessione.")
-        else:
-            with st.container(key="zero_summary_panel", border=False):
-                st.markdown('<div class="zero-section-title">Riepilogo Zero test</div>', unsafe_allow_html=True)
-                st.markdown(
-                    '<div class="zero-section-caption">Media dei quattro passaggi, dispersione e differenza dal paio più veloce.</div>',
-                    unsafe_allow_html=True,
-                )
-
-                matrice_salvata = []
-                for sci_id, gruppo in risultati.groupby("sci_id"):
-                    gruppo = gruppo.sort_values("prova_numero")
-                    tempi = {int(r["prova_numero"]): float(r["tempo_sec"]) for _, r in gruppo.iterrows()}
-                    valori = [tempi.get(i) for i in range(1, 5)]
-                    validi = [v for v in valori if v is not None]
-                    matrice_salvata.append({
-                        "Paio": int(float(str(gruppo.iloc[0]["sci"]))) if str(gruppo.iloc[0]["sci"]).replace(".", "", 1).isdigit() else str(gruppo.iloc[0]["sci"]),
-                        "P1 (s)": round(valori[0], 2) if valori[0] is not None else None,
-                        "P2 (s)": round(valori[1], 2) if valori[1] is not None else None,
-                        "P3 (s)": round(valori[2], 2) if valori[2] is not None else None,
-                        "P4 (s)": round(valori[3], 2) if valori[3] is not None else None,
-                        "Media (s)": round(float(pd.Series(validi).mean()), 2) if validi else None,
-                        "SD (s)": round(float(pd.Series(validi).std()), 2) if len(validi) > 1 else 0.0,
-                    })
-
-                df_riep = pd.DataFrame(matrice_salvata).sort_values("Media (s)").reset_index(drop=True)
-                migliore = float(df_riep["Media (s)"].min())
-                df_riep["Δ migliore (s)"] = (df_riep["Media (s)"] - migliore).round(2)
-                df_riep.insert(0, "Pos.", range(1, len(df_riep) + 1))
-
-                st.dataframe(
-                    df_riep, use_container_width=True, hide_index=True,
-                    column_config={
-                        "Pos.": st.column_config.NumberColumn("Pos.", format="%d"),
-                        "Paio": st.column_config.NumberColumn("Paio", format="%d"),
-                        "P1 (s)": st.column_config.NumberColumn("P1 (s)", format="%.2f"),
-                        "P2 (s)": st.column_config.NumberColumn("P2 (s)", format="%.2f"),
-                        "P3 (s)": st.column_config.NumberColumn("P3 (s)", format="%.2f"),
-                        "P4 (s)": st.column_config.NumberColumn("P4 (s)", format="%.2f"),
-                        "Media (s)": st.column_config.NumberColumn("Media (s)", format="%.2f"),
-                        "SD (s)": st.column_config.NumberColumn("SD (s)", format="%.2f"),
-                        "Δ migliore (s)": st.column_config.NumberColumn("Δ migliore (s)", format="%.2f"),
-                    },
-                )
-
-                st.markdown("#### Sci più simili")
-                tolleranza = st.number_input(
-                    "Tolleranza massima tra i tempi medi (s)", min_value=0.001,
-                    value=0.10, step=0.01, format="%.2f",
-                    key=f"zero_similarity_tolerance_{sessione_id}",
-                )
-                coppie = coppie_simili_zero_test(sessione_id, float(tolleranza))
-                if coppie.empty:
-                    st.caption("Nessuna coppia rientra nella tolleranza selezionata.")
-                else:
-                    st.dataframe(
-                        coppie, use_container_width=True, hide_index=True,
-                        column_config={
-                            "Tempo A": st.column_config.NumberColumn("Tempo A", format="%.2f"),
-                            "Tempo B": st.column_config.NumberColumn("Tempo B", format="%.2f"),
-                            "Δ medio (s)": st.column_config.NumberColumn("Δ medio (s)", format="%.2f"),
-                        },
-                    )
 
 
     elif pagina in ["Test prodotti scorrimento", "Test rigature manuali"]:
