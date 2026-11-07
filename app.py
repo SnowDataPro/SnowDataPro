@@ -5975,6 +5975,16 @@ if st.sidebar.button(
     cambia_pagina("Dashboard")
 
 
+if st.sidebar.button(
+    "Inserimento test",
+    icon=":material/add_circle:",
+    key="menu_inserimento_test",
+    use_container_width=True,
+    type="primary" if pagina == "Inserimento test" else "secondary",
+):
+    cambia_pagina("Inserimento test")
+
+
 with st.sidebar.expander(
     "Test",
     icon=":material/science:",
@@ -6260,103 +6270,34 @@ with st.container(key="sector_page_content"):
             )
 
 
-    elif pagina == "Zero test":
-        # ============================================================
-        # STORICO ZERO TEST - stessa logica visiva dello Storico Sector
-        # ============================================================
-        st.markdown(
-            """
-            <style>
-            [data-testid="stMain"] [data-testid="stExpander"] > details[open] {
-                background: #edf1f4 !important;
-                border-color: #cfd8df !important;
-                border-radius: 14px !important;
-            }
-
-            [data-testid="stMain"] [data-testid="stExpander"] > details[open] > summary {
-                background: #e8edf1 !important;
-                border-radius: 14px 14px 0 0 !important;
-            }
-
-            [data-testid="stMain"]:has([data-testid="stExpander"] > details[open])
-            [data-testid="stElementContainer"]:not(:has([data-testid="stExpander"] > details[open])):not(details[open] *) {
-                filter: blur(9px) brightness(0.78) saturate(0.72);
-                opacity: 0.38;
-                transition: filter 180ms ease, opacity 180ms ease;
-            }
-
-            [data-testid="stMain"]:has([data-testid="stExpander"] > details[open])
-            [data-testid="stExpander"] > details:not([open]):not(details[open] *) {
-                filter: blur(9px) brightness(0.78) saturate(0.72) !important;
-                opacity: 0.38 !important;
-                transition: filter 180ms ease, opacity 180ms ease;
-            }
-
-            [data-testid="stMain"] [data-testid="stElementContainer"]:has(
-                [data-testid="stExpander"] > details[open]
-            ),
-            [data-testid="stMain"] [data-testid="stExpander"]:has(> details[open]),
-            [data-testid="stMain"] [data-testid="stExpander"] > details[open] {
-                filter: none !important;
-                opacity: 1 !important;
-            }
-
-            .zero-history-classification {
-                display: grid;
-                grid-template-columns: repeat(3, minmax(0, 1fr));
-                gap: 0.65rem;
-                margin: 0.35rem 0 1rem 0;
-            }
-
-            .zero-history-classification-item {
-                background: #f7f9fa;
-                border: 1px solid #d8dde3;
-                border-radius: 10px;
-                padding: 0.62rem 0.72rem;
-                min-height: 66px;
-            }
-
-            .zero-history-classification-label {
-                color: #7a8a96;
-                font-size: 0.68rem;
-                font-weight: 800;
-                letter-spacing: 0.055em;
-                text-transform: uppercase;
-                margin-bottom: 0.2rem;
-            }
-
-            .zero-history-classification-value {
-                color: #263238;
-                font-size: 0.86rem;
-                font-weight: 600;
-                line-height: 1.35;
-            }
-
-            @media (max-width: 900px) {
-                .zero-history-classification {
-                    grid-template-columns: 1fr;
-                }
-            }
-            </style>
-            """,
-            unsafe_allow_html=True,
+    elif pagina == "Inserimento test":
+        mostra_banner(
+            "Inserimento test",
+            "Area operativa dedicata alla registrazione e alla modifica dei test.",
         )
 
-        st.markdown(
-            '<div class="section-title">Storico zero test</div>',
-            unsafe_allow_html=True,
-        )
-        st.write(
-            "Database cronologico degli Zero Test. Ogni test resta compatto e può essere "
-            "aperto per visualizzare condizioni neve, quattro passaggi di ogni paio e "
-            "analisi di similarità."
-        )
-        st.caption(
-            "I test sono ordinati automaticamente dal più recente al più vecchio. "
-            "Media, deviazione standard, paio più simile e Δ vengono calcolati dai quattro passaggi."
-        )
+        edit_zero_session_id = st.session_state.get("zero_edit_session_id")
+        if edit_zero_session_id is not None:
+            tipo_inserimento_test = "Zero test"
+            st.markdown(
+                '<div class="catalog-edit-notice">'
+                'Modalità modifica attiva: stai aggiornando uno Zero Test già presente nello storico.'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            tipo_inserimento_test = st.selectbox(
+                "Tipologia test",
+                [
+                    "Zero test",
+                    "Test prodotti scorrimento",
+                    "Test scioline di tenuta",
+                    "Test rigature manuali",
+                ],
+                key="tipo_inserimento_test",
+            )
 
-        with st.expander("＋ Inserisci / modifica zero test", expanded=False):
+        if tipo_inserimento_test == "Zero test":
             sessioni = dizionario_sessioni()
             sci = dizionario_sci()
 
@@ -6396,14 +6337,35 @@ with st.container(key="sector_page_content"):
                         st.rerun()
                 st.stop()
 
+            edit_zero_session_id = st.session_state.get("zero_edit_session_id")
+            opzioni_sessione_zero = list(sessioni.keys())
+            indice_sessione_zero = 0
+            if edit_zero_session_id is not None:
+                for idx_opzione, etichetta_opzione in enumerate(opzioni_sessione_zero):
+                    if int(sessioni[etichetta_opzione]) == int(edit_zero_session_id):
+                        indice_sessione_zero = idx_opzione
+                        st.session_state["insert_zero_session_select"] = etichetta_opzione
+                        break
+
             c_sessione, c_nuova = st.columns([3.2, 1])
             with c_sessione:
-                sessione_label = st.selectbox("Sessione Zero test", list(sessioni.keys()))
+                sessione_label = st.selectbox(
+                    "Sessione Zero test",
+                    opzioni_sessione_zero,
+                    index=indice_sessione_zero,
+                    disabled=edit_zero_session_id is not None,
+                    key="insert_zero_session_select",
+                )
                 sessione_id = sessioni[sessione_label]
             with c_nuova:
                 st.markdown('<div style="height:1.76rem"></div>', unsafe_allow_html=True)
-                if st.button("+ Nuova sessione", use_container_width=True, key="zero_new_session_button"):
-                    cambia_pagina("Nuova sessione")
+                if edit_zero_session_id is None:
+                    if st.button("+ Nuova sessione", use_container_width=True, key="insert_zero_new_session_button"):
+                        cambia_pagina("Nuova sessione")
+                else:
+                    if st.button("Annulla modifica", use_container_width=True, key="cancel_zero_edit_button"):
+                        st.session_state.pop("zero_edit_session_id", None)
+                        cambia_pagina("Zero test")
 
             df_sessioni_corrente = sessioni_df()
             riga_sessione = df_sessioni_corrente[
@@ -6730,8 +6692,133 @@ with st.container(key="sector_page_content"):
                             "snow_caratteristiche": _compatta_neve_sessione(zero_caratteristiche, zero_snow_options["Caratteristiche"]),
                         }
                         salva_zero_test_matrice(sessione_id, righe_da_salvare, classificazione)
-                        st.success(f"Zero test salvato: {len(righe_da_salvare)} paia di sci.")
-                        st.rerun()
+                        if st.session_state.get("zero_edit_session_id") is not None:
+                            st.session_state.pop("zero_edit_session_id", None)
+                            st.session_state["zero_history_notice"] = "Zero test modificato correttamente."
+                            st.session_state["pagina"] = "Zero test"
+                            st.rerun()
+                        else:
+                            st.success(f"Zero test salvato: {len(righe_da_salvare)} paia di sci.")
+                            st.rerun()
+
+        else:
+            st.markdown("#### Inserimento test")
+            st.info(
+                "Per questa tipologia il modulo operativo attuale è ancora nella relativa pagina Test. "
+                "La nuova area Inserimento test è già predisposta e verrà uniformata nello stesso modo dello Zero test."
+            )
+            destinazioni_test = {
+                "Test prodotti scorrimento": "Test prodotti scorrimento",
+                "Test scioline di tenuta": "Test scioline di tenuta",
+                "Test rigature manuali": "Test rigature manuali",
+            }
+            if st.button(
+                f"Apri {tipo_inserimento_test}",
+                type="primary",
+                use_container_width=True,
+                key="open_existing_test_insert",
+            ):
+                cambia_pagina(destinazioni_test[tipo_inserimento_test])
+
+
+    elif pagina == "Zero test":
+        # ============================================================
+        # STORICO ZERO TEST - stessa logica visiva dello Storico Sector
+        # ============================================================
+        st.markdown(
+            """
+            <style>
+            [data-testid="stMain"] [data-testid="stExpander"] > details[open] {
+                background: #edf1f4 !important;
+                border-color: #cfd8df !important;
+                border-radius: 14px !important;
+            }
+
+            [data-testid="stMain"] [data-testid="stExpander"] > details[open] > summary {
+                background: #e8edf1 !important;
+                border-radius: 14px 14px 0 0 !important;
+            }
+
+            [data-testid="stMain"]:has([data-testid="stExpander"] > details[open])
+            [data-testid="stElementContainer"]:not(:has([data-testid="stExpander"] > details[open])):not(details[open] *) {
+                filter: blur(9px) brightness(0.78) saturate(0.72);
+                opacity: 0.38;
+                transition: filter 180ms ease, opacity 180ms ease;
+            }
+
+            [data-testid="stMain"]:has([data-testid="stExpander"] > details[open])
+            [data-testid="stExpander"] > details:not([open]):not(details[open] *) {
+                filter: blur(9px) brightness(0.78) saturate(0.72) !important;
+                opacity: 0.38 !important;
+                transition: filter 180ms ease, opacity 180ms ease;
+            }
+
+            [data-testid="stMain"] [data-testid="stElementContainer"]:has(
+                [data-testid="stExpander"] > details[open]
+            ),
+            [data-testid="stMain"] [data-testid="stExpander"]:has(> details[open]),
+            [data-testid="stMain"] [data-testid="stExpander"] > details[open] {
+                filter: none !important;
+                opacity: 1 !important;
+            }
+
+            .zero-history-classification {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 0.65rem;
+                margin: 0.35rem 0 1rem 0;
+            }
+
+            .zero-history-classification-item {
+                background: #f7f9fa;
+                border: 1px solid #d8dde3;
+                border-radius: 10px;
+                padding: 0.62rem 0.72rem;
+                min-height: 66px;
+            }
+
+            .zero-history-classification-label {
+                color: #7a8a96;
+                font-size: 0.68rem;
+                font-weight: 800;
+                letter-spacing: 0.055em;
+                text-transform: uppercase;
+                margin-bottom: 0.2rem;
+            }
+
+            .zero-history-classification-value {
+                color: #263238;
+                font-size: 0.86rem;
+                font-weight: 600;
+                line-height: 1.35;
+            }
+
+            @media (max-width: 900px) {
+                .zero-history-classification {
+                    grid-template-columns: 1fr;
+                }
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        st.markdown(
+            '<div class="section-title">Storico zero test</div>',
+            unsafe_allow_html=True,
+        )
+        if st.session_state.get("zero_history_notice"):
+            st.success(st.session_state.pop("zero_history_notice"))
+        st.write(
+            "Database cronologico degli Zero Test. Ogni test resta compatto e può essere "
+            "aperto per visualizzare condizioni neve, quattro passaggi di ogni paio e "
+            "analisi di similarità."
+        )
+        st.caption(
+            "I test sono ordinati automaticamente dal più recente al più vecchio. "
+            "Media, deviazione standard, paio più simile e Δ vengono calcolati dai quattro passaggi."
+        )
+
 
 
         df_zero_storico = leggi_df(
@@ -7005,6 +7092,57 @@ with st.container(key="sector_page_content"):
                                 "Note": st.column_config.TextColumn("Note", width="medium"),
                             },
                         )
+
+                        st.markdown('<div style="height:0.75rem"></div>', unsafe_allow_html=True)
+                        az1, az2 = st.columns(2)
+                        with az1:
+                            if st.button(
+                                "Modifica test",
+                                icon=":material/edit:",
+                                use_container_width=True,
+                                key=f"edit_zero_history_{sessione_id_zero}",
+                            ):
+                                st.session_state["zero_edit_session_id"] = int(sessione_id_zero)
+                                st.session_state["tipo_inserimento_test"] = "Zero test"
+                                cambia_pagina("Inserimento test")
+                        with az2:
+                            if st.button(
+                                "Elimina test",
+                                icon=":material/delete:",
+                                use_container_width=True,
+                                key=f"delete_zero_history_{sessione_id_zero}",
+                            ):
+                                st.session_state[f"confirm_delete_zero_{sessione_id_zero}"] = True
+                                st.rerun()
+
+                        if st.session_state.get(f"confirm_delete_zero_{sessione_id_zero}", False):
+                            st.warning(
+                                "Confermi l'eliminazione di questo Zero Test? I tempi registrati verranno cancellati. "
+                                "La sessione ambientale rimarrà disponibile per eventuali altri test."
+                            )
+                            conf1, conf2 = st.columns(2)
+                            with conf1:
+                                if st.button(
+                                    "Conferma eliminazione",
+                                    type="primary",
+                                    use_container_width=True,
+                                    key=f"confirm_delete_zero_yes_{sessione_id_zero}",
+                                ):
+                                    esegui(
+                                        "DELETE FROM zero_test WHERE sessione_id = ?",
+                                        (int(sessione_id_zero),),
+                                    )
+                                    st.session_state.pop(f"confirm_delete_zero_{sessione_id_zero}", None)
+                                    st.session_state["zero_history_notice"] = "Zero test eliminato correttamente."
+                                    st.rerun()
+                            with conf2:
+                                if st.button(
+                                    "Annulla",
+                                    use_container_width=True,
+                                    key=f"confirm_delete_zero_no_{sessione_id_zero}",
+                                ):
+                                    st.session_state.pop(f"confirm_delete_zero_{sessione_id_zero}", None)
+                                    st.rerun()
 
     elif pagina in ["Test prodotti scorrimento", "Test rigature manuali"]:
         categoria = "Scorrimento" if pagina == "Test prodotti scorrimento" else "Rigatura"
