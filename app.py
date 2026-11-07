@@ -3058,12 +3058,32 @@ def coppie_simili_zero_test(sessione_id, tolleranza):
 
 
 def salva_zero_test_matrice(sessione_id, righe, classificazione):
-    """Sostituisce le prove della sessione e salva la classificazione neve osservata."""
+    """Sostituisce le prove della sessione, crea gli sci mancanti e salva la classificazione neve."""
     conn = apri_connessione_database()
     try:
         conn.execute("DELETE FROM zero_test WHERE sessione_id = ?", (int(sessione_id),))
         for riga in righe:
-            sci_id = int(riga["sci_id"])
+            codice_sci = str(riga.get("codice_sci") or "").strip()
+            if not codice_sci:
+                continue
+
+            esistente = conn.execute(
+                "SELECT id FROM sci WHERE codice = ? COLLATE NOCASE LIMIT 1",
+                (codice_sci,),
+            ).fetchone()
+            if esistente:
+                sci_id = int(esistente[0])
+            else:
+                conn.execute(
+                    "INSERT INTO sci (codice, marca, modello, tecnica, note) VALUES (?, '', '', 'Entrambi', '')",
+                    (codice_sci,),
+                )
+                nuovo = conn.execute(
+                    "SELECT id FROM sci WHERE codice = ? COLLATE NOCASE LIMIT 1",
+                    (codice_sci,),
+                ).fetchone()
+                sci_id = int(nuovo[0])
+
             note = str(riga.get("note") or "").strip()
             for prova_numero, tempo in enumerate(riga["tempi"], start=1):
                 if tempo is None:
@@ -3097,7 +3117,6 @@ def salva_zero_test_matrice(sessione_id, righe, classificazione):
     finally:
         conn.close()
     _invalida_cache_dati()
-
 
 def _valori_sessione_neve(valore, opzioni):
     valori = [v.strip() for v in str(valore or "").split(",") if v.strip()]
@@ -5756,12 +5775,7 @@ if st.sidebar.button(
 with st.sidebar.expander(
     "Test",
     icon=":material/science:",
-    expanded=pagina in [
-        "Zero test",
-        "Test prodotti scorrimento",
-        "Test scioline di tenuta",
-        "Test rigature manuali",
-    ],
+    expanded=True,
 ):
     if st.button(
         "Zero test",
@@ -6053,19 +6067,49 @@ with st.container(key="sector_page_content"):
         sci = dizionario_sci()
 
         if not sessioni:
-            st.warning("Crea prima una sessione dalla Dashboard.")
-            if st.button("Vai a Nuova sessione", type="primary"):
+            st.info("Non ci sono ancora sessioni. Crea qui la sessione dello Zero test.")
+            with st.form("zero_quick_session_form"):
+                qs1, qs2, qs3 = st.columns(3)
+                with qs1:
+                    zero_data = st.date_input("Data", value=date.today(), key="zero_quick_date")
+                    zero_luogo = st.text_input("Luogo *", key="zero_quick_place")
+                with qs2:
+                    zero_t_aria = st.number_input("Temperatura aria (°C)", value=0.0, step=0.5, key="zero_quick_air")
+                    zero_t_neve = st.number_input("Temperatura neve (°C)", value=0.0, step=0.5, key="zero_quick_snow")
+                with qs3:
+                    zero_ur = st.number_input("Umidità relativa (%)", min_value=0.0, max_value=100.0, value=70.0, step=1.0, key="zero_quick_rh")
+                    zero_ora = st.time_input("Ora", key="zero_quick_time")
+                crea_sessione_zero = st.form_submit_button("Crea sessione Zero test", type="primary", use_container_width=True)
+
+            if crea_sessione_zero:
+                if not zero_luogo.strip():
+                    st.error("Inserisci il luogo.")
+                else:
+                    esegui(
+                        """
+                        INSERT INTO sessioni (
+                            data, ora, luogo, temperatura_aria, temperatura_neve,
+                            umidita, tipo_neve, condizione_pista, note, creato_il
+                        ) VALUES (?, ?, ?, ?, ?, ?, '', '', '', ?)
+                        """,
+                        (
+                            zero_data.isoformat(), zero_ora.strftime("%H:%M"), zero_luogo.strip(),
+                            float(zero_t_aria), float(zero_t_neve), float(zero_ur),
+                            datetime.now().isoformat(timespec="seconds"),
+                        ),
+                    )
+                    st.success("Sessione Zero test creata.")
+                    st.rerun()
+            st.stop()
+
+        c_sessione, c_nuova = st.columns([3.2, 1])
+        with c_sessione:
+            sessione_label = st.selectbox("Sessione Zero test", list(sessioni.keys()))
+            sessione_id = sessioni[sessione_label]
+        with c_nuova:
+            st.markdown('<div style="height:1.76rem"></div>', unsafe_allow_html=True)
+            if st.button("+ Nuova sessione", use_container_width=True, key="zero_new_session_button"):
                 cambia_pagina("Nuova sessione")
-            st.stop()
-
-        if len(sci) < 2:
-            st.warning("Inserisci almeno due sci nel catalogo.")
-            if st.button("Vai al Catalogo sci", type="primary"):
-                cambia_pagina("Catalogo sci")
-            st.stop()
-
-        sessione_label = st.selectbox("Sessione", list(sessioni.keys()))
-        sessione_id = sessioni[sessione_label]
 
         df_sessioni_corrente = sessioni_df()
         riga_sessione = df_sessioni_corrente[
@@ -6161,24 +6205,23 @@ with st.container(key="sector_page_content"):
                 )
 
         risultati_esistenti = zero_test_sessione(sessione_id)
-        sci_label_to_id = sci
-        sci_id_to_label = {int(v): k for k, v in sci.items()}
         gruppi_esistenti = {}
         if not risultati_esistenti.empty:
             for sci_id, gruppo in risultati_esistenti.groupby("sci_id"):
                 gruppo = gruppo.sort_values("prova_numero")
                 tempi = {int(r["prova_numero"]): float(r["tempo_sec"]) for _, r in gruppo.iterrows()}
                 note_valide = [str(v).strip() for v in gruppo["note"].tolist() if str(v or "").strip()]
-                gruppi_esistenti[int(sci_id)] = (tempi, note_valide[0] if note_valide else "")
+                codice = str(gruppo.iloc[0]["sci"] or "").strip()
+                gruppi_esistenti[int(sci_id)] = (codice, tempi, note_valide[0] if note_valide else "")
 
         ids_esistenti = list(gruppi_esistenti.keys())[:10]
         righe_input = []
         for i in range(10):
             sci_id = ids_esistenti[i] if i < len(ids_esistenti) else None
-            tempi, nota = gruppi_esistenti.get(sci_id, ({}, ""))
+            codice, tempi, nota = gruppi_esistenti.get(sci_id, ("", {}, ""))
             righe_input.append({
                 "Paio": i + 1,
-                "Sci / codice": sci_id_to_label.get(int(sci_id), "") if sci_id is not None else "",
+                "Codice sci": codice,
                 "Passaggio 1 (s)": tempi.get(1),
                 "Passaggio 2 (s)": tempi.get(2),
                 "Passaggio 3 (s)": tempi.get(3),
@@ -6203,8 +6246,8 @@ with st.container(key="sector_page_content"):
                 height=420,
                 column_config={
                     "Paio": st.column_config.NumberColumn("Paio", width="small", format="%d"),
-                    "Sci / codice": st.column_config.SelectboxColumn(
-                        "Sci / codice", options=[""] + list(sci.keys()), required=False, width="medium"
+                    "Codice sci": st.column_config.TextColumn(
+                        "Codice sci", help="Inserisci il codice/nome del paio. Se non esiste, verrà creato automaticamente.", width="medium"
                     ),
                     "Passaggio 1 (s)": st.column_config.NumberColumn("Passaggio 1 (s)", min_value=0.0, step=0.001, format="%.3f"),
                     "Passaggio 2 (s)": st.column_config.NumberColumn("Passaggio 2 (s)", min_value=0.0, step=0.001, format="%.3f"),
@@ -6218,10 +6261,10 @@ with st.container(key="sector_page_content"):
             if st.button("Salva zero test", type="primary", use_container_width=True, key=f"save_zero_matrix_{sessione_id}"):
                 errori_zero = []
                 righe_da_salvare = []
-                sci_usati = set()
+                codici_usati = set()
 
                 for _, riga in editor_zero.iterrows():
-                    label_sci = str(riga.get("Sci / codice") or "").strip()
+                    codice_sci = str(riga.get("Codice sci") or "").strip()
                     valori_tempi = []
                     for colonna in ["Passaggio 1 (s)", "Passaggio 2 (s)", "Passaggio 3 (s)", "Passaggio 4 (s)"]:
                         valore = riga.get(colonna)
@@ -6231,27 +6274,24 @@ with st.container(key="sector_page_content"):
                             numero = float(valore)
                             valori_tempi.append(numero if numero > 0 else None)
 
-                    if not label_sci and not any(v is not None for v in valori_tempi):
+                    if not codice_sci and not any(v is not None for v in valori_tempi):
                         continue
-                    if not label_sci:
-                        errori_zero.append(f"Paio {int(riga['Paio'])}: seleziona lo sci/codice.")
-                        continue
-                    if label_sci not in sci_label_to_id:
-                        errori_zero.append(f"Paio {int(riga['Paio'])}: sci non riconosciuto.")
+                    if not codice_sci:
+                        errori_zero.append(f"Paio {int(riga['Paio'])}: inserisci il codice dello sci.")
                         continue
 
-                    sci_id = int(sci_label_to_id[label_sci])
-                    if sci_id in sci_usati:
-                        errori_zero.append(f"Lo sci {label_sci} è stato selezionato più di una volta.")
+                    chiave_codice = codice_sci.casefold()
+                    if chiave_codice in codici_usati:
+                        errori_zero.append(f"Lo sci {codice_sci} è stato inserito più di una volta.")
                         continue
-                    sci_usati.add(sci_id)
+                    codici_usati.add(chiave_codice)
 
                     if not any(v is not None for v in valori_tempi):
-                        errori_zero.append(f"{label_sci}: inserisci almeno un passaggio.")
+                        errori_zero.append(f"{codice_sci}: inserisci almeno un passaggio.")
                         continue
 
                     righe_da_salvare.append({
-                        "sci_id": sci_id,
+                        "codice_sci": codice_sci,
                         "tempi": valori_tempi,
                         "note": str(riga.get("Note") or "").strip(),
                     })
