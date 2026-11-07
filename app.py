@@ -3043,11 +3043,11 @@ def coppie_simili_zero_test(sessione_id, tolleranza):
             delta = abs(float(righe[i]["tempo_medio"]) - float(righe[j]["tempo_medio"]))
             if delta <= tolleranza:
                 coppie.append({
-                    "Sci A": righe[i]["sci"],
-                    "Sci B": righe[j]["sci"],
-                    "Tempo A": righe[i]["tempo_medio"],
-                    "Tempo B": righe[j]["tempo_medio"],
-                    "Δ medio (s)": delta,
+                    "Paio A": righe[i]["sci"],
+                    "Paio B": righe[j]["sci"],
+                    "Tempo A": round(righe[i]["tempo_medio"], 2),
+                    "Tempo B": round(righe[j]["tempo_medio"], 2),
+                    "Δ medio (s)": round(delta, 2),
                 })
 
     if not coppie:
@@ -6207,21 +6207,37 @@ with st.container(key="sector_page_content"):
         risultati_esistenti = zero_test_sessione(sessione_id)
         gruppi_esistenti = {}
         if not risultati_esistenti.empty:
+            paia_occupati = set()
+            prossimo_libero = 1
             for sci_id, gruppo in risultati_esistenti.groupby("sci_id"):
                 gruppo = gruppo.sort_values("prova_numero")
-                tempi = {int(r["prova_numero"]): float(r["tempo_sec"]) for _, r in gruppo.iterrows()}
-                note_valide = [str(v).strip() for v in gruppo["note"].tolist() if str(v or "").strip()]
+                tempi = {
+                    int(r["prova_numero"]): round(float(r["tempo_sec"]), 2)
+                    for _, r in gruppo.iterrows()
+                }
+                note_valide = [
+                    str(v).strip() for v in gruppo["note"].tolist()
+                    if str(v or "").strip()
+                ]
                 codice = str(gruppo.iloc[0]["sci"] or "").strip()
-                gruppi_esistenti[int(sci_id)] = (codice, tempi, note_valide[0] if note_valide else "")
+                try:
+                    paio_num = int(codice)
+                    if paio_num < 1 or paio_num > 10 or paio_num in paia_occupati:
+                        raise ValueError
+                except (TypeError, ValueError):
+                    while prossimo_libero in paia_occupati and prossimo_libero <= 10:
+                        prossimo_libero += 1
+                    if prossimo_libero > 10:
+                        continue
+                    paio_num = prossimo_libero
+                paia_occupati.add(paio_num)
+                gruppi_esistenti[paio_num] = (tempi, note_valide[0] if note_valide else "")
 
-        ids_esistenti = list(gruppi_esistenti.keys())[:10]
         righe_input = []
         for i in range(10):
-            sci_id = ids_esistenti[i] if i < len(ids_esistenti) else None
-            codice, tempi, nota = gruppi_esistenti.get(sci_id, ("", {}, ""))
+            tempi, nota = gruppi_esistenti.get(i + 1, ({}, ""))
             righe_input.append({
                 "Paio": i + 1,
-                "Codice sci": codice,
                 "Passaggio 1 (s)": tempi.get(1),
                 "Passaggio 2 (s)": tempi.get(2),
                 "Passaggio 3 (s)": tempi.get(3),
@@ -6232,7 +6248,7 @@ with st.container(key="sector_page_content"):
         with st.container(key="zero_table_panel", border=False):
             st.markdown('<div class="zero-section-title">Inserimento prove · 10 paia × 4 passaggi</div>', unsafe_allow_html=True)
             st.markdown(
-                '<div class="zero-section-caption">Una riga per ogni paio. I tempi sono in secondi; '
+                '<div class="zero-section-caption">Una riga per ogni paio (1–10). I tempi sono in secondi con due decimali; '
                 'puoi lasciare vuoto un eventuale passaggio non eseguito.</div>',
                 unsafe_allow_html=True,
             )
@@ -6246,13 +6262,10 @@ with st.container(key="sector_page_content"):
                 height=420,
                 column_config={
                     "Paio": st.column_config.NumberColumn("Paio", width="small", format="%d"),
-                    "Codice sci": st.column_config.TextColumn(
-                        "Codice sci", help="Inserisci il codice/nome del paio. Se non esiste, verrà creato automaticamente.", width="medium"
-                    ),
-                    "Passaggio 1 (s)": st.column_config.NumberColumn("Passaggio 1 (s)", min_value=0.0, step=0.001, format="%.3f"),
-                    "Passaggio 2 (s)": st.column_config.NumberColumn("Passaggio 2 (s)", min_value=0.0, step=0.001, format="%.3f"),
-                    "Passaggio 3 (s)": st.column_config.NumberColumn("Passaggio 3 (s)", min_value=0.0, step=0.001, format="%.3f"),
-                    "Passaggio 4 (s)": st.column_config.NumberColumn("Passaggio 4 (s)", min_value=0.0, step=0.001, format="%.3f"),
+                    "Passaggio 1 (s)": st.column_config.NumberColumn("Passaggio 1 (s)", min_value=0.0, step=0.01, format="%.2f"),
+                    "Passaggio 2 (s)": st.column_config.NumberColumn("Passaggio 2 (s)", min_value=0.0, step=0.01, format="%.2f"),
+                    "Passaggio 3 (s)": st.column_config.NumberColumn("Passaggio 3 (s)", min_value=0.0, step=0.01, format="%.2f"),
+                    "Passaggio 4 (s)": st.column_config.NumberColumn("Passaggio 4 (s)", min_value=0.0, step=0.01, format="%.2f"),
                     "Note": st.column_config.TextColumn("Note", width="medium"),
                 },
                 disabled=["Paio"],
@@ -6261,37 +6274,24 @@ with st.container(key="sector_page_content"):
             if st.button("Salva zero test", type="primary", use_container_width=True, key=f"save_zero_matrix_{sessione_id}"):
                 errori_zero = []
                 righe_da_salvare = []
-                codici_usati = set()
 
                 for _, riga in editor_zero.iterrows():
-                    codice_sci = str(riga.get("Codice sci") or "").strip()
+                    paio_num = int(riga["Paio"])
                     valori_tempi = []
                     for colonna in ["Passaggio 1 (s)", "Passaggio 2 (s)", "Passaggio 3 (s)", "Passaggio 4 (s)"]:
                         valore = riga.get(colonna)
                         if pd.isna(valore) or valore in ("", None):
                             valori_tempi.append(None)
                         else:
-                            numero = float(valore)
+                            numero = round(float(valore), 2)
                             valori_tempi.append(numero if numero > 0 else None)
 
-                    if not codice_sci and not any(v is not None for v in valori_tempi):
-                        continue
-                    if not codice_sci:
-                        errori_zero.append(f"Paio {int(riga['Paio'])}: inserisci il codice dello sci.")
-                        continue
-
-                    chiave_codice = codice_sci.casefold()
-                    if chiave_codice in codici_usati:
-                        errori_zero.append(f"Lo sci {codice_sci} è stato inserito più di una volta.")
-                        continue
-                    codici_usati.add(chiave_codice)
-
                     if not any(v is not None for v in valori_tempi):
-                        errori_zero.append(f"{codice_sci}: inserisci almeno un passaggio.")
                         continue
 
                     righe_da_salvare.append({
-                        "codice_sci": codice_sci,
+                        # Il numero del paio è anche l'identificativo interno dello sci nello Zero test.
+                        "codice_sci": str(paio_num),
                         "tempi": valori_tempi,
                         "note": str(riga.get("Note") or "").strip(),
                     })
@@ -6332,36 +6332,39 @@ with st.container(key="sector_page_content"):
                     valori = [tempi.get(i) for i in range(1, 5)]
                     validi = [v for v in valori if v is not None]
                     matrice_salvata.append({
-                        "Sci": str(gruppo.iloc[0]["sci"]),
-                        "P1 (s)": valori[0], "P2 (s)": valori[1],
-                        "P3 (s)": valori[2], "P4 (s)": valori[3],
-                        "Media (s)": float(pd.Series(validi).mean()) if validi else None,
-                        "SD (s)": float(pd.Series(validi).std()) if len(validi) > 1 else 0.0,
+                        "Paio": int(float(str(gruppo.iloc[0]["sci"]))) if str(gruppo.iloc[0]["sci"]).replace(".", "", 1).isdigit() else str(gruppo.iloc[0]["sci"]),
+                        "P1 (s)": round(valori[0], 2) if valori[0] is not None else None,
+                        "P2 (s)": round(valori[1], 2) if valori[1] is not None else None,
+                        "P3 (s)": round(valori[2], 2) if valori[2] is not None else None,
+                        "P4 (s)": round(valori[3], 2) if valori[3] is not None else None,
+                        "Media (s)": round(float(pd.Series(validi).mean()), 2) if validi else None,
+                        "SD (s)": round(float(pd.Series(validi).std()), 2) if len(validi) > 1 else 0.0,
                     })
 
                 df_riep = pd.DataFrame(matrice_salvata).sort_values("Media (s)").reset_index(drop=True)
                 migliore = float(df_riep["Media (s)"].min())
-                df_riep["Δ migliore (s)"] = df_riep["Media (s)"] - migliore
+                df_riep["Δ migliore (s)"] = (df_riep["Media (s)"] - migliore).round(2)
                 df_riep.insert(0, "Pos.", range(1, len(df_riep) + 1))
 
                 st.dataframe(
                     df_riep, use_container_width=True, hide_index=True,
                     column_config={
                         "Pos.": st.column_config.NumberColumn("Pos.", format="%d"),
-                        "P1 (s)": st.column_config.NumberColumn("P1 (s)", format="%.3f"),
-                        "P2 (s)": st.column_config.NumberColumn("P2 (s)", format="%.3f"),
-                        "P3 (s)": st.column_config.NumberColumn("P3 (s)", format="%.3f"),
-                        "P4 (s)": st.column_config.NumberColumn("P4 (s)", format="%.3f"),
-                        "Media (s)": st.column_config.NumberColumn("Media (s)", format="%.3f"),
-                        "SD (s)": st.column_config.NumberColumn("SD (s)", format="%.3f"),
-                        "Δ migliore (s)": st.column_config.NumberColumn("Δ migliore (s)", format="%.3f"),
+                        "Paio": st.column_config.NumberColumn("Paio", format="%d"),
+                        "P1 (s)": st.column_config.NumberColumn("P1 (s)", format="%.2f"),
+                        "P2 (s)": st.column_config.NumberColumn("P2 (s)", format="%.2f"),
+                        "P3 (s)": st.column_config.NumberColumn("P3 (s)", format="%.2f"),
+                        "P4 (s)": st.column_config.NumberColumn("P4 (s)", format="%.2f"),
+                        "Media (s)": st.column_config.NumberColumn("Media (s)", format="%.2f"),
+                        "SD (s)": st.column_config.NumberColumn("SD (s)", format="%.2f"),
+                        "Δ migliore (s)": st.column_config.NumberColumn("Δ migliore (s)", format="%.2f"),
                     },
                 )
 
                 st.markdown("#### Sci più simili")
                 tolleranza = st.number_input(
                     "Tolleranza massima tra i tempi medi (s)", min_value=0.001,
-                    value=0.100, step=0.010, format="%.3f",
+                    value=0.10, step=0.01, format="%.2f",
                     key=f"zero_similarity_tolerance_{sessione_id}",
                 )
                 coppie = coppie_simili_zero_test(sessione_id, float(tolleranza))
@@ -6371,9 +6374,9 @@ with st.container(key="sector_page_content"):
                     st.dataframe(
                         coppie, use_container_width=True, hide_index=True,
                         column_config={
-                            "Tempo A": st.column_config.NumberColumn("Tempo A", format="%.3f"),
-                            "Tempo B": st.column_config.NumberColumn("Tempo B", format="%.3f"),
-                            "Δ medio (s)": st.column_config.NumberColumn("Δ medio (s)", format="%.3f"),
+                            "Tempo A": st.column_config.NumberColumn("Tempo A", format="%.2f"),
+                            "Tempo B": st.column_config.NumberColumn("Tempo B", format="%.2f"),
+                            "Δ medio (s)": st.column_config.NumberColumn("Δ medio (s)", format="%.2f"),
                         },
                     )
 
