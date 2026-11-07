@@ -2324,6 +2324,84 @@ st.markdown(
         margin-bottom: 0.75rem;
     }
 
+    .zero-test-kicker {
+        color: var(--accent);
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        margin-bottom: 0.28rem;
+    }
+
+    .zero-test-header-row {
+        display: flex;
+        align-items: stretch;
+        gap: 0.55rem;
+        flex-wrap: wrap;
+        margin: 0.78rem 0 0.72rem 0;
+    }
+
+    .zero-test-chip {
+        min-width: 120px;
+        flex: 0 1 auto;
+        padding: 0.56rem 0.72rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-small);
+        background: var(--surface-soft);
+    }
+
+    .zero-test-chip-label {
+        color: var(--text-light);
+        font-size: 0.66rem;
+        font-weight: 800;
+        letter-spacing: 0.055em;
+        text-transform: uppercase;
+        line-height: 1.15;
+        margin-bottom: 0.16rem;
+    }
+
+    .zero-test-chip-value {
+        color: var(--text-main);
+        font-size: 0.88rem;
+        font-weight: 700;
+        line-height: 1.25;
+        white-space: nowrap;
+    }
+
+    .zero-test-guide {
+        display: flex;
+        gap: 0.45rem 1rem;
+        flex-wrap: wrap;
+        align-items: center;
+        padding: 0.55rem 0.72rem;
+        margin: 0 0 0.82rem 0;
+        border-left: 3px solid var(--accent);
+        background: #f7f9fa;
+        border-radius: 0 var(--radius-small) var(--radius-small) 0;
+        color: var(--text-secondary);
+        font-size: 0.76rem;
+        line-height: 1.35;
+    }
+
+    .zero-test-guide strong {
+        color: var(--text-main);
+        font-weight: 700;
+    }
+
+    div[class*="st-key-zero_table_panel"] div[data-testid="stDataFrame"] {
+        border: 1px solid var(--border-strong) !important;
+        border-radius: 10px !important;
+        box-shadow: none !important;
+        background: #ffffff !important;
+        margin-top: 0.1rem !important;
+    }
+
+    div[class*="st-key-zero_table_panel"] [data-testid="stButton"] button {
+        margin-top: 0.35rem !important;
+        min-height: 2.85rem !important;
+        font-weight: 700 !important;
+    }
+
     .zero-session-strip {
         display: flex;
         flex-wrap: wrap;
@@ -6319,15 +6397,58 @@ with st.container(key="sector_page_content"):
         )
         df_zero_completo = _aggiungi_metriche_zero(df_base_zero)
 
+        # Coppie uniche più vicine, usate solo come riepilogo visivo sopra la tabella.
+        coppie_simili = {}
+        for _, riga in df_zero_completo.iterrows():
+            paio_a = riga.get("Paio")
+            paio_b = riga.get("Paio più simile")
+            delta = riga.get("Δ dal più simile (s)")
+            if pd.isna(paio_a) or pd.isna(paio_b) or pd.isna(delta):
+                continue
+            coppia = tuple(sorted((int(paio_a), int(paio_b))))
+            if coppia[0] == coppia[1]:
+                continue
+            delta_val = float(delta)
+            if coppia not in coppie_simili or delta_val < coppie_simili[coppia]:
+                coppie_simili[coppia] = delta_val
+
+        coppie_ordinate = sorted(
+            coppie_simili.items(),
+            key=lambda item: (item[1], item[0][0], item[0][1]),
+        )
+        if coppie_ordinate:
+            (paio_a, paio_b), delta_top = coppie_ordinate[0]
+            match_top_html = f"{paio_a} ↔ {paio_b} · Δ {delta_top:.2f} s"
+        else:
+            match_top_html = "—"
+
         with st.container(key="zero_table_panel", border=False):
+            st.markdown('<div class="zero-test-kicker">Zero test</div>', unsafe_allow_html=True)
             st.markdown(
-                '<div class="zero-section-title">Zero test · 10 paia × 4 passaggi</div>',
+                '<div class="zero-section-title">Confronto tra 10 paia · 4 passaggi</div>',
                 unsafe_allow_html=True,
             )
             st.markdown(
-                '<div class="zero-section-caption">Una sola tabella per tutto lo Zero Test. '
-                'I paia restano sempre in ordine 1–10; Media, SD, Paio più simile e Δ sono calcolati automaticamente. '
-                'I tempi sono espressi in secondi con due decimali.</div>',
+                '<div class="zero-section-caption">Inserisci i quattro tempi di ogni paio. '
+                'L’ordine resta sempre 1–10; le metriche di confronto vengono calcolate automaticamente.</div>',
+                unsafe_allow_html=True,
+            )
+
+            st.markdown(
+                f'<div class="zero-test-header-row">'
+                f'<div class="zero-test-chip"><div class="zero-test-chip-label">Paia</div><div class="zero-test-chip-value">10</div></div>'
+                f'<div class="zero-test-chip"><div class="zero-test-chip-label">Passaggi / paio</div><div class="zero-test-chip-value">4</div></div>'
+                f'<div class="zero-test-chip"><div class="zero-test-chip-label">Coppia più vicina</div><div class="zero-test-chip-value">{match_top_html}</div></div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+            st.markdown(
+                '<div class="zero-test-guide">'
+                '<span><strong>Media</strong> = tempo medio dei 4 passaggi</span>'
+                '<span><strong>Dev. std.</strong> = ripetibilità del paio</span>'
+                '<span><strong>Δ simile</strong> = distanza dalla media del paio più simile</span>'
+                '</div>',
                 unsafe_allow_html=True,
             )
 
@@ -6339,16 +6460,16 @@ with st.container(key="sector_page_content"):
                 num_rows="fixed",
                 height=455,
                 column_config={
-                    "Paio": st.column_config.NumberColumn("Paio", width="small", format="%d"),
-                    "P1 (s)": st.column_config.NumberColumn("P1 (s)", min_value=0.0, step=0.01, format="%.2f", width="small"),
-                    "P2 (s)": st.column_config.NumberColumn("P2 (s)", min_value=0.0, step=0.01, format="%.2f", width="small"),
-                    "P3 (s)": st.column_config.NumberColumn("P3 (s)", min_value=0.0, step=0.01, format="%.2f", width="small"),
-                    "P4 (s)": st.column_config.NumberColumn("P4 (s)", min_value=0.0, step=0.01, format="%.2f", width="small"),
-                    "Media (s)": st.column_config.NumberColumn("Media (s)", format="%.2f", width="small"),
-                    "SD (s)": st.column_config.NumberColumn("SD (s)", format="%.2f", width="small", help="Deviazione standard dei passaggi del paio."),
-                    "Paio più simile": st.column_config.NumberColumn("Paio più simile", format="%d", width="small"),
-                    "Δ dal più simile (s)": st.column_config.NumberColumn("Δ dal più simile (s)", format="%.2f", width="small", help="Differenza assoluta tra la media del paio e quella del paio più simile."),
-                    "Note": st.column_config.TextColumn("Note", width="medium"),
+                    "Paio": st.column_config.NumberColumn("Paio", width="small", format="%d", help="Numero identificativo del paio nello Zero Test."),
+                    "P1 (s)": st.column_config.NumberColumn("P1", min_value=0.0, step=0.01, format="%.2f", width="small", help="Passaggio 1 · secondi"),
+                    "P2 (s)": st.column_config.NumberColumn("P2", min_value=0.0, step=0.01, format="%.2f", width="small", help="Passaggio 2 · secondi"),
+                    "P3 (s)": st.column_config.NumberColumn("P3", min_value=0.0, step=0.01, format="%.2f", width="small", help="Passaggio 3 · secondi"),
+                    "P4 (s)": st.column_config.NumberColumn("P4", min_value=0.0, step=0.01, format="%.2f", width="small", help="Passaggio 4 · secondi"),
+                    "Media (s)": st.column_config.NumberColumn("Media", format="%.2f", width="small", help="Media dei passaggi disponibili · secondi"),
+                    "SD (s)": st.column_config.NumberColumn("Dev. std.", format="%.2f", width="small", help="Deviazione standard dei passaggi: più è bassa, più il paio è ripetibile."),
+                    "Paio più simile": st.column_config.NumberColumn("Paio simile", format="%d", width="medium", help="Paio con la media più vicina."),
+                    "Δ dal più simile (s)": st.column_config.NumberColumn("Δ simile", format="%.2f", width="medium", help="Differenza assoluta, in secondi, tra la media del paio e quella del paio più simile."),
+                    "Note": st.column_config.TextColumn("Note", width="small"),
                 },
                 disabled=["Paio", "Media (s)", "SD (s)", "Paio più simile", "Δ dal più simile (s)"],
             )
