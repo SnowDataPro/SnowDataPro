@@ -100,6 +100,7 @@ def inizializza_database():
             snow_granulometria TEXT,
             snow_caratteristiche TEXT,
             zero_batteria TEXT,
+            zero_modello_sci TEXT,
             note TEXT,
             creato_il TEXT NOT NULL
         )
@@ -221,6 +222,7 @@ def inizializza_database():
         "snow_granulometria": "TEXT",
         "snow_caratteristiche": "TEXT",
         "zero_batteria": "TEXT",
+        "zero_modello_sci": "TEXT",
         "meteo": "TEXT",
     }
     for nome_colonna, tipo_colonna in nuove_colonne_sessioni.items():
@@ -6499,12 +6501,27 @@ with st.container(key="sector_page_content"):
                 value=_formatta_temperatura_1d(riga_sessione.get("temperatura_neve") if riga_sessione is not None else 0.0),
                 key=f"insert_zero_snow_{suffix_zero}",
             )
+            umidita_db_zero = (
+                riga_sessione.get("umidita")
+                if riga_sessione is not None and "umidita" in riga_sessione.index
+                else None
+            )
+            umidita_non_disponibile_default = bool(
+                riga_sessione is not None and pd.isna(umidita_db_zero)
+            )
+            zero_ur_non_disponibile = st.checkbox(
+                "Umidità non disponibile",
+                value=umidita_non_disponibile_default,
+                key=f"insert_zero_rh_missing_{suffix_zero}",
+            )
             zero_ur = st.number_input(
                 "Umidità relativa (%)",
-                min_value=0.0,
-                max_value=100.0,
-                value=_safe_float_zero(riga_sessione.get("umidita") if riga_sessione is not None else 70.0, 70.0),
-                step=1.0,
+                min_value=0,
+                max_value=100,
+                value=int(round(_safe_float_zero(umidita_db_zero if pd.notna(umidita_db_zero) else 70, 70.0))),
+                step=1,
+                format="%d",
+                disabled=zero_ur_non_disponibile,
                 key=f"insert_zero_rh_{suffix_zero}",
             )
 
@@ -6518,7 +6535,7 @@ with st.container(key="sector_page_content"):
             else ""
         )
         batteria_index = batteria_opzioni.index(batteria_db) if batteria_db in batteria_opzioni else 0
-        c_batteria, c_meteo = st.columns([1.35, 1])
+        c_batteria, c_modello_sci, c_meteo = st.columns([1.2, 1, 1])
         with c_batteria:
             zero_batteria = st.selectbox(
                 "Batteria",
@@ -6526,6 +6543,17 @@ with st.container(key="sector_page_content"):
                 index=batteria_index,
                 key=f"insert_zero_battery_{suffix_zero}",
                 help="Indica a quale gruppo di test verranno destinati i paia selezionati con questo Zero test.",
+            )
+        with c_modello_sci:
+            zero_modello_sci = st.text_input(
+                "Modello sci",
+                value=(
+                    str(riga_sessione.get("zero_modello_sci") or "").strip()
+                    if riga_sessione is not None and "zero_modello_sci" in riga_sessione.index
+                    else ""
+                ),
+                key=f"insert_zero_ski_model_{suffix_zero}",
+                placeholder="es. Speedmax 3D",
             )
         with c_meteo:
             meteo_db = (
@@ -6848,8 +6876,8 @@ with st.container(key="sector_page_content"):
                             """
                             INSERT INTO sessioni (
                                 data, ora, luogo, temperatura_aria, temperatura_neve,
-                                umidita, meteo, tipo_neve, condizione_pista, note, zero_batteria, creato_il
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, '', '', ?, ?, ?)
+                                umidita, meteo, tipo_neve, condizione_pista, note, zero_batteria, zero_modello_sci, creato_il
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, '', '', ?, ?, ?, ?)
                             """,
                             (
                                 zero_data.isoformat(),
@@ -6857,10 +6885,11 @@ with st.container(key="sector_page_content"):
                                 zero_luogo.strip(),
                                 _parse_temperatura_1d(zero_t_aria_txt),
                                 _parse_temperatura_1d(zero_t_neve_txt),
-                                float(zero_ur),
+                                None if zero_ur_non_disponibile else int(zero_ur),
                                 zero_meteo or "",
                                 zero_note.strip(),
                                 zero_batteria,
+                                zero_modello_sci.strip(),
                                 datetime.now().isoformat(timespec="seconds"),
                             ),
                         )
@@ -6872,7 +6901,7 @@ with st.container(key="sector_page_content"):
                             """
                             UPDATE sessioni
                             SET data = ?, ora = ?, luogo = ?, temperatura_aria = ?,
-                                temperatura_neve = ?, umidita = ?, meteo = ?, note = ?, zero_batteria = ?
+                                temperatura_neve = ?, umidita = ?, meteo = ?, note = ?, zero_batteria = ?, zero_modello_sci = ?
                             WHERE id = ?
                             """,
                             (
@@ -6881,10 +6910,11 @@ with st.container(key="sector_page_content"):
                                 zero_luogo.strip(),
                                 _parse_temperatura_1d(zero_t_aria_txt),
                                 _parse_temperatura_1d(zero_t_neve_txt),
-                                float(zero_ur),
+                                None if zero_ur_non_disponibile else int(zero_ur),
                                 zero_meteo or "",
                                 zero_note.strip(),
                                 zero_batteria,
+                                zero_modello_sci.strip(),
                                 sessione_id,
                             ),
                         )
@@ -7024,6 +7054,8 @@ with st.container(key="sector_page_content"):
                 s.snow_forma_grano,
                 s.snow_granulometria,
                 s.snow_caratteristiche,
+                s.zero_batteria,
+                s.zero_modello_sci,
                 s.note,
                 s.creato_il,
                 COUNT(DISTINCT z.sci_id) AS paia_testati,
@@ -7193,10 +7225,8 @@ with st.container(key="sector_page_content"):
                     ora_zero_label = str(sessione_zero.get("ora") or "").strip()
                     luogo_zero_label = str(sessione_zero.get("luogo") or "—").strip()
                     paia_zero_label = int(sessione_zero.get("paia_testati") or 0)
-                    titolo_zero = f"{data_zero_label}"
-                    if ora_zero_label:
-                        titolo_zero += f" · {ora_zero_label}"
-                    titolo_zero += f" · {luogo_zero_label} · Zero test · {paia_zero_label} paia"
+                    batteria_zero_label = str(sessione_zero.get("zero_batteria") or "").strip() or "Batteria non specificata"
+                    titolo_zero = f"{data_zero_label} · {luogo_zero_label} · {batteria_zero_label}"
 
                     with st.expander(titolo_zero, expanded=False):
                         df_prove_sessione = zero_prove_per_sessione.get(
@@ -7226,6 +7256,8 @@ with st.container(key="sector_page_content"):
                             st.markdown(f"**Luogo:** {luogo_zero_label or '—'}")
                             st.markdown(f"**Data:** {data_zero_label}")
                             st.markdown(f"**Ora:** {ora_zero_label or '—'}")
+                            modello_zero = str(sessione_zero.get("zero_modello_sci") or "").strip()
+                            st.markdown(f"**Modello sci:** {modello_zero or '—'}")
                         with info2:
                             t_aria = sessione_zero.get("temperatura_aria")
                             t_neve = sessione_zero.get("temperatura_neve")
@@ -7235,7 +7267,7 @@ with st.container(key="sector_page_content"):
                             st.markdown(f"**Temperatura neve:** {t_neve_txt}")
                         with info3:
                             umidita_zero = sessione_zero.get("umidita")
-                            ur_txt = f"{float(umidita_zero):.0f} %" if pd.notna(umidita_zero) else "—"
+                            ur_txt = f"{float(umidita_zero):.0f} %" if pd.notna(umidita_zero) else "Non disponibile"
                             st.markdown(f"**Umidità relativa:** {ur_txt}")
                             meteo_zero = str(sessione_zero.get("meteo") or "").strip()
                             st.markdown(f"**Meteo:** {meteo_zero or '—'}")
