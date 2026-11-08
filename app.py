@@ -22,7 +22,7 @@ st.set_page_config(
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "ski_material_lab.db")
-VERSIONE_DATABASE_APP = 10
+VERSIONE_DATABASE_APP = 11
 
 
 # ============================================================
@@ -90,6 +90,7 @@ def inizializza_database():
             temperatura_aria REAL,
             temperatura_neve REAL,
             umidita REAL,
+            meteo TEXT,
             tipo_neve TEXT,
             condizione_pista TEXT,
             snow_origine TEXT,
@@ -220,6 +221,7 @@ def inizializza_database():
         "snow_granulometria": "TEXT",
         "snow_caratteristiche": "TEXT",
         "zero_batteria": "TEXT",
+        "meteo": "TEXT",
     }
     for nome_colonna, tipo_colonna in nuove_colonne_sessioni.items():
         if nome_colonna not in colonne_sessioni:
@@ -3346,6 +3348,45 @@ def _numero_opzionale(valore):
     return float(valore)
 
 
+def _formatta_temperatura_1d(valore, default=0.0):
+    """Formato unico per temperature aria/neve: un decimale e punto."""
+    try:
+        if valore is None or pd.isna(valore):
+            valore = default
+        return f"{float(valore):.1f}"
+    except Exception:
+        return f"{float(default):.1f}"
+
+
+def _parse_temperatura_1d(valore):
+    """Accetta punto o virgola in input, salva sempre un numero a un decimale."""
+    testo = str(valore or "").strip().replace(",", ".")
+    if not testo:
+        raise ValueError("Temperatura mancante")
+    return round(float(testo), 1)
+
+
+METEO_OPZIONI = [
+    "Soleggiato",
+    "Parzialmente nuvoloso",
+    "Coperto",
+    "Precipitazioni nevose",
+    "Precipitazioni piovose",
+    "Nebbia/foschia",
+]
+
+
+def _formatta_dataframe_temperature_ambientali(df):
+    """Converte solo le colonne aria/neve destinate alla visualizzazione."""
+    risultato = df.copy()
+    for colonna in ["temperatura_aria", "temperatura_neve", "T aria °C", "T neve °C"]:
+        if colonna in risultato.columns:
+            risultato[colonna] = risultato[colonna].apply(
+                lambda v: _formatta_temperatura_1d(v) if pd.notna(v) else "—"
+            )
+    return risultato
+
+
 def _testo_range(minimo, massimo, unita="°C"):
     if pd.isna(minimo) and pd.isna(massimo):
         return "—"
@@ -3529,6 +3570,7 @@ def pagina_trova_prodotto_migliore():
             max_value=20.0,
             value=-5.0,
             step=0.5,
+            format="%.1f",
             key="best_product_temperature",
         )
     with c_rif:
@@ -5145,6 +5187,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             max_value=aria_max,
                             value=(aria_min, aria_max),
                             step=0.5,
+                            format="%.1f °C",
                             disabled=not filtro_temp_aria_attivo,
                             key=f"temp_aria_range_catalogo_{categoria}",
                         )
@@ -5170,6 +5213,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             max_value=nuova_max,
                             value=(nuova_min, nuova_max),
                             step=0.5,
+                            format="%.1f °C",
                             disabled=not filtro_temp_nuova_attivo,
                             key=f"temp_nuova_range_catalogo_{categoria}",
                         )
@@ -5195,6 +5239,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             max_value=trasf_max,
                             value=(trasf_min, trasf_max),
                             step=0.5,
+                            format="%.1f °C",
                             disabled=not filtro_temp_trasformata_attivo,
                             key=f"temp_trasformata_range_catalogo_{categoria}",
                         )
@@ -5220,6 +5265,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                         max_value=produttore_max,
                         value=(produttore_min, produttore_max),
                         step=0.5,
+                        format="%.1f °C",
                         disabled=not filtro_temp_produttore_attivo,
                         key=f"temp_produttore_range_catalogo_{categoria}",
                     )
@@ -5251,6 +5297,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             max_value=aria_max,
                             value=(aria_min, aria_max),
                             step=0.5,
+                            format="%.1f °C",
                             disabled=not filtro_temp_aria_attivo,
                             key=f"temp_aria_range_catalogo_{categoria}",
                         )
@@ -5276,6 +5323,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             max_value=neve_max,
                             value=(neve_min, neve_max),
                             step=0.5,
+                            format="%.1f °C",
                             disabled=not filtro_temp_neve_attivo,
                             key=f"temp_neve_range_catalogo_{categoria}",
                         )
@@ -5301,6 +5349,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             max_value=produttore_max,
                             value=(produttore_min, produttore_max),
                             step=0.5,
+                            format="%.1f °C",
                             disabled=not filtro_temp_produttore_attivo,
                             key=f"temp_produttore_range_catalogo_{categoria}",
                         )
@@ -6132,11 +6181,12 @@ with st.container(key="sector_page_content"):
         else:
             mostra = sessioni[
                 ["data", "ora", "luogo", "temperatura_aria", "temperatura_neve",
-                 "tipo_neve", "condizione_pista"]
+                 "meteo", "tipo_neve", "condizione_pista"]
             ].head(10).copy()
+            mostra = _formatta_dataframe_temperature_ambientali(mostra)
             mostra.columns = [
                 "Data", "Ora", "Luogo", "T aria °C", "T neve °C",
-                "Tipo neve", "Pista"
+                "Meteo", "Tipo neve", "Pista"
             ]
             st.dataframe(mostra, use_container_width=True, hide_index=True)
 
@@ -6154,11 +6204,11 @@ with st.container(key="sector_page_content"):
                 ora_sessione = st.time_input("Ora")
                 luogo = st.text_input("Luogo *")
             with c2:
-                temperatura_aria = st.number_input(
-                    "Temperatura aria (°C)", value=0.0, step=0.5
+                temperatura_aria_txt = st.text_input(
+                    "Temperatura aria (°C)", value="0.0"
                 )
-                temperatura_neve = st.number_input(
-                    "Temperatura neve (°C)", value=0.0, step=0.5
+                temperatura_neve_txt = st.text_input(
+                    "Temperatura neve (°C)", value="0.0"
                 )
                 umidita = st.number_input(
                     "Umidità relativa (%)", min_value=0.0, max_value=100.0,
@@ -6179,6 +6229,12 @@ with st.container(key="sector_page_content"):
                         "Lucida", "Sporca", "Variabile", "Altro"
                     ],
                 )
+                meteo = st.selectbox(
+                    "Meteo",
+                    METEO_OPZIONI,
+                    index=None,
+                    placeholder="Seleziona meteo",
+                )
 
             note = st.text_area("Note")
             salva = st.form_submit_button(
@@ -6192,16 +6248,17 @@ with st.container(key="sector_page_content"):
                     esegui("""
                         INSERT INTO sessioni (
                             data, ora, luogo, temperatura_aria, temperatura_neve,
-                            umidita, tipo_neve, condizione_pista, note, creato_il
+                            umidita, meteo, tipo_neve, condizione_pista, note, creato_il
                         )
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         data_sessione.isoformat(),
                         ora_sessione.strftime("%H:%M"),
                         luogo.strip(),
-                        float(temperatura_aria),
-                        float(temperatura_neve),
+                        _parse_temperatura_1d(temperatura_aria_txt),
+                        _parse_temperatura_1d(temperatura_neve_txt),
                         float(umidita),
+                        meteo or "",
                         tipo_neve,
                         condizione_pista,
                         note.strip(),
@@ -6213,12 +6270,14 @@ with st.container(key="sector_page_content"):
         st.markdown("### Sessioni registrate")
         df = sessioni_df()
         if not df.empty:
+            mostra_sessioni = df[[
+                "id", "data", "ora", "luogo", "temperatura_aria",
+                "temperatura_neve", "umidita", "meteo", "tipo_neve",
+                "condizione_pista", "note"
+            ]].copy()
+            mostra_sessioni = _formatta_dataframe_temperature_ambientali(mostra_sessioni)
             st.dataframe(
-                df[[
-                    "id", "data", "ora", "luogo", "temperatura_aria",
-                    "temperatura_neve", "umidita", "tipo_neve",
-                    "condizione_pista", "note"
-                ]],
+                mostra_sessioni,
                 use_container_width=True,
                 hide_index=True,
             )
@@ -6429,17 +6488,15 @@ with st.container(key="sector_page_content"):
                 value=_safe_time_zero(riga_sessione.get("ora") if riga_sessione is not None else None),
                 key=f"insert_zero_time_{suffix_zero}",
             )
-            zero_t_aria = st.number_input(
+            zero_t_aria_txt = st.text_input(
                 "Temperatura aria (°C)",
-                value=_safe_float_zero(riga_sessione.get("temperatura_aria") if riga_sessione is not None else 0.0),
-                step=0.5,
+                value=_formatta_temperatura_1d(riga_sessione.get("temperatura_aria") if riga_sessione is not None else 0.0),
                 key=f"insert_zero_air_{suffix_zero}",
             )
         with c3:
-            zero_t_neve = st.number_input(
+            zero_t_neve_txt = st.text_input(
                 "Temperatura neve (°C)",
-                value=_safe_float_zero(riga_sessione.get("temperatura_neve") if riga_sessione is not None else 0.0),
-                step=0.5,
+                value=_formatta_temperatura_1d(riga_sessione.get("temperatura_neve") if riga_sessione is not None else 0.0),
                 key=f"insert_zero_snow_{suffix_zero}",
             )
             zero_ur = st.number_input(
@@ -6461,13 +6518,29 @@ with st.container(key="sector_page_content"):
             else ""
         )
         batteria_index = batteria_opzioni.index(batteria_db) if batteria_db in batteria_opzioni else 0
-        zero_batteria = st.selectbox(
-            "Batteria",
-            batteria_opzioni,
-            index=batteria_index,
-            key=f"insert_zero_battery_{suffix_zero}",
-            help="Indica a quale gruppo di test verranno destinati i paia selezionati con questo Zero test.",
-        )
+        c_batteria, c_meteo = st.columns([1.35, 1])
+        with c_batteria:
+            zero_batteria = st.selectbox(
+                "Batteria",
+                batteria_opzioni,
+                index=batteria_index,
+                key=f"insert_zero_battery_{suffix_zero}",
+                help="Indica a quale gruppo di test verranno destinati i paia selezionati con questo Zero test.",
+            )
+        with c_meteo:
+            meteo_db = (
+                str(riga_sessione.get("meteo") or "").strip()
+                if riga_sessione is not None and "meteo" in riga_sessione.index
+                else ""
+            )
+            meteo_index = METEO_OPZIONI.index(meteo_db) if meteo_db in METEO_OPZIONI else None
+            zero_meteo = st.selectbox(
+                "Meteo",
+                METEO_OPZIONI,
+                index=meteo_index,
+                placeholder="Seleziona meteo",
+                key=f"insert_zero_weather_{suffix_zero}",
+            )
 
         zero_note = st.text_area(
             "Note sessione",
@@ -6775,16 +6848,17 @@ with st.container(key="sector_page_content"):
                             """
                             INSERT INTO sessioni (
                                 data, ora, luogo, temperatura_aria, temperatura_neve,
-                                umidita, tipo_neve, condizione_pista, note, zero_batteria, creato_il
-                            ) VALUES (?, ?, ?, ?, ?, ?, '', '', ?, ?, ?)
+                                umidita, meteo, tipo_neve, condizione_pista, note, zero_batteria, creato_il
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, '', '', ?, ?, ?)
                             """,
                             (
                                 zero_data.isoformat(),
                                 zero_ora.strftime("%H:%M"),
                                 zero_luogo.strip(),
-                                float(zero_t_aria),
-                                float(zero_t_neve),
+                                _parse_temperatura_1d(zero_t_aria_txt),
+                                _parse_temperatura_1d(zero_t_neve_txt),
                                 float(zero_ur),
+                                zero_meteo or "",
                                 zero_note.strip(),
                                 zero_batteria,
                                 datetime.now().isoformat(timespec="seconds"),
@@ -6798,16 +6872,17 @@ with st.container(key="sector_page_content"):
                             """
                             UPDATE sessioni
                             SET data = ?, ora = ?, luogo = ?, temperatura_aria = ?,
-                                temperatura_neve = ?, umidita = ?, note = ?, zero_batteria = ?
+                                temperatura_neve = ?, umidita = ?, meteo = ?, note = ?, zero_batteria = ?
                             WHERE id = ?
                             """,
                             (
                                 zero_data.isoformat(),
                                 zero_ora.strftime("%H:%M"),
                                 zero_luogo.strip(),
-                                float(zero_t_aria),
-                                float(zero_t_neve),
+                                _parse_temperatura_1d(zero_t_aria_txt),
+                                _parse_temperatura_1d(zero_t_neve_txt),
                                 float(zero_ur),
+                                zero_meteo or "",
                                 zero_note.strip(),
                                 zero_batteria,
                                 sessione_id,
@@ -6942,6 +7017,7 @@ with st.container(key="sector_page_content"):
                 s.temperatura_aria,
                 s.temperatura_neve,
                 s.umidita,
+                s.meteo,
                 s.snow_origine,
                 s.snow_consistenza,
                 s.snow_umidita,
@@ -7161,6 +7237,8 @@ with st.container(key="sector_page_content"):
                             umidita_zero = sessione_zero.get("umidita")
                             ur_txt = f"{float(umidita_zero):.0f} %" if pd.notna(umidita_zero) else "—"
                             st.markdown(f"**Umidità relativa:** {ur_txt}")
+                            meteo_zero = str(sessione_zero.get("meteo") or "").strip()
+                            st.markdown(f"**Meteo:** {meteo_zero or '—'}")
                             note_zero = str(sessione_zero.get("note") or "").strip()
                             st.markdown(f"**Note:** {note_zero or '—'}")
 
@@ -7718,6 +7796,7 @@ with st.container(key="sector_page_content"):
                     z.tempo_sec,
                     se.temperatura_aria,
                     se.temperatura_neve,
+                    se.meteo,
                     se.tipo_neve,
                     se.condizione_pista,
                     z.note
@@ -7729,7 +7808,7 @@ with st.container(key="sector_page_content"):
             if df.empty:
                 st.info("Archivio vuoto.")
             else:
-                st.dataframe(df, use_container_width=True, hide_index=True)
+                st.dataframe(_formatta_dataframe_temperature_ambientali(df), use_container_width=True, hide_index=True)
 
         with tab2:
             df = leggi_df("""
@@ -7750,6 +7829,7 @@ with st.container(key="sector_page_content"):
                     t.valutazione,
                     se.temperatura_aria,
                     se.temperatura_neve,
+                    se.meteo,
                     se.tipo_neve,
                     se.condizione_pista,
                     t.note
@@ -7762,7 +7842,7 @@ with st.container(key="sector_page_content"):
             if df.empty:
                 st.info("Archivio vuoto.")
             else:
-                st.dataframe(df, use_container_width=True, hide_index=True)
+                st.dataframe(_formatta_dataframe_temperature_ambientali(df), use_container_width=True, hide_index=True)
 
         with tab3:
             df = leggi_df("""
@@ -7777,6 +7857,7 @@ with st.container(key="sector_page_content"):
                     t.durata,
                     se.temperatura_aria,
                     se.temperatura_neve,
+                    se.meteo,
                     se.tipo_neve,
                     se.condizione_pista,
                     t.note
@@ -7788,7 +7869,7 @@ with st.container(key="sector_page_content"):
             if df.empty:
                 st.info("Archivio vuoto.")
             else:
-                st.dataframe(df, use_container_width=True, hide_index=True)
+                st.dataframe(_formatta_dataframe_temperature_ambientali(df), use_container_width=True, hide_index=True)
 
 
     elif pagina == "Backup":
