@@ -6459,35 +6459,32 @@ with st.container(key="sector_page_content"):
                 "Caratteristiche": ["Sporca", "Salata", "Ventata", "Lucida", "Cadente"],
             }
 
-            def _safe_float_scroll(valore, default=0.0):
-                try:
-                    if valore is None or pd.isna(valore):
-                        return float(default)
-                    return float(valore)
-                except Exception:
-                    return float(default)
+            st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
+            st.markdown('<div class="insert-test-title">Test prodotti scorrimento</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="insert-test-caption">Imposta prima il tipo di test e registra le condizioni reali della sessione. Lo Zero Test di riferimento resta esclusivamente un collegamento informativo.</div>',
+                unsafe_allow_html=True,
+            )
 
-            def _safe_date_scroll(valore):
-                if valore is None or str(valore).strip() == "":
-                    return date.today()
-                try:
-                    return pd.to_datetime(valore).date()
-                except Exception:
-                    return date.today()
+            # 1. TIPO DI TEST + ZERO TEST DI RIFERIMENTO
+            st.markdown("#### Impostazione test")
+            c_tipo_scroll, c_zero_ref = st.columns([1, 1.6])
+            with c_tipo_scroll:
+                metodo_scroll = st.selectbox(
+                    "Tipologia di test",
+                    ["Asta", "Parallel", "Fotocellula"],
+                    key="scroll_test_method",
+                    help="Seleziona il metodo con cui hai effettuato il test prodotti.",
+                )
 
-            def _safe_time_scroll(valore):
-                if valore is None or str(valore).strip() == "":
-                    return datetime.now().time().replace(second=0, microsecond=0)
-                try:
-                    return datetime.strptime(str(valore)[:5], "%H:%M").time()
-                except Exception:
-                    return datetime.now().time().replace(second=0, microsecond=0)
-
-            # Zero test di riferimento: soltanto quelli destinati ai prodotti scorrimento.
             df_zero_ref = leggi_df("""
                 SELECT
-                    s.*,
-                    COUNT(DISTINCT z.sci_id) AS n_paia
+                    s.id,
+                    s.data,
+                    s.ora,
+                    s.luogo,
+                    s.zero_batteria,
+                    s.zero_modello_sci
                 FROM sessioni s
                 JOIN zero_test z ON z.sessione_id = s.id
                 WHERE COALESCE(s.zero_batteria, '') = 'Batteria prodotti scorrimento'
@@ -6495,373 +6492,135 @@ with st.container(key="sector_page_content"):
                 ORDER BY s.data DESC, COALESCE(s.ora, '') DESC, s.id DESC
             """)
 
-            zero_ref_labels = ["Nessuno / test indipendente"]
-            zero_ref_map = {"Nessuno / test indipendente": None}
+            zero_ref_labels = ["Nessuno"]
+            zero_ref_map = {"Nessuno": None}
             for _, ref in df_zero_ref.iterrows():
-                data_ref = str(ref.get("data") or "")
+                data_ref = str(ref.get("data") or "").strip()
                 luogo_ref = str(ref.get("luogo") or "").strip() or "—"
                 modello_ref = str(ref.get("zero_modello_sci") or "").strip()
-                suffisso_modello = f" · {modello_ref}" if modello_ref else ""
-                label = f"{data_ref} · {luogo_ref}{suffisso_modello} · #{int(ref['id'])}"
+                label = f"{data_ref} · {luogo_ref}"
+                if modello_ref:
+                    label += f" · {modello_ref}"
                 zero_ref_labels.append(label)
                 zero_ref_map[label] = int(ref["id"])
 
-            st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
-            st.markdown('<div class="insert-test-title">Test prodotti scorrimento</div>', unsafe_allow_html=True)
-            st.markdown(
-                '<div class="insert-test-caption">Registra una sessione di confronto tra prodotti. Se disponibile, collega lo Zero Test usato per scegliere i paia più simili.</div>',
-                unsafe_allow_html=True,
-            )
-
-            zero_ref_label = st.selectbox(
-                "Zero Test di riferimento",
-                zero_ref_labels,
-                key="insert_scroll_zero_reference",
-                help="Seleziona lo Zero Test della batteria prodotti scorrimento usato prima del confronto.",
-            )
+            with c_zero_ref:
+                zero_ref_label = st.selectbox(
+                    "Zero Test di riferimento",
+                    zero_ref_labels,
+                    key="insert_scroll_zero_reference",
+                    help=(
+                        "Solo riferimento informativo. La selezione non precompila i dati, "
+                        "non modifica i risultati e non attribuisce alcun vantaggio ai prodotti."
+                    ),
+                )
             zero_ref_id = zero_ref_map.get(zero_ref_label)
-            riga_ref = None
-            if zero_ref_id is not None and not df_zero_ref.empty:
-                m = df_zero_ref[df_zero_ref["id"].astype(int) == int(zero_ref_id)]
-                if not m.empty:
-                    riga_ref = m.iloc[0]
 
-            ref_suffix = f"ref_{int(zero_ref_id)}" if zero_ref_id is not None else "independent"
-
-            # Mostra i migliori accoppiamenti derivati dallo Zero Test.
             if zero_ref_id is not None:
-                df_ref_matrix = tabella_zero_test_da_risultati(zero_test_sessione(int(zero_ref_id)))
-                coppie_uniche = {}
-                for _, rr in df_ref_matrix.iterrows():
-                    a = rr.get("Paio")
-                    b = rr.get("Paio più simile")
-                    d = rr.get("Δ dal più simile (s)")
-                    if pd.isna(a) or pd.isna(b) or pd.isna(d):
-                        continue
-                    coppia = tuple(sorted((int(a), int(b))))
-                    if coppia[0] == coppia[1]:
-                        continue
-                    coppie_uniche[coppia] = min(float(d), coppie_uniche.get(coppia, float("inf")))
-                top_coppie = sorted(coppie_uniche.items(), key=lambda x: (x[1], x[0]))[:5]
-                if top_coppie:
-                    testo_coppie = " &nbsp; · &nbsp; ".join(
-                        f"<strong>{a} ↔ {b}</strong> <span style='color:#7a8a96'>Δ {d:.2f} s</span>"
-                        for (a, b), d in top_coppie
-                    )
-                    st.markdown(
-                        f'<div class="catalog-edit-notice"><strong>Coppie suggerite dallo Zero Test</strong><br>{testo_coppie}</div>',
-                        unsafe_allow_html=True,
-                    )
+                st.markdown(
+                    f'<div class="catalog-edit-notice"><strong>Zero Test collegato:</strong> {html_escape(zero_ref_label)}<br>'
+                    '<span style="color:#7a8a96">Riferimento esclusivamente informativo: i dati e i risultati del test prodotti restano indipendenti.</span></div>',
+                    unsafe_allow_html=True,
+                )
 
-            # Dati della sessione. Quando c'è uno Zero Test, vengono precompilati da quello.
-            st.markdown('<div class="insert-test-title" style="margin-top:1rem;">Dati sessione</div>', unsafe_allow_html=True)
-            st.markdown(
-                '<div class="insert-test-caption">I dati vengono precompilati dallo Zero Test selezionato e possono essere aggiornati se le condizioni sono cambiate.</div>',
-                unsafe_allow_html=True,
-            )
-
-            default_data = _safe_date_scroll(riga_ref.get("data") if riga_ref is not None else None)
-            default_ora = _safe_time_scroll(riga_ref.get("ora") if riga_ref is not None else None)
-            default_luogo = str(riga_ref.get("luogo") or "") if riga_ref is not None else ""
-            default_taria = _formatta_temperatura_1d(riga_ref.get("temperatura_aria") if riga_ref is not None else 0.0)
-            default_tneve = _formatta_temperatura_1d(riga_ref.get("temperatura_neve") if riga_ref is not None else 0.0)
-            default_ur_raw = riga_ref.get("umidita") if riga_ref is not None and "umidita" in riga_ref.index else None
-            default_ur_missing = bool(riga_ref is not None and pd.isna(default_ur_raw))
+            # 2. DATI SESSIONE - INDIPENDENTI DALLO ZERO TEST
+            st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
+            st.markdown("#### Dati sessione")
+            st.caption("Inserisci le condizioni effettive rilevate durante il test prodotti.")
 
             c1, c2, c3 = st.columns(3)
             with c1:
-                scroll_data = st.date_input("Data", value=default_data, key=f"scroll_date_{ref_suffix}")
-                scroll_luogo = st.text_input("Luogo *", value=default_luogo, key=f"scroll_place_{ref_suffix}")
+                scroll_data = st.date_input("Data", value=date.today(), key="scroll_date")
+                scroll_luogo = st.text_input("Luogo *", key="scroll_place", placeholder="es. Davos (SUI)")
             with c2:
-                scroll_ora = st.time_input("Ora", value=default_ora, key=f"scroll_time_{ref_suffix}")
-                scroll_taria_txt = st.text_input("Temperatura aria (°C)", value=default_taria, key=f"scroll_air_{ref_suffix}")
+                scroll_ora = st.time_input(
+                    "Ora",
+                    value=datetime.now().time().replace(second=0, microsecond=0),
+                    key="scroll_time",
+                )
+                scroll_taria_txt = st.text_input(
+                    "Temperatura aria (°C)",
+                    value="0.0",
+                    key="scroll_air",
+                    help="Usa il punto come separatore decimale, es. -3.0",
+                )
             with c3:
-                scroll_tneve_txt = st.text_input("Temperatura neve (°C)", value=default_tneve, key=f"scroll_snow_{ref_suffix}")
+                scroll_tneve_txt = st.text_input(
+                    "Temperatura neve (°C)",
+                    value="0.0",
+                    key="scroll_snow",
+                    help="Usa il punto come separatore decimale, es. -1.5",
+                )
                 scroll_ur_missing = st.checkbox(
                     "Umidità non disponibile",
-                    value=default_ur_missing,
-                    key=f"scroll_rh_missing_{ref_suffix}",
+                    key="scroll_rh_missing",
                 )
                 scroll_ur = st.number_input(
                     "Umidità relativa (%)",
                     min_value=0,
                     max_value=100,
-                    value=int(round(_safe_float_scroll(default_ur_raw if pd.notna(default_ur_raw) else 70, 70.0))),
+                    value=70,
                     step=1,
                     format="%d",
                     disabled=scroll_ur_missing,
-                    key=f"scroll_rh_{ref_suffix}",
+                    key="scroll_rh",
                 )
 
             c4, c5 = st.columns(2)
             with c4:
-                modello_default = str(riga_ref.get("zero_modello_sci") or "").strip() if riga_ref is not None else ""
                 scroll_modello_sci = st.text_input(
                     "Modello sci",
-                    value=modello_default,
-                    key=f"scroll_ski_model_{ref_suffix}",
+                    key="scroll_ski_model",
                     placeholder="es. Speedmax 3D",
                 )
             with c5:
-                meteo_default = str(riga_ref.get("meteo") or "").strip() if riga_ref is not None else ""
-                meteo_index = METEO_OPZIONI.index(meteo_default) if meteo_default in METEO_OPZIONI else None
                 scroll_meteo = st.selectbox(
                     "Meteo",
                     METEO_OPZIONI,
-                    index=meteo_index,
+                    index=None,
                     placeholder="Seleziona meteo",
-                    key=f"scroll_weather_{ref_suffix}",
+                    key="scroll_weather",
                 )
 
-            # Classificazione neve, precompilata dallo Zero Test ma modificabile.
+            # 3. CLASSIFICAZIONE NEVE - STESSO SISTEMA DELLO ZERO TEST
             st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
-            st.markdown('<div class="insert-test-title">Classificazione neve</div>', unsafe_allow_html=True)
-            st.markdown(
-                '<div class="insert-test-caption">Mantiene la stessa classificazione usata nel catalogo e nello Zero Test.</div>',
-                unsafe_allow_html=True,
-            )
-
-            def _ref_snow(colonna, gruppo):
-                valore = riga_ref.get(colonna) if riga_ref is not None and colonna in riga_ref.index else ""
-                return _valori_sessione_neve(valore, snow_options_scroll[gruppo])
+            st.markdown("#### Classificazione neve")
+            st.caption("Usa la stessa classificazione indipendente adottata nello Zero Test e nel catalogo scioline.")
 
             s1, s2, s3 = st.columns(3)
             with s1:
-                scroll_origine = st.multiselect("Origine", snow_options_scroll["Origine"], default=_ref_snow("snow_origine", "Origine"), key=f"scroll_origin_{ref_suffix}")
+                scroll_origine = st.multiselect(
+                    "Origine", snow_options_scroll["Origine"], key="scroll_origin"
+                )
             with s2:
-                scroll_consistenza = st.multiselect("Consistenza", snow_options_scroll["Consistenza"], default=_ref_snow("snow_consistenza", "Consistenza"), key=f"scroll_consistency_{ref_suffix}")
+                scroll_consistenza = st.multiselect(
+                    "Consistenza", snow_options_scroll["Consistenza"], key="scroll_consistency"
+                )
             with s3:
-                scroll_umidita_neve = st.multiselect("Umidità neve", snow_options_scroll["Umidità neve"], default=_ref_snow("snow_umidita", "Umidità neve"), key=f"scroll_snow_humidity_{ref_suffix}")
-            s4, s5, s6 = st.columns(3)
-            with s4:
-                scroll_forma = st.multiselect("Forma grano", snow_options_scroll["Forma grano"], default=_ref_snow("snow_forma_grano", "Forma grano"), key=f"scroll_grain_{ref_suffix}")
-            with s5:
-                scroll_granulometria = st.multiselect("Granulometria", snow_options_scroll["Granulometria"], default=_ref_snow("snow_granulometria", "Granulometria"), key=f"scroll_size_{ref_suffix}")
-            with s6:
-                scroll_caratteristiche = st.multiselect("Caratteristiche", snow_options_scroll["Caratteristiche"], default=_ref_snow("snow_caratteristiche", "Caratteristiche"), key=f"scroll_features_{ref_suffix}")
-
-            # Metodo e prodotti disponibili.
-            st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
-            st.markdown('<div class="insert-test-title">Confronti prodotti</div>', unsafe_allow_html=True)
-            st.markdown(
-                '<div class="insert-test-caption">Una riga corrisponde a un confronto tra due preparazioni. I prodotti sono scelti direttamente dal catalogo prodotti di scorrimento.</div>',
-                unsafe_allow_html=True,
-            )
-
-            metodo_scroll = st.radio(
-                "Metodo di test",
-                ["Aste", "Parallel"],
-                horizontal=True,
-                key=f"scroll_method_{ref_suffix}",
-            )
-
-            df_prodotti_scroll = leggi_df("""
-                SELECT id, nome, marca, tipo
-                FROM catalogo_prodotti
-                WHERE categoria = 'scorrimento'
-                ORDER BY marca COLLATE NOCASE, nome COLLATE NOCASE
-            """)
-            if df_prodotti_scroll.empty:
-                st.warning("Non ci sono prodotti di scorrimento nel catalogo. Inseriscili prima di registrare il test.")
-                st.stop()
-
-            prodotto_label_to_id = {}
-            labels_base = []
-            for _, prod in df_prodotti_scroll.iterrows():
-                marca = str(prod.get("marca") or "").strip()
-                nome = str(prod.get("nome") or "").strip()
-                base = f"{marca} - {nome}" if marca else nome
-                labels_base.append(base)
-            duplicati = {v for v in labels_base if labels_base.count(v) > 1}
-            prodotto_labels = []
-            for _, prod in df_prodotti_scroll.iterrows():
-                marca = str(prod.get("marca") or "").strip()
-                nome = str(prod.get("nome") or "").strip()
-                base = f"{marca} - {nome}" if marca else nome
-                label = f"{base} · #{int(prod['id'])}" if base in duplicati else base
-                prodotto_labels.append(label)
-                prodotto_label_to_id[label] = int(prod["id"])
-
-            colonne_confronto = ["Paio A", "Prodotto A", "Paio B", "Prodotto B", "Risultato"]
-            if metodo_scroll == "Aste":
-                colonne_confronto.append("Vantaggio (aste)")
-            colonne_confronto += ["Chiarezza", "Note"]
-
-            righe_base = []
-            for _ in range(6):
-                r = {
-                    "Paio A": None,
-                    "Prodotto A": None,
-                    "Paio B": None,
-                    "Prodotto B": None,
-                    "Risultato": None,
-                    "Chiarezza": 3,
-                    "Note": "",
-                }
-                if metodo_scroll == "Aste":
-                    r["Vantaggio (aste)"] = 0.0
-                righe_base.append(r)
-            df_confronti = pd.DataFrame(righe_base)[colonne_confronto]
-
-            config_confronti = {
-                "Paio A": st.column_config.SelectboxColumn("Paio A", options=list(range(1, 11)), width="small"),
-                "Prodotto A": st.column_config.SelectboxColumn("Prodotto A", options=prodotto_labels, width="large", required=False),
-                "Paio B": st.column_config.SelectboxColumn("Paio B", options=list(range(1, 11)), width="small"),
-                "Prodotto B": st.column_config.SelectboxColumn("Prodotto B", options=prodotto_labels, width="large", required=False),
-                "Risultato": st.column_config.SelectboxColumn("Risultato", options=["A", "B", "Pari"], width="small"),
-                "Chiarezza": st.column_config.NumberColumn("Chiarezza", min_value=1, max_value=5, step=1, format="%d", width="small"),
-                "Note": st.column_config.TextColumn("Note", width="medium"),
-            }
-            if metodo_scroll == "Aste":
-                config_confronti["Vantaggio (aste)"] = st.column_config.NumberColumn(
-                    "Vantaggio (aste)", min_value=0.0, step=0.25, format="%.2f", width="small"
+                scroll_umidita_neve = st.multiselect(
+                    "Umidità neve", snow_options_scroll["Umidità neve"], key="scroll_snow_humidity"
                 )
 
-            editor_scroll = st.data_editor(
-                df_confronti,
-                use_container_width=True,
-                hide_index=True,
-                num_rows="dynamic",
-                key=f"scroll_comparisons_{ref_suffix}_{metodo_scroll}",
-                column_config=config_confronti,
+            s4, s5, s6 = st.columns(3)
+            with s4:
+                scroll_forma = st.multiselect(
+                    "Forma grano", snow_options_scroll["Forma grano"], key="scroll_grain"
+                )
+            with s5:
+                scroll_granulometria = st.multiselect(
+                    "Granulometria", snow_options_scroll["Granulometria"], key="scroll_size"
+                )
+            with s6:
+                scroll_caratteristiche = st.multiselect(
+                    "Caratteristiche", snow_options_scroll["Caratteristiche"], key="scroll_features"
+                )
+
+            st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
+            st.markdown("#### Prodotti testati")
+            st.info(
+                "La struttura base del test è pronta. Nel prossimo passaggio definiamo insieme "
+                "come inserire i prodotti e come registrare il risultato per Asta, Parallel e Fotocellula."
             )
-            st.caption("Puoi aggiungere o eliminare righe direttamente dalla tabella. A/B si riferiscono alle due colonne del confronto.")
-
-            scroll_note = st.text_area(
-                "Note generali test",
-                key=f"scroll_notes_{ref_suffix}",
-                placeholder="Tratto di pista, velocità, sensazioni generali, anomalie...",
-                height=85,
-            )
-
-            salva_scroll = st.button(
-                "Salva test prodotti scorrimento",
-                type="primary",
-                use_container_width=True,
-                key=f"save_scroll_test_{ref_suffix}",
-            )
-
-            if salva_scroll:
-                errori = []
-                if not scroll_luogo.strip():
-                    errori.append("Inserisci il luogo del test.")
-
-                confronti_validi = []
-                for idx, rr in editor_scroll.iterrows():
-                    prod_a = str(rr.get("Prodotto A") or "").strip()
-                    prod_b = str(rr.get("Prodotto B") or "").strip()
-                    paio_a = rr.get("Paio A")
-                    paio_b = rr.get("Paio B")
-                    risultato = str(rr.get("Risultato") or "").strip()
-                    riga_compilata = bool(prod_a or prod_b or pd.notna(paio_a) or pd.notna(paio_b) or risultato)
-                    if not riga_compilata:
-                        continue
-                    if not prod_a or not prod_b or pd.isna(paio_a) or pd.isna(paio_b) or not risultato:
-                        errori.append(f"Completa tutti i campi principali del confronto {idx + 1}.")
-                        continue
-                    if int(paio_a) == int(paio_b):
-                        errori.append(f"Nel confronto {idx + 1} seleziona due paia diversi.")
-                        continue
-                    if prod_a == prod_b:
-                        errori.append(f"Nel confronto {idx + 1} seleziona due prodotti diversi.")
-                        continue
-                    confronti_validi.append({
-                        "paio_a": int(paio_a),
-                        "prodotto_a": prod_a,
-                        "paio_b": int(paio_b),
-                        "prodotto_b": prod_b,
-                        "risultato": risultato,
-                        "vantaggio": float(rr.get("Vantaggio (aste)") or 0.0) if metodo_scroll == "Aste" else None,
-                        "chiarezza": int(rr.get("Chiarezza") or 3),
-                        "note": str(rr.get("Note") or "").strip(),
-                    })
-
-                if not confronti_validi:
-                    errori.append("Inserisci almeno un confronto completo.")
-
-                if errori:
-                    for errore in errori:
-                        st.error(errore)
-                else:
-                    classificazione = {
-                        "snow_origine": _compatta_neve_sessione(scroll_origine, snow_options_scroll["Origine"]),
-                        "snow_consistenza": _compatta_neve_sessione(scroll_consistenza, snow_options_scroll["Consistenza"]),
-                        "snow_umidita": _compatta_neve_sessione(scroll_umidita_neve, snow_options_scroll["Umidità neve"]),
-                        "snow_forma_grano": _compatta_neve_sessione(scroll_forma, snow_options_scroll["Forma grano"]),
-                        "snow_granulometria": _compatta_neve_sessione(scroll_granulometria, snow_options_scroll["Granulometria"]),
-                        "snow_caratteristiche": _compatta_neve_sessione(scroll_caratteristiche, snow_options_scroll["Caratteristiche"]),
-                    }
-                    conn = apri_connessione_database()
-                    try:
-                        cur = conn.execute(
-                            """
-                            INSERT INTO sessioni (
-                                data, ora, luogo, temperatura_aria, temperatura_neve,
-                                umidita, meteo, tipo_neve, condizione_pista,
-                                snow_origine, snow_consistenza, snow_umidita,
-                                snow_forma_grano, snow_granulometria, snow_caratteristiche,
-                                zero_modello_sci, tipo_test, zero_riferimento_id, note, creato_il
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, '', '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            """,
-                            (
-                                scroll_data.isoformat(),
-                                scroll_ora.strftime("%H:%M"),
-                                scroll_luogo.strip(),
-                                _parse_temperatura_1d(scroll_taria_txt),
-                                _parse_temperatura_1d(scroll_tneve_txt),
-                                None if scroll_ur_missing else int(scroll_ur),
-                                scroll_meteo or "",
-                                classificazione["snow_origine"],
-                                classificazione["snow_consistenza"],
-                                classificazione["snow_umidita"],
-                                classificazione["snow_forma_grano"],
-                                classificazione["snow_granulometria"],
-                                classificazione["snow_caratteristiche"],
-                                scroll_modello_sci.strip(),
-                                "Test prodotti scorrimento",
-                                int(zero_ref_id) if zero_ref_id is not None else None,
-                                scroll_note.strip(),
-                                datetime.now().isoformat(timespec="seconds"),
-                            ),
-                        )
-                        nuova_sessione = conn.execute("SELECT MAX(id) FROM sessioni").fetchone()
-                        sessione_id = int(nuova_sessione[0])
-
-                        for nr, confronto in enumerate(confronti_validi, start=1):
-                            conn.execute(
-                                """
-                                INSERT INTO test_materiali (
-                                    sessione_id, categoria, metodo, titolo,
-                                    sci_a_id, preparazione_a, sci_b_id, preparazione_b,
-                                    vincitore, vantaggio_aste, tempo_a, tempo_b, valutazione,
-                                    prodotto_a_id, prodotto_b_id, paio_a, paio_b, zero_sessione_id,
-                                    note, creato_il
-                                ) VALUES (?, 'Scorrimento', ?, ?, NULL, ?, NULL, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?)
-                                """,
-                                (
-                                    sessione_id,
-                                    metodo_scroll,
-                                    f"Confronto {nr}",
-                                    confronto["prodotto_a"],
-                                    confronto["prodotto_b"],
-                                    confronto["risultato"],
-                                    confronto["vantaggio"],
-                                    confronto["chiarezza"],
-                                    prodotto_label_to_id[confronto["prodotto_a"]],
-                                    prodotto_label_to_id[confronto["prodotto_b"]],
-                                    confronto["paio_a"],
-                                    confronto["paio_b"],
-                                    int(zero_ref_id) if zero_ref_id is not None else None,
-                                    confronto["note"],
-                                    datetime.now().isoformat(timespec="seconds"),
-                                ),
-                            )
-                        conn.commit()
-                    finally:
-                        conn.close()
-                    _invalida_cache_dati()
-                    st.session_state["scroll_test_notice"] = f"Test prodotti scorrimento salvato: {len(confronti_validi)} confronti."
-                    st.success(st.session_state["scroll_test_notice"])
             st.stop()
 
         if tipo_inserimento_test != "Zero test":
