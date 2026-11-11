@@ -313,7 +313,7 @@ def inizializza_database():
         SET snow_consistenza = REPLACE(
             snow_consistenza,
             'Soffice su superficie dura',
-            'Soffice su fondo ghiacciato'
+            'Molle su fondo compatto'
         )
         WHERE INSTR(COALESCE(snow_consistenza, ''), 'Soffice su superficie dura') > 0
     """)
@@ -322,9 +322,37 @@ def inizializza_database():
         SET tipo_neve = REPLACE(
             tipo_neve,
             'Soffice su superficie dura',
-            'Soffice su fondo ghiacciato'
+            'Molle su fondo compatto'
         )
         WHERE INSTR(COALESCE(tipo_neve, ''), 'Soffice su superficie dura') > 0
+    """)
+    # Uniformazione definitiva della consistenza neve nei dati storici.
+    conn.execute("""
+        UPDATE catalogo_prodotti
+        SET snow_consistenza = REPLACE(
+            snow_consistenza,
+            'Soffice su fondo ghiacciato',
+            'Molle su fondo compatto'
+        )
+        WHERE INSTR(COALESCE(snow_consistenza, ''), 'Soffice su fondo ghiacciato') > 0
+    """)
+    conn.execute("""
+        UPDATE catalogo_prodotti
+        SET tipo_neve = REPLACE(
+            tipo_neve,
+            'Soffice su fondo ghiacciato',
+            'Molle su fondo compatto'
+        )
+        WHERE INSTR(COALESCE(tipo_neve, ''), 'Soffice su fondo ghiacciato') > 0
+    """)
+    conn.execute("""
+        UPDATE sessioni
+        SET snow_consistenza = REPLACE(
+            snow_consistenza,
+            'Soffice su fondo ghiacciato',
+            'Molle su fondo compatto'
+        )
+        WHERE INSTR(COALESCE(snow_consistenza, ''), 'Soffice su fondo ghiacciato') > 0
     """)
 
     # I prodotti già dotati di temperatura ferro vengono interpretati
@@ -3558,7 +3586,7 @@ def pagina_trova_prodotto_migliore():
             "Sfarinata / Soffice",
             "Sgranata",
             "Ghiacciata",
-            "Soffice su fondo ghiacciato",
+            "Molle su fondo compatto",
             "Soffice su fondo compatto",
             "Molle",
         ],
@@ -3885,7 +3913,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
             "Sfarinata / Soffice",
             "Sgranata",
             "Ghiacciata",
-            "Soffice su fondo ghiacciato",
+            "Molle su fondo compatto",
             "Soffice su fondo compatto",
             "Molle",
         ],
@@ -6444,7 +6472,7 @@ with st.container(key="sector_page_content"):
                 "Origine": ["Naturale", "Artificiale", "Mista"],
                 "Consistenza": [
                     "Compatta", "Sfarinata / Soffice", "Sgranata", "Ghiacciata",
-                    "Soffice su fondo ghiacciato", "Soffice su fondo compatto", "Molle",
+                    "Molle su fondo compatto", "Soffice su fondo compatto", "Molle",
                 ],
                 "Umidità neve": ["Secca", "Umida", "Bagnata", "Molto bagnata"],
                 "Forma grano": [
@@ -6796,7 +6824,7 @@ with st.container(key="sector_page_content"):
             "Origine": ["Naturale", "Artificiale", "Mista"],
             "Consistenza": [
                 "Compatta", "Sfarinata / Soffice", "Sgranata", "Ghiacciata",
-                "Soffice su fondo ghiacciato", "Soffice su fondo compatto", "Molle",
+                "Molle su fondo compatto", "Soffice su fondo compatto", "Molle",
             ],
             "Umidità neve": ["Secca", "Umida", "Bagnata", "Molto bagnata"],
             "Forma grano": [
@@ -7320,7 +7348,7 @@ with st.container(key="sector_page_content"):
                 "Sfarinata / Soffice",
                 "Sgranata",
                 "Ghiacciata",
-                "Soffice su fondo ghiacciato",
+                "Molle su fondo compatto",
                 "Soffice su fondo compatto",
                 "Molle",
             ]
@@ -7928,7 +7956,7 @@ with st.container(key="sector_page_content"):
             },
             {
                 "Origine": "",
-                "Consistenza": "Soffice su fondo ghiacciato",
+                "Consistenza": "Molle su fondo compatto",
                 "Umidità": "",
                 "Forma grano": "Trasformata (grani arrotondati)",
                 "Granulometria": "",
