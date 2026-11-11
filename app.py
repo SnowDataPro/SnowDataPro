@@ -6579,10 +6579,8 @@ with st.container(key="sector_page_content"):
                     key="scroll_snow",
                     help="Usa il punto come separatore decimale, es. -1.5",
                 )
-                scroll_ur_missing = st.checkbox(
-                    "Umidità non disponibile",
-                    key="scroll_rh_missing",
-                )
+                if "scroll_rh_missing" not in st.session_state:
+                    st.session_state["scroll_rh_missing"] = False
                 scroll_ur = st.number_input(
                     "Umidità relativa (%)",
                     min_value=0,
@@ -6590,8 +6588,12 @@ with st.container(key="sector_page_content"):
                     value=70,
                     step=1,
                     format="%d",
-                    disabled=scroll_ur_missing,
+                    disabled=bool(st.session_state.get("scroll_rh_missing", False)),
                     key="scroll_rh",
+                )
+                scroll_ur_missing = st.checkbox(
+                    "Umidità non disponibile",
+                    key="scroll_rh_missing",
                 )
 
             c4, c5 = st.columns(2)
@@ -6645,10 +6647,97 @@ with st.container(key="sector_page_content"):
 
             st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
             st.markdown("#### Prodotti testati")
-            st.info(
-                "La struttura base del test è pronta. Nel prossimo passaggio definiamo insieme "
-                "come inserire i prodotti e come registrare il risultato per Asta, Parallel e Fotocellula."
-            )
+
+            if metodo_scroll == "Asta":
+                st.caption(
+                    "Imposta il numero di aste e compila una riga per ogni posizione. "
+                    "I prodotti sono selezionati direttamente dal catalogo SnowDataPro."
+                )
+
+                numero_aste = st.number_input(
+                    "Numero di aste",
+                    min_value=1,
+                    max_value=30,
+                    value=10,
+                    step=1,
+                    format="%d",
+                    key="scroll_num_rods",
+                    help="Definisce il numero di posizioni/righe da compilare nel test ad asta.",
+                )
+
+                df_catalogo_scroll = leggi_df("""
+                    SELECT id, nome, marca, tipo
+                    FROM catalogo_prodotti
+                    WHERE categoria = 'scorrimento'
+                    ORDER BY COALESCE(marca, ''), nome
+                """)
+
+                def _etichette_prodotti_scroll(tipi_ammessi):
+                    if df_catalogo_scroll.empty:
+                        return [""]
+                    filtro = df_catalogo_scroll[
+                        df_catalogo_scroll["tipo"].fillna("").isin(tipi_ammessi)
+                    ].copy()
+                    etichette = [""]
+                    for _, prodotto in filtro.iterrows():
+                        marca = str(prodotto.get("marca") or "").strip()
+                        nome = str(prodotto.get("nome") or "").strip()
+                        label = f"{marca} - {nome}" if marca else nome
+                        if label and label not in etichette:
+                            etichette.append(label)
+                    return etichette
+
+                opzioni_base = _etichette_prodotti_scroll(["Base"])
+                opzioni_paraffina = _etichette_prodotti_scroll(["Solida", "Polvere"])
+                opzioni_top = _etichette_prodotti_scroll(["Top finish", "Spray"])
+                opzioni_liquido = _etichette_prodotti_scroll(["Liquido tampone"])
+
+                n_aste = int(numero_aste)
+                df_aste = pd.DataFrame({
+                    "Posizione": list(range(1, n_aste + 1)),
+                    "Numero sci": [""] * n_aste,
+                    "Base": [""] * n_aste,
+                    "Paraffina": [""] * n_aste,
+                    "Top coating": [""] * n_aste,
+                    "Liquido": [""] * n_aste,
+                    "Note": [""] * n_aste,
+                })
+
+                st.data_editor(
+                    df_aste,
+                    key=f"scroll_rods_editor_{n_aste}",
+                    hide_index=True,
+                    use_container_width=True,
+                    height=min(650, 38 + n_aste * 36),
+                    disabled=["Posizione"],
+                    column_config={
+                        "Posizione": st.column_config.NumberColumn(
+                            "Posizione", format="%d", width="small"
+                        ),
+                        "Numero sci": st.column_config.TextColumn(
+                            "Numero sci", width="small"
+                        ),
+                        "Base": st.column_config.SelectboxColumn(
+                            "Base", options=opzioni_base, width="medium"
+                        ),
+                        "Paraffina": st.column_config.SelectboxColumn(
+                            "Paraffina", options=opzioni_paraffina, width="medium"
+                        ),
+                        "Top coating": st.column_config.SelectboxColumn(
+                            "Top coating", options=opzioni_top, width="medium"
+                        ),
+                        "Liquido": st.column_config.SelectboxColumn(
+                            "Liquido", options=opzioni_liquido, width="medium"
+                        ),
+                        "Note": st.column_config.TextColumn(
+                            "Note", width="large"
+                        ),
+                    },
+                )
+            else:
+                st.info(
+                    f"La struttura di inserimento per il test {metodo_scroll} verrà definita nel prossimo passaggio."
+                )
             st.stop()
 
         if tipo_inserimento_test != "Zero test":
@@ -6748,11 +6837,9 @@ with st.container(key="sector_page_content"):
             umidita_non_disponibile_default = bool(
                 riga_sessione is not None and pd.isna(umidita_db_zero)
             )
-            zero_ur_non_disponibile = st.checkbox(
-                "Umidità non disponibile",
-                value=umidita_non_disponibile_default,
-                key=f"insert_zero_rh_missing_{suffix_zero}",
-            )
+            zero_rh_missing_key = f"insert_zero_rh_missing_{suffix_zero}"
+            if zero_rh_missing_key not in st.session_state:
+                st.session_state[zero_rh_missing_key] = umidita_non_disponibile_default
             zero_ur = st.number_input(
                 "Umidità relativa (%)",
                 min_value=0,
@@ -6760,8 +6847,12 @@ with st.container(key="sector_page_content"):
                 value=int(round(_safe_float_zero(umidita_db_zero if pd.notna(umidita_db_zero) else 70, 70.0))),
                 step=1,
                 format="%d",
-                disabled=zero_ur_non_disponibile,
+                disabled=bool(st.session_state.get(zero_rh_missing_key, False)),
                 key=f"insert_zero_rh_{suffix_zero}",
+            )
+            zero_ur_non_disponibile = st.checkbox(
+                "Umidità non disponibile",
+                key=zero_rh_missing_key,
             )
 
         batteria_opzioni = [
