@@ -162,6 +162,26 @@ def inizializza_database():
     """)
 
     conn.execute("""
+        CREATE TABLE IF NOT EXISTS test_scorrimento_aste (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sessione_id INTEGER NOT NULL,
+            posizione INTEGER,
+            numero_sci TEXT,
+            base_prodotto_id INTEGER,
+            paraffina_prodotto_id INTEGER,
+            top_coating_prodotto_id INTEGER,
+            liquido_prodotto_id INTEGER,
+            note TEXT,
+            creato_il TEXT NOT NULL,
+            FOREIGN KEY(sessione_id) REFERENCES sessioni(id),
+            FOREIGN KEY(base_prodotto_id) REFERENCES catalogo_prodotti(id),
+            FOREIGN KEY(paraffina_prodotto_id) REFERENCES catalogo_prodotti(id),
+            FOREIGN KEY(top_coating_prodotto_id) REFERENCES catalogo_prodotti(id),
+            FOREIGN KEY(liquido_prodotto_id) REFERENCES catalogo_prodotti(id)
+        )
+    """)
+
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS test_tenuta (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             sessione_id INTEGER NOT NULL,
@@ -6689,6 +6709,14 @@ with st.container(key="sector_page_content"):
                     return etichette
 
                 opzioni_tutti_prodotti = _etichette_prodotti_scroll()
+                prodotto_id_da_label = {"—": None}
+                if not df_catalogo_scroll.empty:
+                    for _, prodotto in df_catalogo_scroll.iterrows():
+                        marca = str(prodotto.get("marca") or "").strip()
+                        nome = str(prodotto.get("nome") or "").strip()
+                        label = f"{marca} - {nome}" if marca else nome
+                        if label and label not in prodotto_id_da_label:
+                            prodotto_id_da_label[label] = int(prodotto["id"])
 
                 n_aste = int(numero_aste)
 
@@ -6798,6 +6826,125 @@ with st.container(key="sector_page_content"):
                         st.session_state[stato_tabella_key] = tab
                         st.session_state[versione_key] += 1
                         st.rerun()
+
+                st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
+                salva_scroll = st.button(
+                    "Salva test prodotti scorrimento",
+                    type="primary",
+                    use_container_width=True,
+                    key="save_scroll_rod_test",
+                )
+
+                if salva_scroll:
+                    if not str(scroll_luogo or "").strip():
+                        st.error("Inserisci il luogo del test.")
+                    else:
+                        try:
+                            temp_aria_val = _parse_temperatura_1d(scroll_taria_txt)
+                            temp_neve_val = _parse_temperatura_1d(scroll_tneve_txt)
+                        except Exception:
+                            st.error("Controlla temperatura aria e temperatura neve. Usa valori come -3.0 o 0.0.")
+                            st.stop()
+
+                        tab_da_salvare = st.session_state[stato_tabella_key].copy()
+                        righe_asta = []
+                        for _, riga in tab_da_salvare.iterrows():
+                            numero_sci = str(riga.get("Numero sci") or "").strip()
+                            base_label = str(riga.get("Base") or "—").strip()
+                            paraffina_label = str(riga.get("Paraffina") or "—").strip()
+                            top_label = str(riga.get("Top coating") or "—").strip()
+                            liquido_label = str(riga.get("Liquido") or "—").strip()
+                            note_riga = str(riga.get("Note") or "").strip()
+
+                            posizione_raw = riga.get("Posizione")
+                            posizione = None
+                            if posizione_raw is not None and not pd.isna(posizione_raw) and str(posizione_raw).strip():
+                                posizione = int(float(posizione_raw))
+
+                            # Salva solo righe realmente compilate. La posizione può essere aggiunta anche dopo.
+                            if not numero_sci and all(
+                                x in ("", "—", "None")
+                                for x in [base_label, paraffina_label, top_label, liquido_label]
+                            ) and not note_riga:
+                                continue
+
+                            righe_asta.append({
+                                "posizione": posizione,
+                                "numero_sci": numero_sci,
+                                "base_id": prodotto_id_da_label.get(base_label),
+                                "paraffina_id": prodotto_id_da_label.get(paraffina_label),
+                                "top_id": prodotto_id_da_label.get(top_label),
+                                "liquido_id": prodotto_id_da_label.get(liquido_label),
+                                "note": note_riga,
+                            })
+
+                        if not righe_asta:
+                            st.error("Compila almeno una riga della tabella prima di salvare il test.")
+                        else:
+                            conn = apri_connessione_database()
+                            try:
+                                cur = conn.execute(
+                                    """
+                                    INSERT INTO sessioni (
+                                        data, ora, luogo, temperatura_aria, temperatura_neve,
+                                        umidita, meteo, tipo_neve, condizione_pista,
+                                        snow_origine, snow_consistenza, snow_umidita,
+                                        snow_forma_grano, snow_granulometria, snow_caratteristiche,
+                                        zero_modello_sci, tipo_test, zero_riferimento_id, note, creato_il
+                                    ) VALUES (?, ?, ?, ?, ?, ?, ?, '', '', ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)
+                                    """,
+                                    (
+                                        scroll_data.isoformat(),
+                                        scroll_ora.strftime("%H:%M"),
+                                        str(scroll_luogo).strip(),
+                                        temp_aria_val,
+                                        temp_neve_val,
+                                        None if scroll_ur_missing else int(scroll_ur),
+                                        scroll_meteo or "",
+                                        _compatta_neve_sessione(scroll_origine, snow_options_scroll["Origine"]),
+                                        _compatta_neve_sessione(scroll_consistenza, snow_options_scroll["Consistenza"]),
+                                        _compatta_neve_sessione(scroll_umidita_neve, snow_options_scroll["Umidità neve"]),
+                                        _compatta_neve_sessione(scroll_forma, snow_options_scroll["Forma grano"]),
+                                        _compatta_neve_sessione(scroll_granulometria, snow_options_scroll["Granulometria"]),
+                                        _compatta_neve_sessione(scroll_caratteristiche, snow_options_scroll["Caratteristiche"]),
+                                        str(scroll_modello_sci or "").strip(),
+                                        f"Test prodotti scorrimento · {metodo_scroll}",
+                                        int(zero_ref_id) if zero_ref_id is not None else None,
+                                        datetime.now().isoformat(timespec="seconds"),
+                                    ),
+                                )
+                                sessione_scroll_id = int(cur.lastrowid)
+
+                                for riga in righe_asta:
+                                    conn.execute(
+                                        """
+                                        INSERT INTO test_scorrimento_aste (
+                                            sessione_id, posizione, numero_sci,
+                                            base_prodotto_id, paraffina_prodotto_id,
+                                            top_coating_prodotto_id, liquido_prodotto_id,
+                                            note, creato_il
+                                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                        """,
+                                        (
+                                            sessione_scroll_id,
+                                            riga["posizione"],
+                                            riga["numero_sci"],
+                                            riga["base_id"],
+                                            riga["paraffina_id"],
+                                            riga["top_id"],
+                                            riga["liquido_id"],
+                                            riga["note"],
+                                            datetime.now().isoformat(timespec="seconds"),
+                                        ),
+                                    )
+                                conn.commit()
+                            except Exception:
+                                conn.rollback()
+                                raise
+                            finally:
+                                conn.close()
+                            _invalida_cache_dati()
+                            st.success(f"Test prodotti scorrimento salvato correttamente · {len(righe_asta)} righe registrate.")
             else:
                 st.info(
                     f"La struttura di inserimento per il test {metodo_scroll} verrà definita nel prossimo passaggio."
