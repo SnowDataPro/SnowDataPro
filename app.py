@@ -6672,15 +6672,15 @@ with st.container(key="sector_page_content"):
                     ORDER BY COALESCE(marca, ''), nome
                 """)
 
-                def _etichette_prodotti_scroll(tipi_ammessi):
-                    # Le celle della tabella sono vere tendine collegate al catalogo SnowDataPro.
+                def _etichette_prodotti_scroll():
+                    # In ogni colonna (Base, Paraffina, Top coating, Liquido) è possibile
+                    # scegliere qualsiasi prodotto del catalogo di scorrimento. Le colonne
+                    # descrivono infatti il ruolo/strato usato nel test, non la categoria
+                    # commerciale assegnata al prodotto nel catalogo.
                     if df_catalogo_scroll.empty:
                         return ["—"]
-                    filtro = df_catalogo_scroll[
-                        df_catalogo_scroll["tipo"].fillna("").isin(tipi_ammessi)
-                    ].copy()
                     etichette = ["—"]
-                    for _, prodotto in filtro.iterrows():
+                    for _, prodotto in df_catalogo_scroll.iterrows():
                         marca = str(prodotto.get("marca") or "").strip()
                         nome = str(prodotto.get("nome") or "").strip()
                         label = f"{marca} - {nome}" if marca else nome
@@ -6688,10 +6688,7 @@ with st.container(key="sector_page_content"):
                             etichette.append(label)
                     return etichette
 
-                opzioni_base = _etichette_prodotti_scroll(["Base"])
-                opzioni_paraffina = _etichette_prodotti_scroll(["Solida", "Polvere"])
-                opzioni_top = _etichette_prodotti_scroll(["Top finish", "Spray"])
-                opzioni_liquido = _etichette_prodotti_scroll(["Liquido tampone"])
+                opzioni_tutti_prodotti = _etichette_prodotti_scroll()
 
                 n_aste = int(numero_aste)
 
@@ -6761,16 +6758,16 @@ with st.container(key="sector_page_content"):
                             help="Inserisci liberamente il codice dello sci, ad esempio 1A, 1B, 3A, 3B.",
                         ),
                         "Base": st.column_config.SelectboxColumn(
-                            "Base", options=opzioni_base, width="medium", required=False
+                            "Base", options=opzioni_tutti_prodotti, width="medium", required=False
                         ),
                         "Paraffina": st.column_config.SelectboxColumn(
-                            "Paraffina", options=opzioni_paraffina, width="medium", required=False
+                            "Paraffina", options=opzioni_tutti_prodotti, width="medium", required=False
                         ),
                         "Top coating": st.column_config.SelectboxColumn(
-                            "Top coating", options=opzioni_top, width="medium", required=False
+                            "Top coating", options=opzioni_tutti_prodotti, width="medium", required=False
                         ),
                         "Liquido": st.column_config.SelectboxColumn(
-                            "Liquido", options=opzioni_liquido, width="medium", required=False
+                            "Liquido", options=opzioni_tutti_prodotti, width="medium", required=False
                         ),
                         "Note": st.column_config.TextColumn(
                             "Note", width="large"
