@@ -7,6 +7,7 @@ import textwrap
 import base64
 from datetime import datetime, date
 import math
+import re
 from html import escape as html_escape
 
 # ============================================================
@@ -7116,6 +7117,17 @@ def _product_cell_html(nome, foto_data=None, foto_mime=None):
     )
 
 
+def _chiave_ordine_numero_sci(valore):
+    """Ordine naturale per codici sci come 1A, 1B, 2A, 10B; fallback alfabetico."""
+    testo = str(valore or "").strip()
+    if not testo:
+        return (10**9, "", "")
+    match = re.match(r"^\s*(\d+)\s*([A-Za-z]*)\s*(.*)$", testo)
+    if match:
+        return (int(match.group(1)), match.group(2).upper(), match.group(3).upper())
+    return (10**9 - 1, testo.upper(), "")
+
+
 def _render_test_scorrimento_detail_table(df_righe):
     """Tabella storico test scorrimento con foto prodotto e preview hover."""
     if df_righe is None or df_righe.empty:
@@ -7166,7 +7178,7 @@ def _render_test_scorrimento_detail_table(df_righe):
         .scroll-test-table th:nth-child(6), .scroll-test-table td:nth-child(6) { width: 190px; }
         .scroll-test-table th:nth-child(7), .scroll-test-table td:nth-child(7) { width: 220px; }
         .test-product-cell {
-            min-height: 92px;
+            min-height: 72px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -7180,13 +7192,13 @@ def _render_test_scorrimento_detail_table(df_righe):
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 60px;
-            height: 60px;
+            width: 42px;
+            height: 42px;
             z-index: 5;
         }
         .test-product-thumb {
-            width: 58px;
-            height: 58px;
+            width: 40px;
+            height: 40px;
             object-fit: contain;
             display: block;
             border-radius: 8px;
@@ -7198,17 +7210,17 @@ def _render_test_scorrimento_detail_table(df_righe):
         .test-product-hover-preview {
             position: absolute;
             left: 50%;
-            bottom: calc(100% + 10px);
+            bottom: calc(100% + 12px);
             transform: translate(-50%, 8px) scale(.96);
             opacity: 0;
             visibility: hidden;
-            width: 190px;
-            height: 190px;
-            padding: 10px;
+            width: 320px;
+            height: 320px;
+            padding: 14px;
             background: #fff;
             border: 1px solid #cfd6dc;
             border-radius: 12px;
-            box-shadow: 0 14px 36px rgba(31,41,51,.24);
+            box-shadow: 0 18px 48px rgba(31,41,51,.30);
             pointer-events: none;
             z-index: 9999;
             transition: opacity .14s ease, transform .14s ease, visibility .14s ease;
@@ -8121,12 +8133,57 @@ with st.container(key="sector_page_content"):
                         LEFT JOIN catalogo_prodotti pt ON pt.id = a.top_coating_prodotto_id
                         LEFT JOIN catalogo_prodotti pl ON pl.id = a.liquido_prodotto_id
                         WHERE a.sessione_id = ?
-                        ORDER BY CASE WHEN a.posizione IS NULL THEN 1 ELSE 0 END, a.posizione, a.id
+                        ORDER BY a.id
                         """, (sid,)
                     )
                     if not df_righe.empty:
                         st.markdown("##### Dettaglio test")
-                        _render_test_scorrimento_detail_table(df_righe)
+
+                        ordine_key = f"scroll_history_order_{sid}"
+                        if ordine_key not in st.session_state:
+                            st.session_state[ordine_key] = "sci"
+
+                        ord1, ord2, ord_spacer = st.columns([1.35, 1.15, 4.5])
+                        with ord1:
+                            if st.button(
+                                "↕ Riordina per classifica",
+                                use_container_width=True,
+                                key=f"scroll_history_rank_{sid}",
+                            ):
+                                st.session_state[ordine_key] = "classifica"
+                                st.rerun()
+                        with ord2:
+                            if st.button(
+                                "↺ Ordine sci",
+                                use_container_width=True,
+                                key=f"scroll_history_ski_{sid}",
+                            ):
+                                st.session_state[ordine_key] = "sci"
+                                st.rerun()
+
+                        df_righe_visual = df_righe.copy()
+                        if st.session_state.get(ordine_key) == "classifica":
+                            df_righe_visual["_pos_sort"] = pd.to_numeric(
+                                df_righe_visual["posizione"], errors="coerce"
+                            )
+                            df_righe_visual = df_righe_visual.sort_values(
+                                by=["_pos_sort"], na_position="last", kind="stable"
+                            ).drop(columns=["_pos_sort"]).reset_index(drop=True)
+                        else:
+                            df_righe_visual["_ski_sort"] = df_righe_visual["numero_sci"].apply(
+                                _chiave_ordine_numero_sci
+                            )
+                            df_righe_visual = df_righe_visual.sort_values(
+                                by=["_ski_sort"], kind="stable"
+                            ).drop(columns=["_ski_sort"]).reset_index(drop=True)
+
+                        stato_ordine = (
+                            "Classifica per posizione"
+                            if st.session_state.get(ordine_key) == "classifica"
+                            else "Ordine per numero sci"
+                        )
+                        st.caption(f"Visualizzazione: {stato_ordine}")
+                        _render_test_scorrimento_detail_table(df_righe_visual)
 
                     if st.button("Elimina test", icon=":material/delete:", use_container_width=True, key=f"delete_scroll_history_{sid}"):
                         st.session_state[f"confirm_delete_scroll_{sid}"] = True
