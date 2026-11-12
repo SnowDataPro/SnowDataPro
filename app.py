@@ -6673,12 +6673,13 @@ with st.container(key="sector_page_content"):
                 """)
 
                 def _etichette_prodotti_scroll(tipi_ammessi):
+                    # Le celle della tabella sono vere tendine collegate al catalogo SnowDataPro.
                     if df_catalogo_scroll.empty:
-                        return [""]
+                        return ["—"]
                     filtro = df_catalogo_scroll[
                         df_catalogo_scroll["tipo"].fillna("").isin(tipi_ammessi)
                     ].copy()
-                    etichette = [""]
+                    etichette = ["—"]
                     for _, prodotto in filtro.iterrows():
                         marca = str(prodotto.get("marca") or "").strip()
                         nome = str(prodotto.get("nome") or "").strip()
@@ -6693,47 +6694,113 @@ with st.container(key="sector_page_content"):
                 opzioni_liquido = _etichette_prodotti_scroll(["Liquido tampone"])
 
                 n_aste = int(numero_aste)
-                df_aste = pd.DataFrame({
-                    "Posizione": list(range(1, n_aste + 1)),
-                    "Numero sci": [""] * n_aste,
-                    "Base": [""] * n_aste,
-                    "Paraffina": [""] * n_aste,
-                    "Top coating": [""] * n_aste,
-                    "Liquido": [""] * n_aste,
-                    "Note": [""] * n_aste,
-                })
 
-                st.data_editor(
+                def _tabella_aste_vuota(n):
+                    return pd.DataFrame({
+                        "_ordine_inserimento": list(range(n)),
+                        "Posizione": [None] * n,
+                        "Numero sci": [""] * n,
+                        "Base": ["—"] * n,
+                        "Paraffina": ["—"] * n,
+                        "Top coating": ["—"] * n,
+                        "Liquido": ["—"] * n,
+                        "Note": [""] * n,
+                    })
+
+                stato_tabella_key = "scroll_rods_table_data"
+                stato_n_key = "scroll_rods_table_n"
+                versione_key = "scroll_rods_table_version"
+
+                if versione_key not in st.session_state:
+                    st.session_state[versione_key] = 0
+
+                # Se cambia il numero di aste, preserva quanto già inserito nelle righe esistenti.
+                if (
+                    stato_tabella_key not in st.session_state
+                    or st.session_state.get(stato_n_key) != n_aste
+                ):
+                    nuova_tabella = _tabella_aste_vuota(n_aste)
+                    precedente = st.session_state.get(stato_tabella_key)
+                    if isinstance(precedente, pd.DataFrame) and not precedente.empty:
+                        precedente = precedente.copy().reset_index(drop=True)
+                        # Se cambia il numero di aste, conserva le righe già compilate
+                        # seguendo l'ordine originario di inserimento, non il nome dello sci.
+                        if "_ordine_inserimento" in precedente.columns:
+                            precedente = precedente.sort_values("_ordine_inserimento", kind="stable").reset_index(drop=True)
+                        righe_da_copiare = min(len(precedente), n_aste)
+                        for idx in range(righe_da_copiare):
+                            for col in ["Posizione", "Numero sci", "Base", "Paraffina", "Top coating", "Liquido", "Note"]:
+                                if col in precedente.columns:
+                                    nuova_tabella.at[idx, col] = precedente.at[idx, col]
+                    st.session_state[stato_tabella_key] = nuova_tabella
+                    st.session_state[stato_n_key] = n_aste
+                    st.session_state[versione_key] += 1
+
+                df_aste = st.session_state[stato_tabella_key].copy()
+
+                tabella_editata = st.data_editor(
                     df_aste,
-                    key=f"scroll_rods_editor_{n_aste}",
+                    key=f"scroll_rods_editor_{n_aste}_{st.session_state[versione_key]}",
                     hide_index=True,
                     use_container_width=True,
                     height=min(650, 38 + n_aste * 36),
-                    disabled=["Posizione"],
                     column_config={
+                        "_ordine_inserimento": None,
                         "Posizione": st.column_config.NumberColumn(
-                            "Posizione", format="%d", width="small"
+                            "Posizione",
+                            min_value=1,
+                            max_value=n_aste,
+                            step=1,
+                            format="%d",
+                            width="small",
+                            help="Inserisci la posizione ottenuta nel test. Puoi poi riordinare la tabella per classifica.",
                         ),
                         "Numero sci": st.column_config.TextColumn(
-                            "Numero sci", width="small"
+                            "Numero sci",
+                            width="small",
+                            help="Inserisci liberamente il codice dello sci, ad esempio 1A, 1B, 3A, 3B.",
                         ),
                         "Base": st.column_config.SelectboxColumn(
-                            "Base", options=opzioni_base, width="medium"
+                            "Base", options=opzioni_base, width="medium", required=False
                         ),
                         "Paraffina": st.column_config.SelectboxColumn(
-                            "Paraffina", options=opzioni_paraffina, width="medium"
+                            "Paraffina", options=opzioni_paraffina, width="medium", required=False
                         ),
                         "Top coating": st.column_config.SelectboxColumn(
-                            "Top coating", options=opzioni_top, width="medium"
+                            "Top coating", options=opzioni_top, width="medium", required=False
                         ),
                         "Liquido": st.column_config.SelectboxColumn(
-                            "Liquido", options=opzioni_liquido, width="medium"
+                            "Liquido", options=opzioni_liquido, width="medium", required=False
                         ),
                         "Note": st.column_config.TextColumn(
                             "Note", width="large"
                         ),
                     },
                 )
+                st.session_state[stato_tabella_key] = tabella_editata.copy()
+
+                c_ordina, c_reset, c_spazio = st.columns([1.4, 1.4, 4])
+                with c_ordina:
+                    if st.button("↕ Riordina per classifica", use_container_width=True, key="scroll_sort_by_rank"):
+                        tab = st.session_state[stato_tabella_key].copy()
+                        # Le posizioni mancanti rimangono in fondo; le altre vengono ordinate 1,2,3...
+                        tab["_pos_sort"] = pd.to_numeric(tab["Posizione"], errors="coerce")
+                        tab = tab.sort_values(
+                            by=["_pos_sort", "_ordine_inserimento"],
+                            na_position="last",
+                            kind="stable",
+                        ).drop(columns=["_pos_sort"]).reset_index(drop=True)
+                        st.session_state[stato_tabella_key] = tab
+                        st.session_state[versione_key] += 1
+                        st.rerun()
+
+                with c_reset:
+                    if st.button("↺ Ripristina ordine inserimento", use_container_width=True, key="scroll_reset_ski_order"):
+                        tab = st.session_state[stato_tabella_key].copy()
+                        tab = tab.sort_values("_ordine_inserimento", kind="stable").reset_index(drop=True)
+                        st.session_state[stato_tabella_key] = tab
+                        st.session_state[versione_key] += 1
+                        st.rerun()
             else:
                 st.info(
                     f"La struttura di inserimento per il test {metodo_scroll} verrà definita nel prossimo passaggio."
