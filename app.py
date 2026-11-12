@@ -7092,30 +7092,28 @@ pagina = st.session_state["pagina"]
 
 
 def _product_cell_html(nome, foto_data=None, foto_mime=None):
-    """Cella prodotto compatta con miniatura e preview al passaggio del mouse."""
+    """Cella prodotto compatta: solo nome, con preview grande al passaggio del mouse."""
     nome_pulito = str(nome or "—").strip() or "—"
     if nome_pulito == "—":
         return '<div class="test-product-empty">—</div>'
 
-    immagine_html = ""
+    preview_html = ""
     valore_foto = str(foto_data or "").strip()
     if valore_foto:
         mime = str(foto_mime or "image/png").strip() or "image/png"
         src = f"data:{html_escape(mime)};base64,{valore_foto}"
-        immagine_html = (
-            '<div class="test-product-image-wrap">'
-            f'<img class="test-product-thumb" src="{src}" alt="{html_escape(nome_pulito)}">'
+        preview_html = (
             f'<div class="test-product-hover-preview"><img src="{src}" alt="{html_escape(nome_pulito)}"></div>'
-            '</div>'
         )
 
     return (
         '<div class="test-product-cell">'
-        f'{immagine_html}'
+        '<div class="test-product-hover-target">'
         f'<div class="test-product-name">{html_escape(nome_pulito)}</div>'
+        f'{preview_html}'
+        '</div>'
         '</div>'
     )
-
 
 def _chiave_ordine_numero_sci(valore):
     """Ordine naturale per codici sci come 1A, 1B, 2A, 10B; fallback alfabetico."""
@@ -7129,7 +7127,7 @@ def _chiave_ordine_numero_sci(valore):
 
 
 def _render_test_scorrimento_detail_table(df_righe):
-    """Tabella storico test scorrimento con foto prodotto e preview hover."""
+    """Tabella storico test scorrimento compatta con preview foto sul nome prodotto."""
     if df_righe is None or df_righe.empty:
         return
 
@@ -7178,51 +7176,36 @@ def _render_test_scorrimento_detail_table(df_righe):
         .scroll-test-table th:nth-child(6), .scroll-test-table td:nth-child(6) { width: 190px; }
         .scroll-test-table th:nth-child(7), .scroll-test-table td:nth-child(7) { width: 220px; }
         .test-product-cell {
-            min-height: 72px;
+            min-height: 42px;
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
-            gap: .34rem;
             text-align: center;
             position: relative;
         }
-        .test-product-image-wrap {
+        .test-product-hover-target {
             position: relative;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 42px;
-            height: 42px;
-            z-index: 5;
-        }
-        .test-product-thumb {
-            width: 40px;
-            height: 40px;
-            object-fit: contain;
-            display: block;
-            border-radius: 8px;
-            background: #fff;
-            border: 1px solid #edf0f2;
-            transition: box-shadow .16s ease, transform .16s ease;
+            display: inline-block;
+            max-width: 100%;
             cursor: zoom-in;
+            z-index: 5;
         }
         .test-product-hover-preview {
             position: absolute;
             left: 50%;
-            bottom: calc(100% + 12px);
-            transform: translate(-50%, 8px) scale(.96);
+            bottom: calc(100% + 14px);
+            transform: translate(-50%, 10px) scale(.95);
             opacity: 0;
             visibility: hidden;
-            width: 320px;
-            height: 320px;
-            padding: 14px;
-            background: #fff;
-            border: 1px solid #cfd6dc;
-            border-radius: 12px;
-            box-shadow: 0 18px 48px rgba(31,41,51,.30);
+            width: 420px;
+            height: 420px;
+            padding: 18px;
+            background: #ffffff;
+            border: 1px solid #c8d0d7;
+            border-radius: 14px;
+            box-shadow: 0 24px 64px rgba(31,41,51,.34);
             pointer-events: none;
-            z-index: 9999;
+            z-index: 99999;
             transition: opacity .14s ease, transform .14s ease, visibility .14s ease;
         }
         .test-product-hover-preview img {
@@ -7231,20 +7214,48 @@ def _render_test_scorrimento_detail_table(df_righe):
             object-fit: contain;
             display: block;
         }
-        .test-product-image-wrap:hover .test-product-hover-preview {
+        .test-product-hover-target:hover .test-product-hover-preview {
             opacity: 1;
             visibility: visible;
             transform: translate(-50%, 0) scale(1);
         }
-        .test-product-image-wrap:hover .test-product-thumb {
-            box-shadow: 0 4px 14px rgba(31,41,51,.16);
-            transform: translateY(-1px);
-        }
         .test-product-name {
-            line-height: 1.22;
+            line-height: 1.25;
             font-weight: 560;
             color: #263238;
             overflow-wrap: anywhere;
+            transition: color .14s ease;
+        }
+        .test-product-hover-target:hover .test-product-name {
+            color: #007ea8;
+        }
+        .scroll-test-table tbody tr.test-winner td {
+            background: #eef9fc;
+            border-top: 1px solid #90d7eb;
+            border-bottom: 1px solid #90d7eb;
+        }
+        .scroll-test-table tbody tr.test-winner td:first-child {
+            box-shadow: inset 4px 0 0 #00a7e1;
+            color: #005f7d;
+            font-weight: 800;
+        }
+        .scroll-test-table tbody tr.test-winner .test-product-name,
+        .scroll-test-table tbody tr.test-winner .scroll-test-note {
+            font-weight: 650;
+            color: #173744;
+        }
+        .winner-position {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 30px;
+            height: 30px;
+            padding: 0 .45rem;
+            border-radius: 999px;
+            background: #d9f3fa;
+            border: 1px solid #8ed8eb;
+            color: #005f7d;
+            font-weight: 800;
         }
         .test-product-empty { color: #9aa7b2; text-align:center; }
         .scroll-test-note { color:#52616b; line-height:1.35; white-space:normal; }
@@ -7264,15 +7275,27 @@ def _render_test_scorrimento_detail_table(df_righe):
             pos_txt = str(posizione)
         numero_sci = html_escape(str(record.get("numero_sci") or "—"))
         note = html_escape(str(record.get("note") or "—"))
+
+        is_winner = False
+        try:
+            is_winner = int(float(posizione)) == 1
+        except (TypeError, ValueError):
+            is_winner = str(posizione or "").strip() == "1"
+
+        row_class = ' class="test-winner"' if is_winner else ""
+        posizione_html = (
+            f'<span class="winner-position">{html_escape(pos_txt)}</span>'
+            if is_winner else html_escape(pos_txt)
+        )
         righe_html.append(
-            "<tr>"
-            f"<td>{html_escape(pos_txt)}</td>"
+            f"<tr{row_class}>"
+            f"<td>{posizione_html}</td>"
             f"<td>{numero_sci}</td>"
             f"<td>{_product_cell_html(record.get('base'), record.get('base_foto'), record.get('base_mime'))}</td>"
             f"<td>{_product_cell_html(record.get('paraffina'), record.get('paraffina_foto'), record.get('paraffina_mime'))}</td>"
             f"<td>{_product_cell_html(record.get('top_coating'), record.get('top_foto'), record.get('top_mime'))}</td>"
             f"<td>{_product_cell_html(record.get('liquido'), record.get('liquido_foto'), record.get('liquido_mime'))}</td>"
-            f"<td><div class=\"scroll-test-note\">{note}</div></td>"
+            f'<td><div class="scroll-test-note">{note}</div></td>'
             "</tr>"
         )
 
