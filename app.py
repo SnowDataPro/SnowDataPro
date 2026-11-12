@@ -7144,39 +7144,41 @@ def _render_test_scorrimento_detail_table(df_righe):
         }
         table.scroll-test-table {
             width: 100%;
-            min-width: 1100px;
+            min-width: 930px;
             border-collapse: separate;
             border-spacing: 0;
             table-layout: fixed;
             color: #1f2933;
-            font-size: .90rem;
+            font-size: .82rem;
         }
         .scroll-test-table th {
             background: #eef1f4;
             color: #52616b;
             font-weight: 650;
             text-align: left;
-            padding: .72rem .65rem;
+            padding: .50rem .48rem;
             border-bottom: 1px solid #d8dde3;
             white-space: nowrap;
+            line-height: 1.15;
         }
         .scroll-test-table td {
-            padding: .72rem .65rem;
+            padding: .46rem .48rem;
             border-bottom: 1px solid #e3e7eb;
             vertical-align: middle;
             overflow: visible;
             position: relative;
+            line-height: 1.18;
         }
         .scroll-test-table tr:last-child td { border-bottom: 0; }
-        .scroll-test-table th:nth-child(1), .scroll-test-table td:nth-child(1) { width: 72px; text-align:center; }
-        .scroll-test-table th:nth-child(2), .scroll-test-table td:nth-child(2) { width: 105px; }
+        .scroll-test-table th:nth-child(1), .scroll-test-table td:nth-child(1) { width: 62px; text-align:center; }
+        .scroll-test-table th:nth-child(2), .scroll-test-table td:nth-child(2) { width: 88px; }
         .scroll-test-table th:nth-child(3), .scroll-test-table td:nth-child(3),
         .scroll-test-table th:nth-child(4), .scroll-test-table td:nth-child(4),
         .scroll-test-table th:nth-child(5), .scroll-test-table td:nth-child(5),
-        .scroll-test-table th:nth-child(6), .scroll-test-table td:nth-child(6) { width: 190px; }
-        .scroll-test-table th:nth-child(7), .scroll-test-table td:nth-child(7) { width: 220px; }
+        .scroll-test-table th:nth-child(6), .scroll-test-table td:nth-child(6) { width: 158px; }
+        .scroll-test-table th:nth-child(7), .scroll-test-table td:nth-child(7) { width: 170px; }
         .test-product-cell {
-            min-height: 42px;
+            min-height: 30px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -7191,21 +7193,23 @@ def _render_test_scorrimento_detail_table(df_righe):
             z-index: 5;
         }
         .test-product-hover-preview {
-            position: absolute;
-            left: 50%;
-            bottom: calc(100% + 14px);
-            transform: translate(-50%, 10px) scale(.95);
+            position: fixed;
+            top: 132px;
+            right: 34px;
+            left: auto;
+            bottom: auto;
+            transform: translateY(10px) scale(.96);
             opacity: 0;
             visibility: hidden;
-            width: 420px;
-            height: 420px;
+            width: min(470px, 34vw);
+            height: min(470px, 60vh);
             padding: 18px;
             background: #ffffff;
             border: 1px solid #c8d0d7;
-            border-radius: 14px;
-            box-shadow: 0 24px 64px rgba(31,41,51,.34);
+            border-radius: 16px;
+            box-shadow: 0 28px 74px rgba(31,41,51,.38);
             pointer-events: none;
-            z-index: 99999;
+            z-index: 2147483000;
             transition: opacity .14s ease, transform .14s ease, visibility .14s ease;
         }
         .test-product-hover-preview img {
@@ -7217,11 +7221,12 @@ def _render_test_scorrimento_detail_table(df_righe):
         .test-product-hover-target:hover .test-product-hover-preview {
             opacity: 1;
             visibility: visible;
-            transform: translate(-50%, 0) scale(1);
+            transform: translateY(0) scale(1);
         }
         .test-product-name {
-            line-height: 1.25;
+            line-height: 1.18;
             font-weight: 560;
+            font-size: .80rem;
             color: #263238;
             overflow-wrap: anywhere;
             transition: color .14s ease;
@@ -7248,8 +7253,8 @@ def _render_test_scorrimento_detail_table(df_righe):
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            min-width: 30px;
-            height: 30px;
+            min-width: 26px;
+            height: 26px;
             padding: 0 .45rem;
             border-radius: 999px;
             background: #d9f3fa;
@@ -7258,7 +7263,7 @@ def _render_test_scorrimento_detail_table(df_righe):
             font-weight: 800;
         }
         .test-product-empty { color: #9aa7b2; text-align:center; }
-        .scroll-test-note { color:#52616b; line-height:1.35; white-space:normal; }
+        .scroll-test-note { color:#52616b; line-height:1.22; white-space:normal; font-size:.79rem; }
         </style>
         """,
         unsafe_allow_html=True,
