@@ -7141,32 +7141,46 @@ def _render_test_scorrimento_detail_table(df_righe):
             border-radius: 12px;
             background: #ffffff;
             margin-top: .35rem;
+            position: relative;
+            z-index: 1;
+        }
+        .scroll-test-table tbody tr {
+            position: relative;
+            z-index: 1;
+        }
+        .scroll-test-table tbody tr:has(.test-product-hover-target:hover) {
+            z-index: 2147483646 !important;
         }
         table.scroll-test-table {
             width: 100%;
-            min-width: 930px;
+            min-width: 900px;
             border-collapse: separate;
             border-spacing: 0;
             table-layout: fixed;
-            color: #1f2933;
-            font-size: .82rem;
+            color: #263238;
+            font-size: .80rem;
+            font-weight: 500;
         }
         .scroll-test-table th {
             background: #eef1f4;
             color: #52616b;
+            font-size: .80rem;
             font-weight: 650;
             text-align: left;
-            padding: .50rem .48rem;
+            padding: .46rem .44rem;
             border-bottom: 1px solid #d8dde3;
             white-space: nowrap;
             line-height: 1.15;
         }
         .scroll-test-table td {
-            padding: .46rem .48rem;
+            padding: .42rem .44rem;
             border-bottom: 1px solid #e3e7eb;
             vertical-align: middle;
             overflow: visible;
             position: relative;
+            color: #263238;
+            font-size: .80rem;
+            font-weight: 500;
             line-height: 1.18;
         }
         .scroll-test-table tr:last-child td { border-bottom: 0; }
@@ -7190,27 +7204,33 @@ def _render_test_scorrimento_detail_table(df_righe):
             display: inline-block;
             max-width: 100%;
             cursor: zoom-in;
-            z-index: 5;
+            z-index: auto;
+        }
+        .scroll-test-table tr:has(.test-product-hover-target:hover),
+        .scroll-test-table td:has(.test-product-hover-target:hover),
+        .test-product-hover-target:hover {
+            z-index: 2147483646 !important;
         }
         .test-product-hover-preview {
             position: fixed;
-            top: 132px;
-            right: 34px;
+            top: 138px;
+            right: 32px;
             left: auto;
             bottom: auto;
-            transform: translateY(10px) scale(.96);
+            transform: translateY(8px) scale(.97);
             opacity: 0;
             visibility: hidden;
-            width: min(470px, 34vw);
-            height: min(470px, 60vh);
-            padding: 18px;
+            width: min(410px, 30vw);
+            height: min(410px, 52vh);
+            padding: 14px;
             background: #ffffff;
             border: 1px solid #c8d0d7;
-            border-radius: 16px;
-            box-shadow: 0 28px 74px rgba(31,41,51,.38);
+            border-radius: 15px;
+            box-shadow: 0 24px 64px rgba(31,41,51,.34);
             pointer-events: none;
-            z-index: 2147483000;
-            transition: opacity .14s ease, transform .14s ease, visibility .14s ease;
+            isolation: isolate;
+            z-index: 2147483647 !important;
+            transition: opacity .12s ease, transform .12s ease, visibility .12s ease;
         }
         .test-product-hover-preview img {
             width: 100%;
@@ -7225,11 +7245,11 @@ def _render_test_scorrimento_detail_table(df_righe):
         }
         .test-product-name {
             line-height: 1.18;
-            font-weight: 560;
+            font-weight: 500;
             font-size: .80rem;
             color: #263238;
             overflow-wrap: anywhere;
-            transition: color .14s ease;
+            transition: color .12s ease;
         }
         .test-product-hover-target:hover .test-product-name {
             color: #007ea8;
@@ -7262,8 +7282,19 @@ def _render_test_scorrimento_detail_table(df_righe):
             color: #005f7d;
             font-weight: 800;
         }
-        .test-product-empty { color: #9aa7b2; text-align:center; }
-        .scroll-test-note { color:#52616b; line-height:1.22; white-space:normal; font-size:.79rem; }
+        .test-product-empty {
+            color: #9aa7b2;
+            text-align: center;
+            font-size: .80rem;
+            font-weight: 500;
+        }
+        .scroll-test-note {
+            color: #263238;
+            line-height: 1.18;
+            white-space: normal;
+            font-size: .80rem;
+            font-weight: 500;
+        }
         </style>
         """,
         unsafe_allow_html=True,
