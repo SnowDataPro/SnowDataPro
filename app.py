@@ -8151,29 +8151,6 @@ with st.container(key="sector_page_content"):
                 metodo = str(test.get("tipo_test") or "Test prodotti scorrimento").replace("Test prodotti scorrimento · ", "")
                 titolo = f"{data_label} · {luogo} · {metodo}"
                 with st.expander(titolo):
-                    c1, c2, c3, c4 = st.columns(4)
-                    with c1:
-                        st.metric("Metodo", metodo)
-                    with c2:
-                        st.metric("Righe test", int(test.get("righe_test") or 0))
-                    with c3:
-                        st.metric("T aria", _formatta_temperatura_1d(test.get("temperatura_aria")))
-                    with c4:
-                        st.metric("T neve", _formatta_temperatura_1d(test.get("temperatura_neve")))
-
-                    st.markdown("##### Sessione")
-                    sc1, sc2, sc3 = st.columns(3)
-                    with sc1:
-                        st.write(f"**Data:** {data_label}")
-                        st.write(f"**Luogo:** {luogo}")
-                    with sc2:
-                        st.write(f"**Ora:** {str(test.get('ora') or '—')[:5]}")
-                        st.write(f"**Meteo:** {str(test.get('meteo') or '—')}")
-                    with sc3:
-                        ur = test.get("umidita")
-                        st.write(f"**UR:** {'—' if pd.isna(ur) else str(int(round(float(ur)))) + ' %'}")
-                        st.write(f"**Modello sci:** {str(test.get('zero_modello_sci') or '—')}")
-
                     df_righe = leggi_df(
                         """
                         SELECT a.posizione, a.numero_sci,
@@ -8195,6 +8172,91 @@ with st.container(key="sector_page_content"):
                         ORDER BY a.id
                         """, (sid,)
                     )
+                    combinazioni_testate = len(df_righe) if not df_righe.empty else int(test.get("righe_test") or 0)
+
+                    c1, c2, c3, c4 = st.columns(4)
+                    with c1:
+                        st.metric("Metodo test", metodo)
+                    with c2:
+                        st.metric("Prodotti/combinazioni testati", combinazioni_testate)
+                    with c3:
+                        st.metric("T aria °C", _formatta_temperatura_1d(test.get("temperatura_aria")))
+                    with c4:
+                        st.metric("T neve °C", _formatta_temperatura_1d(test.get("temperatura_neve")))
+
+                    st.markdown("##### Sessione")
+                    sc1, sc2, sc3 = st.columns(3)
+                    with sc1:
+                        st.write(f"**Data:** {data_label}")
+                        st.write(f"**Luogo:** {luogo}")
+                    with sc2:
+                        st.write(f"**Ora:** {str(test.get('ora') or '—')[:5]}")
+                        st.write(f"**Meteo:** {str(test.get('meteo') or '—')}")
+                    with sc3:
+                        ur = test.get("umidita")
+                        st.write(f"**UR:** {'—' if pd.isna(ur) else str(int(round(float(ur)))) + ' %'}")
+                        st.write(f"**Modello sci:** {str(test.get('zero_modello_sci') or '—')}")
+
+                    st.markdown(
+                        """
+                        <style>
+                        .scroll-snow-classification {
+                            display: grid;
+                            grid-template-columns: repeat(3, minmax(0, 1fr));
+                            gap: 0.65rem;
+                            margin: 0.35rem 0 1rem 0;
+                        }
+                        .scroll-snow-classification-item {
+                            background: #f7f9fa;
+                            border: 1px solid #d8dde3;
+                            border-radius: 10px;
+                            padding: 0.62rem 0.72rem;
+                            min-height: 66px;
+                        }
+                        .scroll-snow-classification-label {
+                            color: #7a8a96;
+                            font-size: 0.68rem;
+                            font-weight: 800;
+                            letter-spacing: 0.055em;
+                            text-transform: uppercase;
+                            margin-bottom: 0.2rem;
+                        }
+                        .scroll-snow-classification-value {
+                            color: #263238;
+                            font-size: 0.86rem;
+                            font-weight: 600;
+                            line-height: 1.35;
+                        }
+                        @media (max-width: 900px) {
+                            .scroll-snow-classification {
+                                grid-template-columns: 1fr;
+                            }
+                        }
+                        </style>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown("##### Tipologia neve")
+                    classificazione_scroll = [
+                        ("Origine", test.get("snow_origine")),
+                        ("Consistenza", test.get("snow_consistenza")),
+                        ("Umidità neve", test.get("snow_umidita")),
+                        ("Forma grano", test.get("snow_forma_grano")),
+                        ("Granulometria", test.get("snow_granulometria")),
+                        ("Caratteristiche", test.get("snow_caratteristiche")),
+                    ]
+                    class_html_scroll = '<div class="scroll-snow-classification">'
+                    for etichetta_scroll, valore_scroll in classificazione_scroll:
+                        valore_pulito_scroll = str(valore_scroll or "").strip() or "—"
+                        class_html_scroll += (
+                            '<div class="scroll-snow-classification-item">'
+                            f'<div class="scroll-snow-classification-label">{html_escape(etichetta_scroll)}</div>'
+                            f'<div class="scroll-snow-classification-value">{html_escape(valore_pulito_scroll)}</div>'
+                            '</div>'
+                        )
+                    class_html_scroll += '</div>'
+                    st.markdown(class_html_scroll, unsafe_allow_html=True)
+
                     if not df_righe.empty:
                         st.markdown("##### Dettaglio test")
 
