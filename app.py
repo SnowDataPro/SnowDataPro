@@ -7097,18 +7097,18 @@ def cambia_pagina(nome):
 logo_sidebar_path = os.path.join(BASE_DIR, "snowdatapro_logo_transparent.png")
 
 if os.path.exists(logo_sidebar_path):
-    # Logo più grande, sempre centrato e ben visibile.
-    col_logo_sx, col_logo, col_logo_dx = st.sidebar.columns([0.35, 5.3, 0.35])
+    # Stesse proporzioni e stessa centratura usate nella sidebar di Sector G2 Lab.
+    col_logo_sx, col_logo, col_logo_dx = st.sidebar.columns([1, 4, 1])
 
     with col_logo:
         st.image(
             logo_sidebar_path,
-            width=340,
+            width=250,
         )
 
-    # Spaziatura simile a Sector tra logo e Dashboard.
+    # Stessa distanza tra branding e primo elemento del menu di Sector G2 Lab.
     st.sidebar.markdown(
-        '<div style="height: 24px;"></div>',
+        '<div style="height: 28px;"></div>',
         unsafe_allow_html=True,
     )
 else:
@@ -7130,11 +7130,17 @@ if st.sidebar.button(
 
 with st.sidebar.expander(
     "Test",
+    expanded=pagina in [
+        "Zero test",
+        "Test prodotti scorrimento",
+        "Test scioline di tenuta",
+        "Test rigature manuali",
+    ],
     icon=":material/science:",
-    expanded=True,
 ):
     if st.button(
         "Zero test",
+        icon=":material/science:",
         key="menu_zero_test",
         use_container_width=True,
         type="primary" if pagina == "Zero test" else "secondary",
@@ -7143,6 +7149,7 @@ with st.sidebar.expander(
 
     if st.button(
         "Test prodotti scorrimento",
+        icon=":material/show_chart:",
         key="menu_test_scorrimento",
         use_container_width=True,
         type="primary" if pagina == "Test prodotti scorrimento" else "secondary",
@@ -7151,6 +7158,7 @@ with st.sidebar.expander(
 
     if st.button(
         "Test scioline di tenuta",
+        icon=":material/bolt:",
         key="menu_test_tenuta",
         use_container_width=True,
         type="primary" if pagina == "Test scioline di tenuta" else "secondary",
@@ -7159,6 +7167,7 @@ with st.sidebar.expander(
 
     if st.button(
         "Test rigature manuali",
+        icon=":material/build:",
         key="menu_test_rigature",
         use_container_width=True,
         type="primary" if pagina == "Test rigature manuali" else "secondary",
@@ -7168,15 +7177,16 @@ with st.sidebar.expander(
 
 with st.sidebar.expander(
     "Prodotti",
-    icon=":material/inventory_2:",
     expanded=pagina in [
         "Prodotti di scorrimento",
         "Scioline di tenuta",
         "Rigature manuali",
     ],
+    icon=":material/inventory_2:",
 ):
     if st.button(
         "Prodotti di scorrimento",
+        icon=":material/show_chart:",
         key="menu_prodotti_scorrimento",
         use_container_width=True,
         type="primary" if pagina == "Prodotti di scorrimento" else "secondary",
@@ -7185,6 +7195,7 @@ with st.sidebar.expander(
 
     if st.button(
         "Scioline di tenuta",
+        icon=":material/science:",
         key="menu_prodotti_tenuta",
         use_container_width=True,
         type="primary" if pagina == "Scioline di tenuta" else "secondary",
@@ -7193,6 +7204,7 @@ with st.sidebar.expander(
 
     if st.button(
         "Rigature manuali",
+        icon=":material/build:",
         key="menu_prodotti_rigature",
         use_container_width=True,
         type="primary" if pagina == "Rigature manuali" else "secondary",
