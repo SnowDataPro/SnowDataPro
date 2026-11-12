@@ -7089,6 +7089,189 @@ if "pagina" not in st.session_state:
 pagina = st.session_state["pagina"]
 
 
+
+def _product_cell_html(nome, foto_data=None, foto_mime=None):
+    """Cella prodotto compatta con miniatura e preview al passaggio del mouse."""
+    nome_pulito = str(nome or "—").strip() or "—"
+    if nome_pulito == "—":
+        return '<div class="test-product-empty">—</div>'
+
+    immagine_html = ""
+    valore_foto = str(foto_data or "").strip()
+    if valore_foto:
+        mime = str(foto_mime or "image/png").strip() or "image/png"
+        src = f"data:{html_escape(mime)};base64,{valore_foto}"
+        immagine_html = (
+            '<div class="test-product-image-wrap">'
+            f'<img class="test-product-thumb" src="{src}" alt="{html_escape(nome_pulito)}">'
+            f'<div class="test-product-hover-preview"><img src="{src}" alt="{html_escape(nome_pulito)}"></div>'
+            '</div>'
+        )
+
+    return (
+        '<div class="test-product-cell">'
+        f'{immagine_html}'
+        f'<div class="test-product-name">{html_escape(nome_pulito)}</div>'
+        '</div>'
+    )
+
+
+def _render_test_scorrimento_detail_table(df_righe):
+    """Tabella storico test scorrimento con foto prodotto e preview hover."""
+    if df_righe is None or df_righe.empty:
+        return
+
+    st.markdown(
+        """
+        <style>
+        .scroll-test-table-wrap {
+            overflow-x: auto;
+            overflow-y: visible;
+            border: 1px solid #d8dde3;
+            border-radius: 12px;
+            background: #ffffff;
+            margin-top: .35rem;
+        }
+        table.scroll-test-table {
+            width: 100%;
+            min-width: 1100px;
+            border-collapse: separate;
+            border-spacing: 0;
+            table-layout: fixed;
+            color: #1f2933;
+            font-size: .90rem;
+        }
+        .scroll-test-table th {
+            background: #eef1f4;
+            color: #52616b;
+            font-weight: 650;
+            text-align: left;
+            padding: .72rem .65rem;
+            border-bottom: 1px solid #d8dde3;
+            white-space: nowrap;
+        }
+        .scroll-test-table td {
+            padding: .72rem .65rem;
+            border-bottom: 1px solid #e3e7eb;
+            vertical-align: middle;
+            overflow: visible;
+            position: relative;
+        }
+        .scroll-test-table tr:last-child td { border-bottom: 0; }
+        .scroll-test-table th:nth-child(1), .scroll-test-table td:nth-child(1) { width: 72px; text-align:center; }
+        .scroll-test-table th:nth-child(2), .scroll-test-table td:nth-child(2) { width: 105px; }
+        .scroll-test-table th:nth-child(3), .scroll-test-table td:nth-child(3),
+        .scroll-test-table th:nth-child(4), .scroll-test-table td:nth-child(4),
+        .scroll-test-table th:nth-child(5), .scroll-test-table td:nth-child(5),
+        .scroll-test-table th:nth-child(6), .scroll-test-table td:nth-child(6) { width: 190px; }
+        .scroll-test-table th:nth-child(7), .scroll-test-table td:nth-child(7) { width: 220px; }
+        .test-product-cell {
+            min-height: 92px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: .34rem;
+            text-align: center;
+            position: relative;
+        }
+        .test-product-image-wrap {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 60px;
+            height: 60px;
+            z-index: 5;
+        }
+        .test-product-thumb {
+            width: 58px;
+            height: 58px;
+            object-fit: contain;
+            display: block;
+            border-radius: 8px;
+            background: #fff;
+            border: 1px solid #edf0f2;
+            transition: box-shadow .16s ease, transform .16s ease;
+            cursor: zoom-in;
+        }
+        .test-product-hover-preview {
+            position: absolute;
+            left: 50%;
+            bottom: calc(100% + 10px);
+            transform: translate(-50%, 8px) scale(.96);
+            opacity: 0;
+            visibility: hidden;
+            width: 190px;
+            height: 190px;
+            padding: 10px;
+            background: #fff;
+            border: 1px solid #cfd6dc;
+            border-radius: 12px;
+            box-shadow: 0 14px 36px rgba(31,41,51,.24);
+            pointer-events: none;
+            z-index: 9999;
+            transition: opacity .14s ease, transform .14s ease, visibility .14s ease;
+        }
+        .test-product-hover-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+        .test-product-image-wrap:hover .test-product-hover-preview {
+            opacity: 1;
+            visibility: visible;
+            transform: translate(-50%, 0) scale(1);
+        }
+        .test-product-image-wrap:hover .test-product-thumb {
+            box-shadow: 0 4px 14px rgba(31,41,51,.16);
+            transform: translateY(-1px);
+        }
+        .test-product-name {
+            line-height: 1.22;
+            font-weight: 560;
+            color: #263238;
+            overflow-wrap: anywhere;
+        }
+        .test-product-empty { color: #9aa7b2; text-align:center; }
+        .scroll-test-note { color:#52616b; line-height:1.35; white-space:normal; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    righe_html = []
+    for record in df_righe.to_dict("records"):
+        posizione = record.get("posizione")
+        if posizione is None or (isinstance(posizione, float) and pd.isna(posizione)):
+            pos_txt = "—"
+        elif isinstance(posizione, (int, float)) and not pd.isna(posizione):
+            pos_txt = str(int(posizione))
+        else:
+            pos_txt = str(posizione)
+        numero_sci = html_escape(str(record.get("numero_sci") or "—"))
+        note = html_escape(str(record.get("note") or "—"))
+        righe_html.append(
+            "<tr>"
+            f"<td>{html_escape(pos_txt)}</td>"
+            f"<td>{numero_sci}</td>"
+            f"<td>{_product_cell_html(record.get('base'), record.get('base_foto'), record.get('base_mime'))}</td>"
+            f"<td>{_product_cell_html(record.get('paraffina'), record.get('paraffina_foto'), record.get('paraffina_mime'))}</td>"
+            f"<td>{_product_cell_html(record.get('top_coating'), record.get('top_foto'), record.get('top_mime'))}</td>"
+            f"<td>{_product_cell_html(record.get('liquido'), record.get('liquido_foto'), record.get('liquido_mime'))}</td>"
+            f"<td><div class=\"scroll-test-note\">{note}</div></td>"
+            "</tr>"
+        )
+
+    html = (
+        '<div class="scroll-test-table-wrap">'
+        '<table class="scroll-test-table">'
+        '<thead><tr><th>Posizione</th><th>Numero sci</th><th>Base</th><th>Paraffina</th><th>Top coating</th><th>Liquido</th><th>Note</th></tr></thead>'
+        '<tbody>' + ''.join(righe_html) + '</tbody></table></div>'
+    )
+    st.markdown(html, unsafe_allow_html=True)
+
 def cambia_pagina(nome):
     st.session_state["pagina"] = nome
     st.rerun()
@@ -7924,9 +8107,13 @@ with st.container(key="sector_page_content"):
                         """
                         SELECT a.posizione, a.numero_sci,
                                COALESCE(pb.marca || ' - ' || pb.nome, pb.nome, '—') AS base,
+                               pb.foto_data AS base_foto, pb.foto_mime AS base_mime,
                                COALESCE(pp.marca || ' - ' || pp.nome, pp.nome, '—') AS paraffina,
+                               pp.foto_data AS paraffina_foto, pp.foto_mime AS paraffina_mime,
                                COALESCE(pt.marca || ' - ' || pt.nome, pt.nome, '—') AS top_coating,
+                               pt.foto_data AS top_foto, pt.foto_mime AS top_mime,
                                COALESCE(pl.marca || ' - ' || pl.nome, pl.nome, '—') AS liquido,
+                               pl.foto_data AS liquido_foto, pl.foto_mime AS liquido_mime,
                                a.note
                         FROM test_scorrimento_aste a
                         LEFT JOIN catalogo_prodotti pb ON pb.id = a.base_prodotto_id
@@ -7939,7 +8126,7 @@ with st.container(key="sector_page_content"):
                     )
                     if not df_righe.empty:
                         st.markdown("##### Dettaglio test")
-                        st.dataframe(df_righe, use_container_width=True, hide_index=True)
+                        _render_test_scorrimento_detail_table(df_righe)
 
                     if st.button("Elimina test", icon=":material/delete:", use_container_width=True, key=f"delete_scroll_history_{sid}"):
                         st.session_state[f"confirm_delete_scroll_{sid}"] = True
