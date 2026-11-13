@@ -1098,7 +1098,24 @@ section[data-testid="stSidebar"]
 
     border-radius: 3px !important;
 
+    box-shadow: none !important;
+
     margin-top: 0.35rem;
+}
+
+/* Rimuove completamente i riquadri degli expander, in stile Sector G2 Lab */
+section[data-testid="stSidebar"]
+[data-testid="stExpander"] > details,
+section[data-testid="stSidebar"]
+[data-testid="stExpander"] > details[open],
+section[data-testid="stSidebar"]
+[data-testid="stExpander"] > details > summary,
+section[data-testid="stSidebar"]
+[data-testid="stExpander"] > details > div {
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
 }
 
 
@@ -8000,11 +8017,11 @@ with st.sidebar.expander(
         "Test scioline di tenuta",
         "Test rigature manuali",
     ],
-    icon=":material/science:",
+    icon="🧪",
 ):
     if st.button(
         "Zero test",
-        icon=":material/science:",
+        icon="⏱️",
         key="menu_zero_test",
         use_container_width=True,
         type="primary" if pagina == "Zero test" else "secondary",
@@ -8013,19 +8030,21 @@ with st.sidebar.expander(
 
     if st.button(
         "Test prodotti scorrimento",
-        icon=":material/show_chart:",
+        icon="⛷️",
         key="menu_test_scorrimento",
         use_container_width=True,
         type="primary" if pagina == "Test prodotti scorrimento" else "secondary",
+        help="Sezione test prodotti scorrimento · skating",
     ):
         cambia_pagina("Test prodotti scorrimento")
 
     if st.button(
         "Test scioline di tenuta",
-        icon=":material/bolt:",
+        icon="🎿",
         key="menu_test_tenuta",
         use_container_width=True,
         type="primary" if pagina == "Test scioline di tenuta" else "secondary",
+        help="Sezione test scioline di tenuta · tecnica classica",
     ):
         cambia_pagina("Test scioline di tenuta")
 
