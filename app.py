@@ -7284,6 +7284,182 @@ def _chiave_ordine_numero_sci(valore):
     return (10**9 - 1, testo.upper(), "")
 
 
+
+def _nome_file_pdf_test_scorrimento(test):
+    data = str(test.get("data") or "test").strip().replace("/", "-")
+    luogo = re.sub(r"[^A-Za-z0-9_-]+", "_", str(test.get("luogo") or "").strip()).strip("_")
+    metodo = str(test.get("tipo_test") or "").replace("Test prodotti scorrimento · ", "").strip()
+    metodo = re.sub(r"[^A-Za-z0-9_-]+", "_", metodo).strip("_")
+    parti = ["SnowDataPro", "test_scorrimento", data]
+    if luogo:
+        parti.append(luogo)
+    if metodo:
+        parti.append(metodo)
+    return "_".join(parti) + ".pdf"
+
+
+def _crea_pdf_test_scorrimento(test, df_righe):
+    """Crea un PDF professionale del test prodotti scorrimento."""
+    from io import BytesIO
+    from xml.sax.saxutils import escape as xml_escape
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_LEFT, TA_CENTER
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        rightMargin=12 * mm,
+        leftMargin=12 * mm,
+        topMargin=12 * mm,
+        bottomMargin=12 * mm,
+        title="SnowDataPro - Test prodotti scorrimento",
+        author="SnowDataPro",
+    )
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "SDPTitle", parent=styles["Title"], fontName="Helvetica-Bold",
+        fontSize=18, leading=21, textColor=colors.HexColor("#1f2933"),
+        spaceAfter=5 * mm, alignment=TA_LEFT,
+    )
+    section_style = ParagraphStyle(
+        "SDPSection", parent=styles["Heading2"], fontName="Helvetica-Bold",
+        fontSize=11, leading=14, textColor=colors.HexColor("#1f2933"),
+        spaceBefore=3 * mm, spaceAfter=2 * mm,
+    )
+    label_style = ParagraphStyle(
+        "SDPLabel", parent=styles["Normal"], fontName="Helvetica-Bold",
+        fontSize=7.5, leading=9, textColor=colors.HexColor("#52616b"),
+    )
+    value_style = ParagraphStyle(
+        "SDPValue", parent=styles["Normal"], fontName="Helvetica",
+        fontSize=8.5, leading=10.5, textColor=colors.HexColor("#263238"),
+    )
+    small_style = ParagraphStyle(
+        "SDPSmall", parent=styles["Normal"], fontName="Helvetica",
+        fontSize=7.2, leading=8.8, textColor=colors.HexColor("#263238"),
+    )
+    header_style = ParagraphStyle(
+        "SDPHeader", parent=styles["Normal"], fontName="Helvetica-Bold",
+        fontSize=7.4, leading=9, textColor=colors.HexColor("#37474f"), alignment=TA_CENTER,
+    )
+
+    def pv(v, default="-"):
+        if v is None:
+            return default
+        try:
+            if pd.isna(v):
+                return default
+        except Exception:
+            pass
+        txt = str(v).strip()
+        return txt if txt else default
+
+    def para(v, style=value_style):
+        return Paragraph(xml_escape(pv(v)), style)
+
+    metodo = str(test.get("tipo_test") or "Test prodotti scorrimento").replace("Test prodotti scorrimento · ", "").strip()
+    taria = _formatta_temperatura_1d(test.get("temperatura_aria"))
+    tneve = _formatta_temperatura_1d(test.get("temperatura_neve"))
+    ur = test.get("umidita")
+    ur_txt = "Non disponibile" if ur is None or (isinstance(ur, float) and pd.isna(ur)) else f"{int(round(float(ur)))} %"
+
+    story = [
+        Paragraph("SnowDataPro - Test prodotti scorrimento", title_style),
+    ]
+
+    summary = [
+        [Paragraph("METODO TEST", label_style), Paragraph("PRODOTTI/COMBINAZIONI TESTATI", label_style), Paragraph("T ARIA", label_style), Paragraph("T NEVE", label_style)],
+        [para(metodo), para(len(df_righe)), para(f"{taria} °C"), para(f"{tneve} °C")],
+    ]
+    t = Table(summary, colWidths=[55*mm, 65*mm, 45*mm, 45*mm], hAlign="LEFT")
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#eef1f4")),
+        ("BOX", (0,0), (-1,-1), 0.6, colors.HexColor("#d8dde3")),
+        ("INNERGRID", (0,0), (-1,-1), 0.4, colors.HexColor("#d8dde3")),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("LEFTPADDING", (0,0), (-1,-1), 7), ("RIGHTPADDING", (0,0), (-1,-1), 7),
+        ("TOPPADDING", (0,0), (-1,-1), 6), ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+    ]))
+    story += [t, Spacer(1, 4*mm), Paragraph("Sessione", section_style)]
+
+    sessione = [
+        [Paragraph("Data", label_style), para(test.get("data")), Paragraph("Ora", label_style), para(str(test.get("ora") or "-")[:5]), Paragraph("Luogo", label_style), para(test.get("luogo"))],
+        [Paragraph("Meteo", label_style), para(test.get("meteo")), Paragraph("Umidità relativa", label_style), para(ur_txt), Paragraph("Modello sci", label_style), para(test.get("zero_modello_sci"))],
+    ]
+    ts = Table(sessione, colWidths=[25*mm, 45*mm, 25*mm, 35*mm, 25*mm, 55*mm], hAlign="LEFT")
+    ts.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,-1), colors.HexColor("#f7f9fa")),
+        ("BOX", (0,0), (-1,-1), 0.5, colors.HexColor("#d8dde3")),
+        ("INNERGRID", (0,0), (-1,-1), 0.35, colors.HexColor("#e3e7eb")),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("LEFTPADDING", (0,0), (-1,-1), 6), ("RIGHTPADDING", (0,0), (-1,-1), 6),
+        ("TOPPADDING", (0,0), (-1,-1), 5), ("BOTTOMPADDING", (0,0), (-1,-1), 5),
+    ]))
+    story += [ts, Spacer(1, 3*mm), Paragraph("Tipologia neve", section_style)]
+
+    snow = [
+        [Paragraph("Origine", label_style), para(test.get("snow_origine")), Paragraph("Consistenza", label_style), para(test.get("snow_consistenza")), Paragraph("Umidità neve", label_style), para(test.get("snow_umidita"))],
+        [Paragraph("Forma grano", label_style), para(test.get("snow_forma_grano")), Paragraph("Granulometria", label_style), para(test.get("snow_granulometria")), Paragraph("Caratteristiche", label_style), para(test.get("snow_caratteristiche"))],
+    ]
+    tn = Table(snow, colWidths=[25*mm, 45*mm, 25*mm, 45*mm, 25*mm, 55*mm], hAlign="LEFT")
+    tn.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,-1), colors.HexColor("#f7f9fa")),
+        ("BOX", (0,0), (-1,-1), 0.5, colors.HexColor("#d8dde3")),
+        ("INNERGRID", (0,0), (-1,-1), 0.35, colors.HexColor("#e3e7eb")),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("LEFTPADDING", (0,0), (-1,-1), 6), ("RIGHTPADDING", (0,0), (-1,-1), 6),
+        ("TOPPADDING", (0,0), (-1,-1), 5), ("BOTTOMPADDING", (0,0), (-1,-1), 5),
+    ]))
+    story += [tn, Spacer(1, 3*mm), Paragraph("Dettaglio test", section_style)]
+
+    df_pdf = df_righe.copy()
+    if not df_pdf.empty:
+        df_pdf["_pos"] = pd.to_numeric(df_pdf["posizione"], errors="coerce")
+        df_pdf = df_pdf.sort_values(["_pos"], na_position="last", kind="stable").drop(columns=["_pos"])
+
+    table_data = [[Paragraph(x, header_style) for x in ["Pos.", "Sci", "Base", "Paraffina", "Top coating", "Liquido", "Note"]]]
+    for _, r in df_pdf.iterrows():
+        pos = r.get("posizione")
+        pos_txt = "-" if pos is None or (isinstance(pos, float) and pd.isna(pos)) else str(int(float(pos)))
+        table_data.append([
+            Paragraph(xml_escape(pos_txt), small_style),
+            para(r.get("numero_sci"), small_style),
+            para(r.get("base"), small_style),
+            para(r.get("paraffina"), small_style),
+            para(r.get("top_coating"), small_style),
+            para(r.get("liquido"), small_style),
+            para(r.get("note"), small_style),
+        ])
+
+    td = Table(table_data, colWidths=[13*mm, 18*mm, 42*mm, 42*mm, 45*mm, 45*mm, 50*mm], repeatRows=1, hAlign="LEFT")
+    styles_table = [
+        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#eef1f4")),
+        ("BOX", (0,0), (-1,-1), 0.6, colors.HexColor("#d8dde3")),
+        ("INNERGRID", (0,0), (-1,-1), 0.35, colors.HexColor("#d8dde3")),
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("ALIGN", (0,1), (1,-1), "CENTER"),
+        ("LEFTPADDING", (0,0), (-1,-1), 4), ("RIGHTPADDING", (0,0), (-1,-1), 4),
+        ("TOPPADDING", (0,0), (-1,-1), 4), ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+    ]
+    # Evidenzia solo il primo classificato con testo in grassetto, senza sfondi colorati.
+    for idx, (_, r) in enumerate(df_pdf.iterrows(), start=1):
+        try:
+            if int(float(r.get("posizione"))) == 1:
+                styles_table.append(("FONTNAME", (0, idx), (-1, idx), "Helvetica-Bold"))
+        except Exception:
+            pass
+    td.setStyle(TableStyle(styles_table))
+    story.append(td)
+
+    doc.build(story)
+    return buffer.getvalue()
+
+
 def _render_test_scorrimento_detail_table(df_righe):
     """Tabella storico test scorrimento compatta con preview foto sul nome prodotto."""
     if df_righe is None or df_righe.empty:
@@ -8469,8 +8645,110 @@ with st.container(key="sector_page_content"):
                         st.caption(f"Visualizzazione: {stato_ordine}")
                         _render_test_scorrimento_detail_table(df_righe_visual)
 
-                    st.markdown('<div style="height:0.35rem"></div>', unsafe_allow_html=True)
-                    edit_c, delete_c = st.columns(2)
+                    st.markdown(
+                        """
+                        <style>
+                        /* Azioni storico test: stessa gerarchia visiva usata in Sector G2 Lab */
+                        div[class*="st-key-download_scroll_test_"] button {
+                            height: 48px !important;
+                            background: #eef1f4 !important;
+                            border: 1px solid #c8cfd6 !important;
+                            border-radius: 5px !important;
+                            box-shadow: none !important;
+                            font-weight: 600 !important;
+                        }
+                        div[class*="st-key-download_scroll_test_"] button p,
+                        div[class*="st-key-download_scroll_test_"] button svg {
+                            color: #37474f !important;
+                            fill: #37474f !important;
+                            font-weight: 600 !important;
+                        }
+                        div[class*="st-key-download_scroll_test_"] button:hover {
+                            background: #e2e7eb !important;
+                            border-color: #aeb8bf !important;
+                        }
+
+                        div[class*="st-key-edit_scroll_history_"] button {
+                            height: 48px !important;
+                            background: #00a7e1 !important;
+                            border: 1px solid #00a7e1 !important;
+                            border-radius: 5px !important;
+                            box-shadow: none !important;
+                            font-weight: 600 !important;
+                        }
+                        div[class*="st-key-edit_scroll_history_"] button p,
+                        div[class*="st-key-edit_scroll_history_"] button svg {
+                            color: #ffffff !important;
+                            fill: #ffffff !important;
+                            font-weight: 600 !important;
+                        }
+                        div[class*="st-key-edit_scroll_history_"] button:hover {
+                            background: #0095c9 !important;
+                            border-color: #0095c9 !important;
+                        }
+
+                        div[class*="st-key-delete_scroll_history_"] button {
+                            height: 48px !important;
+                            background: #ffffff !important;
+                            border: 1px solid #d9534f !important;
+                            border-radius: 5px !important;
+                            box-shadow: none !important;
+                            font-weight: 600 !important;
+                        }
+                        div[class*="st-key-delete_scroll_history_"] button p,
+                        div[class*="st-key-delete_scroll_history_"] button svg {
+                            color: #d9534f !important;
+                            fill: #d9534f !important;
+                            font-weight: 600 !important;
+                        }
+                        div[class*="st-key-delete_scroll_history_"] button:hover {
+                            background: #d9534f !important;
+                            border-color: #d9534f !important;
+                        }
+                        div[class*="st-key-delete_scroll_history_"] button:hover p,
+                        div[class*="st-key-delete_scroll_history_"] button:hover svg {
+                            color: #ffffff !important;
+                            fill: #ffffff !important;
+                        }
+
+                        div[class*="st-key-confirm_scroll_yes_"] button {
+                            height: 46px !important;
+                            background: #d9534f !important;
+                            border: 1px solid #d9534f !important;
+                            color: #ffffff !important;
+                            border-radius: 5px !important;
+                            font-weight: 600 !important;
+                        }
+                        div[class*="st-key-confirm_scroll_yes_"] button p,
+                        div[class*="st-key-confirm_scroll_yes_"] button svg {
+                            color: #ffffff !important;
+                            fill: #ffffff !important;
+                        }
+                        </style>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+                    try:
+                        pdf_test_scorrimento = _crea_pdf_test_scorrimento(test, df_righe)
+                        errore_pdf_test = None
+                    except Exception as exc:
+                        pdf_test_scorrimento = b""
+                        errore_pdf_test = str(exc)
+
+                    st.markdown('<div style="height:0.45rem"></div>', unsafe_allow_html=True)
+                    download_c, edit_c, delete_c = st.columns(3)
+                    with download_c:
+                        st.download_button(
+                            "Scarica test",
+                            data=pdf_test_scorrimento,
+                            file_name=_nome_file_pdf_test_scorrimento(test),
+                            mime="application/pdf",
+                            icon=":material/download:",
+                            use_container_width=True,
+                            disabled=bool(errore_pdf_test),
+                            key=f"download_scroll_test_{sid}",
+                        )
                     with edit_c:
                         if st.button(
                             "Modifica test",
@@ -8492,18 +8770,33 @@ with st.container(key="sector_page_content"):
                         ):
                             st.session_state[f"confirm_delete_scroll_{sid}"] = True
                             st.rerun()
+
+                    if errore_pdf_test:
+                        st.caption(f"PDF non disponibile: {errore_pdf_test}")
+
                     if st.session_state.get(f"confirm_delete_scroll_{sid}", False):
-                        st.warning("Confermi l'eliminazione di questo test prodotti scorrimento?")
+                        st.warning("Confermi l'eliminazione definitiva di questo test prodotti scorrimento?")
                         dc1, dc2 = st.columns(2)
                         with dc1:
-                            if st.button("Conferma eliminazione", type="primary", use_container_width=True, key=f"confirm_scroll_yes_{sid}"):
+                            if st.button(
+                                "Conferma eliminazione",
+                                icon=":material/delete_forever:",
+                                use_container_width=True,
+                                key=f"confirm_scroll_yes_{sid}",
+                            ):
                                 esegui("DELETE FROM test_scorrimento_aste WHERE sessione_id = ?", (sid,))
                                 esegui("DELETE FROM sessioni WHERE id = ?", (sid,))
                                 st.session_state.pop(f"confirm_delete_scroll_{sid}", None)
                                 _invalida_cache_dati()
+                                st.session_state["scroll_history_notice"] = "Test prodotti scorrimento eliminato correttamente."
                                 st.rerun()
                         with dc2:
-                            if st.button("Annulla", use_container_width=True, key=f"confirm_scroll_no_{sid}"):
+                            if st.button(
+                                "Annulla",
+                                icon=":material/close:",
+                                use_container_width=True,
+                                key=f"confirm_scroll_no_{sid}",
+                            ):
                                 st.session_state.pop(f"confirm_delete_scroll_{sid}", None)
                                 st.rerun()
 
