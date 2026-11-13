@@ -7460,6 +7460,279 @@ def _crea_pdf_test_scorrimento(test, df_righe):
     return buffer.getvalue()
 
 
+
+def _render_test_scorrimento_podium(df_righe):
+    """Podio grafico dei primi tre classificati con foto e nomi dei prodotti/combinazioni."""
+    if df_righe is None or df_righe.empty:
+        return
+
+    df_podio = df_righe.copy()
+    df_podio["_pos_num"] = pd.to_numeric(df_podio.get("posizione"), errors="coerce")
+    df_podio = df_podio[df_podio["_pos_num"].isin([1, 2, 3])]
+    if df_podio.empty:
+        return
+
+    # Una sola riga per gradino: in caso di dati duplicati mantiene la prima registrata.
+    df_podio = (
+        df_podio.sort_values("_pos_num", kind="stable")
+        .drop_duplicates(subset=["_pos_num"], keep="first")
+    )
+    records_by_pos = {
+        int(r["_pos_num"]): r
+        for r in df_podio.to_dict("records")
+        if r.get("_pos_num") is not None and not pd.isna(r.get("_pos_num"))
+    }
+
+    def _foto_src(foto_data, foto_mime):
+        valore = str(foto_data or "").strip()
+        if not valore:
+            return ""
+        mime = str(foto_mime or "image/png").strip() or "image/png"
+        return f"data:{html_escape(mime)};base64,{valore}"
+
+    def _prodotti_record(record):
+        campi = [
+            ("Base", "base", "base_foto", "base_mime"),
+            ("Paraffina", "paraffina", "paraffina_foto", "paraffina_mime"),
+            ("Top coating", "top_coating", "top_foto", "top_mime"),
+            ("Liquido", "liquido", "liquido_foto", "liquido_mime"),
+        ]
+        prodotti = []
+        for categoria, nome_key, foto_key, mime_key in campi:
+            nome = str(record.get(nome_key) or "").strip()
+            if not nome or nome == "—":
+                continue
+            prodotti.append({
+                "categoria": categoria,
+                "nome": nome,
+                "src": _foto_src(record.get(foto_key), record.get(mime_key)),
+            })
+        return prodotti
+
+    def _product_tile_html(prodotto, singolo=False):
+        nome = html_escape(prodotto["nome"])
+        categoria = html_escape(prodotto["categoria"])
+        src = prodotto["src"]
+        img_class = " podium-single-image" if singolo else ""
+        if src:
+            visual = f'<img class="podium-product-image{img_class}" src="{src}" alt="{nome}">'
+        else:
+            visual = f'<div class="podium-product-placeholder{img_class}"><span>IMG</span></div>'
+        return (
+            '<div class="podium-product-tile">'
+            f'{visual}'
+            f'<div class="podium-product-category">{categoria}</div>'
+            f'<div class="podium-product-name" title="{nome}">{nome}</div>'
+            '</div>'
+        )
+
+    def _entry_html(pos):
+        record = records_by_pos.get(pos)
+        if not record:
+            return '<div class="scroll-podium-entry podium-empty-slot"></div>'
+
+        prodotti = _prodotti_record(record)
+        numero_sci = html_escape(str(record.get("numero_sci") or "—"))
+        medal = {1: "🥇", 2: "🥈", 3: "🥉"}[pos]
+        rank_word = {1: "1°", 2: "2°", 3: "3°"}[pos]
+        place_class = {1: "first", 2: "second", 3: "third"}[pos]
+
+        if prodotti:
+            singolo = len(prodotti) == 1
+            products_html = ''.join(_product_tile_html(p, singolo=singolo) for p in prodotti)
+        else:
+            products_html = (
+                '<div class="podium-no-products">'
+                '<div class="podium-product-placeholder podium-single-image"><span>IMG</span></div>'
+                '<div class="podium-product-name">Nessun prodotto associato</div>'
+                '</div>'
+            )
+
+        return (
+            f'<div class="scroll-podium-entry podium-{place_class}">'
+            '<div class="podium-result-card">'
+            f'<div class="podium-medal-large">{medal}</div>'
+            f'<div class="podium-ski-label">SCI {numero_sci}</div>'
+            f'<div class="podium-product-grid count-{min(len(prodotti), 4)}">{products_html}</div>'
+            '</div>'
+            f'<div class="podium-step podium-step-{place_class}">'
+            f'<span class="podium-step-rank">{rank_word}</span>'
+            '</div>'
+            '</div>'
+        )
+
+    # Ordine visivo classico del podio: 2° a sinistra, 1° al centro, 3° a destra.
+    podium_html = (
+        '<div class="scroll-podium-wrap">'
+        '<div class="scroll-podium">'
+        f'{_entry_html(2)}{_entry_html(1)}{_entry_html(3)}'
+        '</div>'
+        '</div>'
+    )
+
+    st.markdown(
+        """
+        <style>
+        .scroll-podium-wrap {
+            margin: .35rem 0 1.1rem 0;
+            padding: 1rem 1rem .15rem 1rem;
+            border: 1px solid #d8dde3;
+            border-radius: 14px;
+            background: linear-gradient(180deg, #ffffff 0%, #f7f9fa 100%);
+            overflow-x: auto;
+        }
+        .scroll-podium {
+            min-width: 760px;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: .8rem;
+            align-items: end;
+        }
+        .scroll-podium-entry {
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            min-width: 0;
+        }
+        .podium-result-card {
+            position: relative;
+            background: #ffffff;
+            border: 1px solid #d8dde3;
+            border-radius: 12px 12px 8px 8px;
+            padding: 1.55rem .7rem .7rem .7rem;
+            box-shadow: 0 7px 18px rgba(31, 41, 51, .07);
+            min-height: 188px;
+        }
+        .podium-first .podium-result-card {
+            border-color: #d8b54c;
+            box-shadow: 0 9px 24px rgba(31, 41, 51, .10);
+        }
+        .podium-medal-large {
+            position: absolute;
+            top: -.78rem;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 2.15rem;
+            height: 2.15rem;
+            border-radius: 999px;
+            background: #ffffff;
+            border: 1px solid #d8dde3;
+            box-shadow: 0 4px 10px rgba(31, 41, 51, .10);
+            font-size: 1.22rem;
+            line-height: 1;
+        }
+        .podium-ski-label {
+            text-align: center;
+            color: #7a8a96;
+            font-size: .66rem;
+            font-weight: 800;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            margin-bottom: .55rem;
+        }
+        .podium-product-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: .52rem;
+            align-items: start;
+        }
+        .podium-product-grid.count-1 {
+            grid-template-columns: 1fr;
+        }
+        .podium-product-tile,
+        .podium-no-products {
+            min-width: 0;
+            text-align: center;
+        }
+        .podium-product-image,
+        .podium-product-placeholder {
+            width: 100%;
+            height: 58px;
+            object-fit: contain;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f7f9fa;
+            border: 1px solid #e3e7eb;
+            border-radius: 8px;
+            margin: 0 auto .3rem auto;
+        }
+        .podium-product-image.podium-single-image,
+        .podium-product-placeholder.podium-single-image {
+            width: 104px;
+            height: 86px;
+        }
+        .podium-product-placeholder span {
+            color: #a5b0b8;
+            font-size: .62rem;
+            font-weight: 800;
+            letter-spacing: .08em;
+        }
+        .podium-product-category {
+            color: #8a98a3;
+            font-size: .58rem;
+            line-height: 1.05;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            margin-bottom: .12rem;
+        }
+        .podium-product-name {
+            color: #263238;
+            font-size: .69rem;
+            line-height: 1.12;
+            font-weight: 700;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            overflow-wrap: anywhere;
+        }
+        .podium-step {
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            border: 1px solid #cfd6dc;
+            border-top-width: 4px;
+            border-radius: 5px 5px 0 0;
+            background: #eef1f4;
+            margin: .35rem .25rem 0 .25rem;
+            padding-top: .6rem;
+        }
+        .podium-step-first {
+            height: 108px;
+            border-top-color: #d4af37;
+            background: linear-gradient(180deg, #fffaf0 0%, #eef1f4 100%);
+        }
+        .podium-step-second {
+            height: 78px;
+            border-top-color: #aeb7bf;
+        }
+        .podium-step-third {
+            height: 58px;
+            border-top-color: #b97a45;
+        }
+        .podium-step-rank {
+            color: #263238;
+            font-size: 1.05rem;
+            line-height: 1;
+            font-weight: 850;
+        }
+        .podium-empty-slot {
+            min-height: 1px;
+        }
+        @media (max-width: 900px) {
+            .scroll-podium-wrap { padding-left: .7rem; padding-right: .7rem; }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(podium_html, unsafe_allow_html=True)
+
 def _render_test_scorrimento_detail_table(df_righe):
     """Tabella storico test scorrimento compatta con preview foto sul nome prodotto."""
     if df_righe is None or df_righe.empty:
@@ -8597,6 +8870,9 @@ with st.container(key="sector_page_content"):
                     st.markdown(class_html_scroll, unsafe_allow_html=True)
 
                     if not df_righe.empty:
+                        st.markdown("##### Podio test")
+                        _render_test_scorrimento_podium(df_righe)
+
                         st.markdown("##### Dettaglio test")
 
                         ordine_key = f"scroll_history_order_{sid}"
