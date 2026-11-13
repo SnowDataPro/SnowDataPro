@@ -6115,12 +6115,82 @@ def render_form_test_scorrimento():
         "Caratteristiche": ["Sporca", "Salata", "Ventata", "Lucida", "Cadente"],
     }
 
+    edit_scroll_session_id = st.session_state.get("scroll_edit_session_id")
+    edit_scroll_row = None
+    needs_scroll_edit_load = False
+    if edit_scroll_session_id is not None:
+        df_edit_scroll = leggi_df(
+            """
+            SELECT id, data, ora, luogo, temperatura_aria, temperatura_neve,
+                   umidita, meteo, snow_origine, snow_consistenza, snow_umidita,
+                   snow_forma_grano, snow_granulometria, snow_caratteristiche,
+                   zero_modello_sci, tipo_test, zero_riferimento_id
+            FROM sessioni
+            WHERE id = ?
+            """,
+            (int(edit_scroll_session_id),),
+        )
+        if not df_edit_scroll.empty:
+            edit_scroll_row = df_edit_scroll.iloc[0]
+            needs_scroll_edit_load = (
+                st.session_state.get("scroll_edit_loaded_id") != int(edit_scroll_session_id)
+            )
+        else:
+            st.session_state.pop("scroll_edit_session_id", None)
+            st.session_state.pop("scroll_edit_loaded_id", None)
+            edit_scroll_session_id = None
+
+    if needs_scroll_edit_load and edit_scroll_row is not None:
+        metodo_edit = str(edit_scroll_row.get("tipo_test") or "Asta").replace("Test prodotti scorrimento · ", "").strip()
+        st.session_state["scroll_test_method"] = metodo_edit if metodo_edit in ["Asta", "Parallel", "Fotocellula"] else "Asta"
+        try:
+            st.session_state["scroll_date"] = pd.to_datetime(edit_scroll_row.get("data")).date()
+        except Exception:
+            st.session_state["scroll_date"] = date.today()
+        try:
+            st.session_state["scroll_time"] = datetime.strptime(str(edit_scroll_row.get("ora") or "00:00")[:5], "%H:%M").time()
+        except Exception:
+            st.session_state["scroll_time"] = datetime.now().time().replace(second=0, microsecond=0)
+        st.session_state["scroll_place"] = str(edit_scroll_row.get("luogo") or "")
+        st.session_state["scroll_air"] = _formatta_temperatura_1d(edit_scroll_row.get("temperatura_aria"))
+        st.session_state["scroll_snow"] = _formatta_temperatura_1d(edit_scroll_row.get("temperatura_neve"))
+        ur_edit = edit_scroll_row.get("umidita")
+        st.session_state["scroll_rh_missing"] = bool(pd.isna(ur_edit))
+        st.session_state["scroll_rh"] = 70 if pd.isna(ur_edit) else int(round(float(ur_edit)))
+        st.session_state["scroll_ski_model"] = str(edit_scroll_row.get("zero_modello_sci") or "")
+        meteo_edit = str(edit_scroll_row.get("meteo") or "").strip()
+        st.session_state["scroll_weather"] = meteo_edit if meteo_edit in METEO_OPZIONI else None
+        st.session_state["scroll_origin"] = _valori_sessione_neve(edit_scroll_row.get("snow_origine"), snow_options_scroll["Origine"])
+        st.session_state["scroll_consistency"] = _valori_sessione_neve(edit_scroll_row.get("snow_consistenza"), snow_options_scroll["Consistenza"])
+        st.session_state["scroll_snow_humidity"] = _valori_sessione_neve(edit_scroll_row.get("snow_umidita"), snow_options_scroll["Umidità neve"])
+        st.session_state["scroll_grain"] = _valori_sessione_neve(edit_scroll_row.get("snow_forma_grano"), snow_options_scroll["Forma grano"])
+        st.session_state["scroll_size"] = _valori_sessione_neve(edit_scroll_row.get("snow_granulometria"), snow_options_scroll["Granulometria"])
+        st.session_state["scroll_features"] = _valori_sessione_neve(edit_scroll_row.get("snow_caratteristiche"), snow_options_scroll["Caratteristiche"])
+        df_edit_count = leggi_df(
+            "SELECT COUNT(*) AS n FROM test_scorrimento_aste WHERE sessione_id = ?",
+            (int(edit_scroll_session_id),),
+        )
+        n_edit = int(df_edit_count.iloc[0]["n"] or 1) if not df_edit_count.empty else 1
+        st.session_state["scroll_num_rods"] = max(1, n_edit)
+
     st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
     st.markdown('<div class="insert-test-title">Test prodotti scorrimento</div>', unsafe_allow_html=True)
     st.markdown(
         '<div class="insert-test-caption">Imposta prima il tipo di test e registra le condizioni reali della sessione. Lo Zero Test di riferimento resta esclusivamente un collegamento informativo.</div>',
         unsafe_allow_html=True,
     )
+
+    if edit_scroll_session_id is not None:
+        ce1, ce2 = st.columns([4, 1.25])
+        with ce1:
+            st.info("Modalità modifica attiva: stai aggiornando un test prodotti scorrimento già presente nello storico.")
+        with ce2:
+            if st.button("Annulla modifica", use_container_width=True, key="cancel_scroll_edit"):
+                st.session_state.pop("scroll_edit_session_id", None)
+                st.session_state.pop("scroll_edit_loaded_id", None)
+                for k in ["scroll_rods_table_data", "scroll_rods_table_n"]:
+                    st.session_state.pop(k, None)
+                st.rerun()
 
     # 1. TIPO DI TEST + ZERO TEST DI RIFERIMENTO
     st.markdown("#### Impostazione test")
@@ -6159,6 +6229,16 @@ def render_form_test_scorrimento():
             label += f" · {modello_ref}"
         zero_ref_labels.append(label)
         zero_ref_map[label] = int(ref["id"])
+
+    if needs_scroll_edit_load and edit_scroll_row is not None:
+        ref_id_edit = edit_scroll_row.get("zero_riferimento_id")
+        ref_label_edit = "Nessuno"
+        if ref_id_edit is not None and not pd.isna(ref_id_edit):
+            for lbl_ref, id_ref in zero_ref_map.items():
+                if id_ref == int(ref_id_edit):
+                    ref_label_edit = lbl_ref
+                    break
+        st.session_state["insert_scroll_zero_reference"] = ref_label_edit
 
     with c_zero_ref:
         zero_ref_label = st.selectbox(
@@ -6328,6 +6408,43 @@ def render_form_test_scorrimento():
 
         n_aste = int(numero_aste)
 
+        if needs_scroll_edit_load and edit_scroll_session_id is not None:
+            df_edit_aste = leggi_df(
+                """
+                SELECT a.posizione, a.numero_sci,
+                       COALESCE(pb.marca || ' - ' || pb.nome, pb.nome, '—') AS base,
+                       COALESCE(pp.marca || ' - ' || pp.nome, pp.nome, '—') AS paraffina,
+                       COALESCE(pt.marca || ' - ' || pt.nome, pt.nome, '—') AS top_coating,
+                       COALESCE(pl.marca || ' - ' || pl.nome, pl.nome, '—') AS liquido,
+                       a.note
+                FROM test_scorrimento_aste a
+                LEFT JOIN catalogo_prodotti pb ON pb.id = a.base_prodotto_id
+                LEFT JOIN catalogo_prodotti pp ON pp.id = a.paraffina_prodotto_id
+                LEFT JOIN catalogo_prodotti pt ON pt.id = a.top_coating_prodotto_id
+                LEFT JOIN catalogo_prodotti pl ON pl.id = a.liquido_prodotto_id
+                WHERE a.sessione_id = ?
+                ORDER BY a.id
+                """,
+                (int(edit_scroll_session_id),),
+            )
+            righe_edit = []
+            for idx_edit, r_edit in df_edit_aste.reset_index(drop=True).iterrows():
+                righe_edit.append({
+                    "_ordine_inserimento": idx_edit,
+                    "Posizione": None if pd.isna(r_edit.get("posizione")) else int(r_edit.get("posizione")),
+                    "Numero sci": str(r_edit.get("numero_sci") or ""),
+                    "Base": str(r_edit.get("base") or "—"),
+                    "Paraffina": str(r_edit.get("paraffina") or "—"),
+                    "Top coating": str(r_edit.get("top_coating") or "—"),
+                    "Liquido": str(r_edit.get("liquido") or "—"),
+                    "Note": str(r_edit.get("note") or ""),
+                })
+            if righe_edit:
+                st.session_state["scroll_rods_table_data"] = pd.DataFrame(righe_edit)
+                st.session_state["scroll_rods_table_n"] = len(righe_edit)
+                st.session_state["scroll_rods_table_version"] = st.session_state.get("scroll_rods_table_version", 0) + 1
+            st.session_state["scroll_edit_loaded_id"] = int(edit_scroll_session_id)
+
         def _tabella_aste_vuota(n):
             return pd.DataFrame({
                 "_ordine_inserimento": list(range(n)),
@@ -6437,7 +6554,7 @@ def render_form_test_scorrimento():
 
         st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
         salva_scroll = st.button(
-            "Salva test prodotti scorrimento",
+            "Salva modifiche test" if edit_scroll_session_id is not None else "Salva test prodotti scorrimento",
             type="primary",
             use_container_width=True,
             key="save_scroll_rod_test",
@@ -6491,37 +6608,71 @@ def render_form_test_scorrimento():
                 else:
                     conn = apri_connessione_database()
                     try:
-                        cur = conn.execute(
-                            """
-                            INSERT INTO sessioni (
-                                data, ora, luogo, temperatura_aria, temperatura_neve,
-                                umidita, meteo, tipo_neve, condizione_pista,
-                                snow_origine, snow_consistenza, snow_umidita,
-                                snow_forma_grano, snow_granulometria, snow_caratteristiche,
-                                zero_modello_sci, tipo_test, zero_riferimento_id, note, creato_il
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, '', '', ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)
-                            """,
-                            (
-                                scroll_data.isoformat(),
-                                scroll_ora.strftime("%H:%M"),
-                                str(scroll_luogo).strip(),
-                                temp_aria_val,
-                                temp_neve_val,
-                                None if scroll_ur_missing else int(scroll_ur),
-                                scroll_meteo or "",
-                                _compatta_neve_sessione(scroll_origine, snow_options_scroll["Origine"]),
-                                _compatta_neve_sessione(scroll_consistenza, snow_options_scroll["Consistenza"]),
-                                _compatta_neve_sessione(scroll_umidita_neve, snow_options_scroll["Umidità neve"]),
-                                _compatta_neve_sessione(scroll_forma, snow_options_scroll["Forma grano"]),
-                                _compatta_neve_sessione(scroll_granulometria, snow_options_scroll["Granulometria"]),
-                                _compatta_neve_sessione(scroll_caratteristiche, snow_options_scroll["Caratteristiche"]),
-                                str(scroll_modello_sci or "").strip(),
-                                f"Test prodotti scorrimento · {metodo_scroll}",
-                                int(zero_ref_id) if zero_ref_id is not None else None,
-                                datetime.now().isoformat(timespec="seconds"),
-                            ),
-                        )
-                        sessione_scroll_id = int(cur.lastrowid)
+                        if edit_scroll_session_id is not None:
+                            sessione_scroll_id = int(edit_scroll_session_id)
+                            conn.execute(
+                                """
+                                UPDATE sessioni
+                                SET data = ?, ora = ?, luogo = ?, temperatura_aria = ?, temperatura_neve = ?,
+                                    umidita = ?, meteo = ?,
+                                    snow_origine = ?, snow_consistenza = ?, snow_umidita = ?,
+                                    snow_forma_grano = ?, snow_granulometria = ?, snow_caratteristiche = ?,
+                                    zero_modello_sci = ?, tipo_test = ?, zero_riferimento_id = ?
+                                WHERE id = ?
+                                """,
+                                (
+                                    scroll_data.isoformat(),
+                                    scroll_ora.strftime("%H:%M"),
+                                    str(scroll_luogo).strip(),
+                                    temp_aria_val,
+                                    temp_neve_val,
+                                    None if scroll_ur_missing else int(scroll_ur),
+                                    scroll_meteo or "",
+                                    _compatta_neve_sessione(scroll_origine, snow_options_scroll["Origine"]),
+                                    _compatta_neve_sessione(scroll_consistenza, snow_options_scroll["Consistenza"]),
+                                    _compatta_neve_sessione(scroll_umidita_neve, snow_options_scroll["Umidità neve"]),
+                                    _compatta_neve_sessione(scroll_forma, snow_options_scroll["Forma grano"]),
+                                    _compatta_neve_sessione(scroll_granulometria, snow_options_scroll["Granulometria"]),
+                                    _compatta_neve_sessione(scroll_caratteristiche, snow_options_scroll["Caratteristiche"]),
+                                    str(scroll_modello_sci or "").strip(),
+                                    f"Test prodotti scorrimento · {metodo_scroll}",
+                                    int(zero_ref_id) if zero_ref_id is not None else None,
+                                    sessione_scroll_id,
+                                ),
+                            )
+                            conn.execute("DELETE FROM test_scorrimento_aste WHERE sessione_id = ?", (sessione_scroll_id,))
+                        else:
+                            cur = conn.execute(
+                                """
+                                INSERT INTO sessioni (
+                                    data, ora, luogo, temperatura_aria, temperatura_neve,
+                                    umidita, meteo, tipo_neve, condizione_pista,
+                                    snow_origine, snow_consistenza, snow_umidita,
+                                    snow_forma_grano, snow_granulometria, snow_caratteristiche,
+                                    zero_modello_sci, tipo_test, zero_riferimento_id, note, creato_il
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?, '', '', ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)
+                                """,
+                                (
+                                    scroll_data.isoformat(),
+                                    scroll_ora.strftime("%H:%M"),
+                                    str(scroll_luogo).strip(),
+                                    temp_aria_val,
+                                    temp_neve_val,
+                                    None if scroll_ur_missing else int(scroll_ur),
+                                    scroll_meteo or "",
+                                    _compatta_neve_sessione(scroll_origine, snow_options_scroll["Origine"]),
+                                    _compatta_neve_sessione(scroll_consistenza, snow_options_scroll["Consistenza"]),
+                                    _compatta_neve_sessione(scroll_umidita_neve, snow_options_scroll["Umidità neve"]),
+                                    _compatta_neve_sessione(scroll_forma, snow_options_scroll["Forma grano"]),
+                                    _compatta_neve_sessione(scroll_granulometria, snow_options_scroll["Granulometria"]),
+                                    _compatta_neve_sessione(scroll_caratteristiche, snow_options_scroll["Caratteristiche"]),
+                                    str(scroll_modello_sci or "").strip(),
+                                    f"Test prodotti scorrimento · {metodo_scroll}",
+                                    int(zero_ref_id) if zero_ref_id is not None else None,
+                                    datetime.now().isoformat(timespec="seconds"),
+                                ),
+                            )
+                            sessione_scroll_id = int(cur.lastrowid)
 
                         for riga in righe_asta:
                             conn.execute(
@@ -6552,7 +6703,14 @@ def render_form_test_scorrimento():
                     finally:
                         conn.close()
                     _invalida_cache_dati()
-                    st.session_state["scroll_history_notice"] = f"Test prodotti scorrimento salvato correttamente · {len(righe_asta)} righe registrate."
+                    if edit_scroll_session_id is not None:
+                        st.session_state["scroll_history_notice"] = f"Test prodotti scorrimento aggiornato correttamente · {len(righe_asta)} righe registrate."
+                        st.session_state.pop("scroll_edit_session_id", None)
+                        st.session_state.pop("scroll_edit_loaded_id", None)
+                    else:
+                        st.session_state["scroll_history_notice"] = f"Test prodotti scorrimento salvato correttamente · {len(righe_asta)} righe registrate."
+                    for k in ["scroll_rods_table_data", "scroll_rods_table_n"]:
+                        st.session_state.pop(k, None)
                     st.rerun()
     else:
         st.info(
@@ -7158,30 +7316,30 @@ def _render_test_scorrimento_detail_table(df_righe):
             border-spacing: 0;
             table-layout: fixed;
             color: #263238;
-            font-size: .80rem;
+            font-size: .72rem;
             font-weight: 500;
         }
         .scroll-test-table th {
             background: #eef1f4;
             color: #52616b;
-            font-size: .80rem;
+            font-size: .72rem;
             font-weight: 650;
             text-align: left;
-            padding: .46rem .44rem;
+            padding: .38rem .34rem;
             border-bottom: 1px solid #d8dde3;
             white-space: nowrap;
             line-height: 1.15;
         }
         .scroll-test-table td {
-            padding: .42rem .44rem;
+            padding: .34rem .34rem;
             border-bottom: 1px solid #e3e7eb;
             vertical-align: middle;
             overflow: visible;
             position: relative;
             color: #263238;
-            font-size: .80rem;
+            font-size: .72rem;
             font-weight: 500;
-            line-height: 1.18;
+            line-height: 1.12;
         }
         .scroll-test-table tr:last-child td { border-bottom: 0; }
         .scroll-test-table th:nth-child(1), .scroll-test-table td:nth-child(1) { width: 62px; text-align:center; }
@@ -7192,7 +7350,7 @@ def _render_test_scorrimento_detail_table(df_righe):
         .scroll-test-table th:nth-child(6), .scroll-test-table td:nth-child(6) { width: 158px; }
         .scroll-test-table th:nth-child(7), .scroll-test-table td:nth-child(7) { width: 170px; }
         .test-product-cell {
-            min-height: 30px;
+            min-height: 24px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -7244,55 +7402,49 @@ def _render_test_scorrimento_detail_table(df_righe):
             transform: translateY(0) scale(1);
         }
         .test-product-name {
-            line-height: 1.18;
+            line-height: 1.08;
             font-weight: 500;
-            font-size: .80rem;
+            font-size: .72rem;
             color: #263238;
-            overflow-wrap: anywhere;
+            white-space: nowrap;
+            overflow-wrap: normal;
             transition: color .12s ease;
         }
         .test-product-hover-target:hover .test-product-name {
             color: #007ea8;
         }
         .scroll-test-table tbody tr.test-winner td {
-            background: #eef9fc;
-            border-top: 1px solid #90d7eb;
-            border-bottom: 1px solid #90d7eb;
-        }
-        .scroll-test-table tbody tr.test-winner td:first-child {
-            box-shadow: inset 4px 0 0 #00a7e1;
-            color: #005f7d;
-            font-weight: 800;
+            background: #ffffff;
+            font-weight: 750;
         }
         .scroll-test-table tbody tr.test-winner .test-product-name,
         .scroll-test-table tbody tr.test-winner .scroll-test-note {
-            font-weight: 650;
-            color: #173744;
+            font-weight: 750;
+            color: #263238;
         }
-        .winner-position {
+        .winner-position,
+        .podium-position {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            min-width: 26px;
-            height: 26px;
-            padding: 0 .45rem;
-            border-radius: 999px;
-            background: #d9f3fa;
-            border: 1px solid #8ed8eb;
-            color: #005f7d;
-            font-weight: 800;
+            gap: .18rem;
+            white-space: nowrap;
+            color: #263238;
         }
+        .winner-position { font-weight: 800; }
+        .podium-medal { font-size: .88rem; line-height: 1; }
+        .scroll-test-table tbody tr:not(.test-winner) td { background: #ffffff; }
         .test-product-empty {
             color: #9aa7b2;
             text-align: center;
-            font-size: .80rem;
+            font-size: .72rem;
             font-weight: 500;
         }
         .scroll-test-note {
             color: #263238;
-            line-height: 1.18;
-            white-space: normal;
-            font-size: .80rem;
+            line-height: 1.08;
+            white-space: nowrap;
+            font-size: .72rem;
             font-weight: 500;
         }
         </style>
@@ -7319,10 +7471,19 @@ def _render_test_scorrimento_detail_table(df_righe):
             is_winner = str(posizione or "").strip() == "1"
 
         row_class = ' class="test-winner"' if is_winner else ""
-        posizione_html = (
-            f'<span class="winner-position">{html_escape(pos_txt)}</span>'
-            if is_winner else html_escape(pos_txt)
-        )
+        medal_map = {1: "🥇", 2: "🥈", 3: "🥉"}
+        pos_num = None
+        try:
+            pos_num = int(float(posizione))
+        except (TypeError, ValueError):
+            pass
+        if pos_num in medal_map:
+            css_pos = "winner-position" if pos_num == 1 else "podium-position"
+            posizione_html = (
+                f'<span class="{css_pos}"><span class="podium-medal">{medal_map[pos_num]}</span>{html_escape(pos_txt)}</span>'
+            )
+        else:
+            posizione_html = html_escape(pos_txt)
         righe_html.append(
             f"<tr{row_class}>"
             f"<td>{posizione_html}</td>"
@@ -8098,7 +8259,9 @@ with st.container(key="sector_page_content"):
             "Archivio dei test prodotti scorrimento. Apri un test per vedere condizioni, preparazioni e classifica."
         )
 
-        with st.expander("＋ Nuovo test prodotti scorrimento", expanded=False):
+        scroll_edit_active = st.session_state.get("scroll_edit_session_id") is not None
+        scroll_form_label = "✎ Modifica test prodotti scorrimento" if scroll_edit_active else "＋ Nuovo test prodotti scorrimento"
+        with st.expander(scroll_form_label, expanded=scroll_edit_active):
             render_form_test_scorrimento()
 
         df_scroll_storico = leggi_df(
@@ -8306,9 +8469,29 @@ with st.container(key="sector_page_content"):
                         st.caption(f"Visualizzazione: {stato_ordine}")
                         _render_test_scorrimento_detail_table(df_righe_visual)
 
-                    if st.button("Elimina test", icon=":material/delete:", use_container_width=True, key=f"delete_scroll_history_{sid}"):
-                        st.session_state[f"confirm_delete_scroll_{sid}"] = True
-                        st.rerun()
+                    st.markdown('<div style="height:0.35rem"></div>', unsafe_allow_html=True)
+                    edit_c, delete_c = st.columns(2)
+                    with edit_c:
+                        if st.button(
+                            "Modifica test",
+                            icon=":material/edit:",
+                            use_container_width=True,
+                            key=f"edit_scroll_history_{sid}",
+                        ):
+                            st.session_state["scroll_edit_session_id"] = sid
+                            st.session_state.pop("scroll_edit_loaded_id", None)
+                            for k in ["scroll_rods_table_data", "scroll_rods_table_n"]:
+                                st.session_state.pop(k, None)
+                            st.rerun()
+                    with delete_c:
+                        if st.button(
+                            "Elimina test",
+                            icon=":material/delete:",
+                            use_container_width=True,
+                            key=f"delete_scroll_history_{sid}",
+                        ):
+                            st.session_state[f"confirm_delete_scroll_{sid}"] = True
+                            st.rerun()
                     if st.session_state.get(f"confirm_delete_scroll_{sid}", False):
                         st.warning("Confermi l'eliminazione di questo test prodotti scorrimento?")
                         dc1, dc2 = st.columns(2)
