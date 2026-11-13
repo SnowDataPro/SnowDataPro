@@ -7975,6 +7975,163 @@ def cambia_pagina(nome):
     st.rerun()
 
 
+
+# ============================================================
+# SIDEBAR — replica grafica Sector G2 Lab
+# Inserita a valle di tutti gli altri CSS per evitare override
+# del tema generale di SnowDataPro sui pulsanti del menu.
+# ============================================================
+st.markdown(
+    """
+    <style>
+    section[data-testid="stSidebar"] {
+        background: #191c1e !important;
+        border-right: 1px solid #2b3033 !important;
+    }
+
+    section[data-testid="stSidebar"] > div {
+        padding-top: 1.8rem !important;
+    }
+
+    /* Nessun riquadro attorno alle sezioni Test / Prodotti. */
+    section[data-testid="stSidebar"] [data-testid="stExpander"],
+    section[data-testid="stSidebar"] [data-testid="stExpander"] > details,
+    section[data-testid="stSidebar"] [data-testid="stExpander"] > details[open],
+    section[data-testid="stSidebar"] [data-testid="stExpander"] > details > div {
+        background: transparent !important;
+        border: 0 !important;
+        outline: 0 !important;
+        box-shadow: none !important;
+        border-radius: 3px !important;
+    }
+
+    section[data-testid="stSidebar"] [data-testid="stExpander"] {
+        margin-top: 0.35rem !important;
+    }
+
+    section[data-testid="stSidebar"] [data-testid="stExpander"] summary {
+        min-height: 44px !important;
+        padding-left: 0.4rem !important;
+        background: transparent !important;
+        color: #c9d0d4 !important;
+        border: 0 !important;
+        outline: 0 !important;
+        box-shadow: none !important;
+        border-radius: 3px !important;
+    }
+
+    section[data-testid="stSidebar"] [data-testid="stExpander"] summary:hover {
+        background: #252a2d !important;
+        color: #ffffff !important;
+    }
+
+    section[data-testid="stSidebar"] [data-testid="stExpander"] summary p {
+        color: inherit !important;
+        font-weight: 400 !important;
+    }
+
+    section[data-testid="stSidebar"] [data-testid="stExpander"] summary svg {
+        color: #9ba6ac !important;
+        fill: #9ba6ac !important;
+    }
+
+    section[data-testid="stSidebar"] [data-testid="stExpander"] > details > div {
+        padding-left: 0.65rem !important;
+    }
+
+    /* Tutte le voci hanno lo stesso aspetto neutro di Sector. */
+    section[data-testid="stSidebar"] .stButton > button,
+    section[data-testid="stSidebar"] button[data-testid="stBaseButton-secondary"],
+    section[data-testid="stSidebar"] button[kind="secondary"] {
+        width: 100% !important;
+        min-height: 44px !important;
+        justify-content: flex-start !important;
+        text-align: left !important;
+        padding-left: 0.65rem !important;
+        background: transparent !important;
+        color: #c9d0d4 !important;
+        border: 0 !important;
+        border-radius: 3px !important;
+        box-shadow: none !important;
+        font-weight: 400 !important;
+    }
+
+    section[data-testid="stSidebar"] [data-testid="stExpander"] .stButton > button,
+    section[data-testid="stSidebar"] [data-testid="stExpander"] button[data-testid="stBaseButton-secondary"] {
+        min-height: 39px !important;
+        font-size: 0.90rem !important;
+        padding-left: 1.25rem !important;
+    }
+
+    section[data-testid="stSidebar"] .stButton > button:hover,
+    section[data-testid="stSidebar"] button[data-testid="stBaseButton-secondary"]:hover,
+    section[data-testid="stSidebar"] button[kind="secondary"]:hover {
+        background: #252a2d !important;
+        color: #ffffff !important;
+        border: 0 !important;
+        box-shadow: none !important;
+    }
+
+    /* Voce attiva: grigio scuro + sola barra azzurra a sinistra, come Sector. */
+    section[data-testid="stSidebar"] .stButton > button[kind="primary"],
+    section[data-testid="stSidebar"] button[data-testid="stBaseButton-primary"],
+    section[data-testid="stSidebar"] button[kind="primary"] {
+        background: #252a2d !important;
+        color: #ffffff !important;
+        border: 0 !important;
+        border-left: 4px solid #00a7e1 !important;
+        border-radius: 2px !important;
+        box-shadow: none !important;
+        font-weight: 500 !important;
+    }
+
+    section[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover,
+    section[data-testid="stSidebar"] button[data-testid="stBaseButton-primary"]:hover,
+    section[data-testid="stSidebar"] button[kind="primary"]:hover {
+        background: #252a2d !important;
+        color: #ffffff !important;
+        border: 0 !important;
+        border-left: 4px solid #00a7e1 !important;
+    }
+
+    section[data-testid="stSidebar"] .stButton button > div {
+        justify-content: flex-start !important;
+        width: 100% !important;
+    }
+
+    section[data-testid="stSidebar"] .stButton button p,
+    section[data-testid="stSidebar"] p,
+    section[data-testid="stSidebar"] span,
+    section[data-testid="stSidebar"] label {
+        color: inherit !important;
+        text-align: left !important;
+    }
+
+    section[data-testid="stSidebar"] ::-webkit-scrollbar {
+        width: 6px !important;
+    }
+
+    section[data-testid="stSidebar"] ::-webkit-scrollbar-thumb {
+        background: #41484c !important;
+        border-radius: 10px !important;
+    }
+
+    /* Mantiene il logo centrato e con la stessa gerarchia di Sector. */
+    section[data-testid="stSidebar"] [data-testid="stImage"] {
+        display: flex !important;
+        justify-content: center !important;
+        width: 100% !important;
+    }
+
+    section[data-testid="stSidebar"] [data-testid="stImage"] img {
+        margin-left: auto !important;
+        margin-right: auto !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 logo_sidebar_path = os.path.join(BASE_DIR, "snowdatapro_logo_transparent.png")
 
 if os.path.exists(logo_sidebar_path):
@@ -8017,11 +8174,11 @@ with st.sidebar.expander(
         "Test scioline di tenuta",
         "Test rigature manuali",
     ],
-    icon="🧪",
+    icon=":material/science:",
 ):
     if st.button(
         "Zero test",
-        icon="⏱️",
+        icon=":material/timer:",
         key="menu_zero_test",
         use_container_width=True,
         type="primary" if pagina == "Zero test" else "secondary",
@@ -8030,7 +8187,7 @@ with st.sidebar.expander(
 
     if st.button(
         "Test prodotti scorrimento",
-        icon="⛷️",
+        icon=":material/downhill_skiing:",
         key="menu_test_scorrimento",
         use_container_width=True,
         type="primary" if pagina == "Test prodotti scorrimento" else "secondary",
@@ -8040,7 +8197,7 @@ with st.sidebar.expander(
 
     if st.button(
         "Test scioline di tenuta",
-        icon="🎿",
+        icon=":material/nordic_walking:",
         key="menu_test_tenuta",
         use_container_width=True,
         type="primary" if pagina == "Test scioline di tenuta" else "secondary",
