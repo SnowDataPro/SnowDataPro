@@ -7811,14 +7811,55 @@ def _render_test_scorrimento_podium(df_righe):
     st.markdown(podium_html, unsafe_allow_html=True)
 
 def _render_test_scorrimento_detail_table(df_righe):
-    """Tabella storico test scorrimento compatta con preview foto sul nome prodotto."""
+    """Tabella storico test scorrimento compatta con sole colonne prodotto realmente usate."""
     if df_righe is None or df_righe.empty:
         return
 
+    # Mostra nello storico soltanto gli strati effettivamente presenti nel test.
+    # Le colonne non selezionate nell'inserimento vengono salvate vuote/null e,
+    # dopo le LEFT JOIN, arrivano come "—": per questo possiamo ricostruire
+    # automaticamente la configurazione senza modificare lo schema del database.
+    colonne_prodotto = [
+        ("Base", "base", "base_foto", "base_mime", "base_id"),
+        ("Paraffina", "paraffina", "paraffina_foto", "paraffina_mime", "paraffina_id"),
+        ("Top coating", "top_coating", "top_foto", "top_mime", "top_coating_id"),
+        ("Liquido", "liquido", "liquido_foto", "liquido_mime", "liquido_id"),
+    ]
+
+    def _id_prodotto_presente(nome_colonna_id):
+        """Una colonna è attiva solo se nel test esiste almeno un ID prodotto reale."""
+        if nome_colonna_id not in df_righe.columns:
+            return False
+        for valore in df_righe[nome_colonna_id].tolist():
+            if valore is None:
+                continue
+            try:
+                if pd.isna(valore):
+                    continue
+            except (TypeError, ValueError):
+                pass
+            testo = str(valore).strip()
+            if testo and testo.lower() not in {"none", "nan", "<na>", "0", "0.0"}:
+                return True
+        return False
+
+    # La scelta delle colonne si basa sugli ID salvati in test_scorrimento_aste,
+    # non sui testi delle LEFT JOIN. In questo modo Base/Paraffina non vengono
+    # mostrate quando non erano state selezionate nel test.
+    colonne_attive = [
+        dati for dati in colonne_prodotto
+        if _id_prodotto_presente(dati[4])
+    ]
+
+    # Se per un vecchio test non fosse possibile ricostruire la configurazione,
+    # manteniamo almeno la struttura base senza aggiungere colonne vuote.
+    numero_colonne_prodotto = len(colonne_attive)
+    larghezza_minima = 320 + (158 * numero_colonne_prodotto)
+
     st.markdown(
-        """
+        f"""
         <style>
-        .scroll-test-table-wrap {
+        .scroll-test-table-wrap {{
             overflow-x: auto;
             overflow-y: visible;
             border: 1px solid #d8dde3;
@@ -7827,25 +7868,25 @@ def _render_test_scorrimento_detail_table(df_righe):
             margin-top: .35rem;
             position: relative;
             z-index: 1;
-        }
-        .scroll-test-table tbody tr {
+        }}
+        .scroll-test-table tbody tr {{
             position: relative;
             z-index: 1;
-        }
-        .scroll-test-table tbody tr:has(.test-product-hover-target:hover) {
+        }}
+        .scroll-test-table tbody tr:has(.test-product-hover-target:hover) {{
             z-index: 2147483646 !important;
-        }
-        table.scroll-test-table {
+        }}
+        table.scroll-test-table {{
             width: 100%;
-            min-width: 900px;
+            min-width: {larghezza_minima}px;
             border-collapse: separate;
             border-spacing: 0;
             table-layout: fixed;
             color: #263238;
             font-size: .72rem;
             font-weight: 500;
-        }
-        .scroll-test-table th {
+        }}
+        .scroll-test-table th {{
             background: #eef1f4;
             color: #52616b;
             font-size: .72rem;
@@ -7855,8 +7896,8 @@ def _render_test_scorrimento_detail_table(df_righe):
             border-bottom: 1px solid #d8dde3;
             white-space: nowrap;
             line-height: 1.15;
-        }
-        .scroll-test-table td {
+        }}
+        .scroll-test-table td {{
             padding: .34rem .34rem;
             border-bottom: 1px solid #e3e7eb;
             vertical-align: middle;
@@ -7866,36 +7907,33 @@ def _render_test_scorrimento_detail_table(df_righe):
             font-size: .72rem;
             font-weight: 500;
             line-height: 1.12;
-        }
-        .scroll-test-table tr:last-child td { border-bottom: 0; }
-        .scroll-test-table th:nth-child(1), .scroll-test-table td:nth-child(1) { width: 62px; text-align:center; }
-        .scroll-test-table th:nth-child(2), .scroll-test-table td:nth-child(2) { width: 88px; }
-        .scroll-test-table th:nth-child(3), .scroll-test-table td:nth-child(3),
-        .scroll-test-table th:nth-child(4), .scroll-test-table td:nth-child(4),
-        .scroll-test-table th:nth-child(5), .scroll-test-table td:nth-child(5),
-        .scroll-test-table th:nth-child(6), .scroll-test-table td:nth-child(6) { width: 158px; }
-        .scroll-test-table th:nth-child(7), .scroll-test-table td:nth-child(7) { width: 170px; }
-        .test-product-cell {
+        }}
+        .scroll-test-table tr:last-child td {{ border-bottom: 0; }}
+        .scroll-test-table th.col-posizione, .scroll-test-table td.col-posizione {{ width: 62px; text-align:center; }}
+        .scroll-test-table th.col-sci, .scroll-test-table td.col-sci {{ width: 88px; }}
+        .scroll-test-table th.col-prodotto, .scroll-test-table td.col-prodotto {{ width: 158px; }}
+        .scroll-test-table th.col-note, .scroll-test-table td.col-note {{ width: 170px; }}
+        .test-product-cell {{
             min-height: 24px;
             display: flex;
             align-items: center;
             justify-content: center;
             text-align: center;
             position: relative;
-        }
-        .test-product-hover-target {
+        }}
+        .test-product-hover-target {{
             position: relative;
             display: inline-block;
             max-width: 100%;
             cursor: zoom-in;
             z-index: auto;
-        }
+        }}
         .scroll-test-table tr:has(.test-product-hover-target:hover),
         .scroll-test-table td:has(.test-product-hover-target:hover),
-        .test-product-hover-target:hover {
+        .test-product-hover-target:hover {{
             z-index: 2147483646 !important;
-        }
-        .test-product-hover-preview {
+        }}
+        .test-product-hover-preview {{
             position: fixed;
             top: 138px;
             right: 32px;
@@ -7915,19 +7953,19 @@ def _render_test_scorrimento_detail_table(df_righe):
             isolation: isolate;
             z-index: 2147483647 !important;
             transition: opacity .12s ease, transform .12s ease, visibility .12s ease;
-        }
-        .test-product-hover-preview img {
+        }}
+        .test-product-hover-preview img {{
             width: 100%;
             height: 100%;
             object-fit: contain;
             display: block;
-        }
-        .test-product-hover-target:hover .test-product-hover-preview {
+        }}
+        .test-product-hover-target:hover .test-product-hover-preview {{
             opacity: 1;
             visibility: visible;
             transform: translateY(0) scale(1);
-        }
-        .test-product-name {
+        }}
+        .test-product-name {{
             line-height: 1.08;
             font-weight: 500;
             font-size: .72rem;
@@ -7935,37 +7973,37 @@ def _render_test_scorrimento_detail_table(df_righe):
             white-space: nowrap;
             overflow-wrap: normal;
             transition: color .12s ease;
-        }
-        .test-product-hover-target:hover .test-product-name {
+        }}
+        .test-product-hover-target:hover .test-product-name {{
             color: #007ea8;
-        }
-        .scroll-test-table tbody tr.test-winner td {
+        }}
+        .scroll-test-table tbody tr.test-winner td {{
             background: #ffffff;
             font-weight: 750;
-        }
+        }}
         .scroll-test-table tbody tr.test-winner .test-product-name,
-        .scroll-test-table tbody tr.test-winner .scroll-test-note {
+        .scroll-test-table tbody tr.test-winner .scroll-test-note {{
             font-weight: 750;
             color: #263238;
-        }
-        .winner-position {
+        }}
+        .winner-position {{
             font-weight: 800;
             color: #263238;
-        }
-        .scroll-test-table tbody tr:not(.test-winner) td { background: #ffffff; }
-        .test-product-empty {
+        }}
+        .scroll-test-table tbody tr:not(.test-winner) td {{ background: #ffffff; }}
+        .test-product-empty {{
             color: #9aa7b2;
             text-align: center;
             font-size: .72rem;
             font-weight: 500;
-        }
-        .scroll-test-note {
+        }}
+        .scroll-test-note {{
             color: #263238;
             line-height: 1.08;
             white-space: nowrap;
             font-size: .72rem;
             font-weight: 500;
-        }
+        }}
         </style>
         """,
         unsafe_allow_html=True,
@@ -7994,22 +8032,35 @@ def _render_test_scorrimento_detail_table(df_righe):
             posizione_html = f'<span class="winner-position">{html_escape(pos_txt)}</span>'
         else:
             posizione_html = html_escape(pos_txt)
+
+        celle_prodotti = "".join(
+            f'<td class="col-prodotto">{_product_cell_html(record.get(campo), record.get(campo_foto), record.get(campo_mime))}</td>'
+            for _, campo, campo_foto, campo_mime, _ in colonne_attive
+        )
+
         righe_html.append(
             f"<tr{row_class}>"
-            f"<td>{posizione_html}</td>"
-            f"<td>{numero_sci}</td>"
-            f"<td>{_product_cell_html(record.get('base'), record.get('base_foto'), record.get('base_mime'))}</td>"
-            f"<td>{_product_cell_html(record.get('paraffina'), record.get('paraffina_foto'), record.get('paraffina_mime'))}</td>"
-            f"<td>{_product_cell_html(record.get('top_coating'), record.get('top_foto'), record.get('top_mime'))}</td>"
-            f"<td>{_product_cell_html(record.get('liquido'), record.get('liquido_foto'), record.get('liquido_mime'))}</td>"
-            f'<td><div class="scroll-test-note">{note}</div></td>'
+            f'<td class="col-posizione">{posizione_html}</td>'
+            f'<td class="col-sci">{numero_sci}</td>'
+            f"{celle_prodotti}"
+            f'<td class="col-note"><div class="scroll-test-note">{note}</div></td>'
             "</tr>"
         )
+
+    intestazioni_prodotti = "".join(
+        f'<th class="col-prodotto">{html_escape(etichetta)}</th>'
+        for etichetta, _, _, _, _ in colonne_attive
+    )
 
     html = (
         '<div class="scroll-test-table-wrap">'
         '<table class="scroll-test-table">'
-        '<thead><tr><th>Posizione</th><th>Numero sci</th><th>Base</th><th>Paraffina</th><th>Top coating</th><th>Liquido</th><th>Note</th></tr></thead>'
+        '<thead><tr>'
+        '<th class="col-posizione">Posizione</th>'
+        '<th class="col-sci">Numero sci</th>'
+        + intestazioni_prodotti +
+        '<th class="col-note">Note</th>'
+        '</tr></thead>'
         '<tbody>' + ''.join(righe_html) + '</tbody></table></div>'
     )
     st.markdown(html, unsafe_allow_html=True)
@@ -8986,6 +9037,10 @@ with st.container(key="sector_page_content"):
                     df_righe = leggi_df(
                         """
                         SELECT a.posizione, a.numero_sci,
+                               a.base_prodotto_id AS base_id,
+                               a.paraffina_prodotto_id AS paraffina_id,
+                               a.top_coating_prodotto_id AS top_coating_id,
+                               a.liquido_prodotto_id AS liquido_id,
                                COALESCE(pb.marca || ' - ' || pb.nome, pb.nome, '—') AS base,
                                pb.foto_data AS base_foto, pb.foto_mime AS base_mime,
                                COALESCE(pp.marca || ' - ' || pp.nome, pp.nome, '—') AS paraffina,
