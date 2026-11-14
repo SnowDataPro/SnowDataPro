@@ -7774,7 +7774,7 @@ def _render_test_scorrimento_podium(df_righe, tipo_prodotti_testati=None):
             border-radius: 12px 12px 8px 8px;
             padding: 1rem .8rem .8rem .8rem;
             box-shadow: 0 7px 18px rgba(31, 41, 51, .07);
-            min-height: 222px;
+            min-height: 238px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -7786,7 +7786,7 @@ def _render_test_scorrimento_podium(df_righe, tipo_prodotti_testati=None):
         .podium-product-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: .75rem;
+            gap: .82rem;
             align-items: start;
             width: 100%;
         }
@@ -7801,7 +7801,7 @@ def _render_test_scorrimento_podium(df_righe, tipo_prodotti_testati=None):
         .podium-product-image,
         .podium-product-placeholder {
             width: 100%;
-            height: 92px;
+            height: 108px;
             object-fit: contain;
             display: flex;
             align-items: center;
@@ -7809,13 +7809,13 @@ def _render_test_scorrimento_podium(df_righe, tipo_prodotti_testati=None):
             background: #f7f9fa;
             border: 1px solid #e3e7eb;
             border-radius: 10px;
-            margin: 0 auto .42rem auto;
-            padding: .35rem;
+            margin: 0 auto .45rem auto;
+            padding: .3rem;
         }
         .podium-product-image.podium-single-image,
         .podium-product-placeholder.podium-single-image {
-            width: 132px;
-            height: 132px;
+            width: 152px;
+            height: 152px;
         }
         .podium-product-placeholder span {
             color: #a5b0b8;
@@ -7825,16 +7825,16 @@ def _render_test_scorrimento_podium(df_righe, tipo_prodotti_testati=None):
         }
         .podium-product-category {
             color: #8a98a3;
-            font-size: .62rem;
+            font-size: .64rem;
             line-height: 1.08;
             font-weight: 800;
             text-transform: uppercase;
             letter-spacing: .04em;
-            margin-bottom: .16rem;
+            margin-bottom: .18rem;
         }
         .podium-product-name {
             color: #263238;
-            font-size: .82rem;
+            font-size: .86rem;
             line-height: 1.16;
             font-weight: 700;
             display: -webkit-box;
@@ -8093,6 +8093,7 @@ def _render_test_scorrimento_detail_table(df_righe):
             pos_txt = str(int(posizione))
         else:
             pos_txt = str(posizione)
+        numero_sci = html_escape(str(record.get("numero_sci") or "—"))
         note = html_escape(str(record.get("note") or "—"))
 
         is_winner = False
