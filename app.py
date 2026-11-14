@@ -7709,7 +7709,6 @@ def _render_test_scorrimento_podium(df_righe, tipo_prodotti_testati=None):
             return '<div class="scroll-podium-entry podium-empty-slot"></div>'
 
         prodotti = _prodotti_record(record)
-        numero_sci = html_escape(str(record.get("numero_sci") or "—"))
         rank_word = {1: "1°", 2: "2°", 3: "3°"}[pos]
         place_class = {1: "first", 2: "second", 3: "third"}[pos]
 
@@ -7727,7 +7726,6 @@ def _render_test_scorrimento_podium(df_righe, tipo_prodotti_testati=None):
         return (
             f'<div class="scroll-podium-entry podium-{place_class}">'
             '<div class="podium-result-card">'
-            f'<div class="podium-ski-label">SCI {numero_sci}</div>'
             f'<div class="podium-product-grid count-{min(len(prodotti), 4)}">{products_html}</div>'
             '</div>'
             f'<div class="podium-step podium-step-{place_class}">'
@@ -7774,28 +7772,23 @@ def _render_test_scorrimento_podium(df_righe, tipo_prodotti_testati=None):
             background: #ffffff;
             border: 1px solid #d8dde3;
             border-radius: 12px 12px 8px 8px;
-            padding: .85rem .7rem .7rem .7rem;
+            padding: 1rem .8rem .8rem .8rem;
             box-shadow: 0 7px 18px rgba(31, 41, 51, .07);
-            min-height: 188px;
+            min-height: 222px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         .podium-first .podium-result-card {
             border-color: #d8b54c;
             box-shadow: 0 9px 24px rgba(31, 41, 51, .10);
         }
-        .podium-ski-label {
-            text-align: center;
-            color: #7a8a96;
-            font-size: .66rem;
-            font-weight: 800;
-            letter-spacing: .08em;
-            text-transform: uppercase;
-            margin-bottom: .55rem;
-        }
         .podium-product-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: .52rem;
+            gap: .75rem;
             align-items: start;
+            width: 100%;
         }
         .podium-product-grid.count-1 {
             grid-template-columns: 1fr;
@@ -7808,20 +7801,21 @@ def _render_test_scorrimento_podium(df_righe, tipo_prodotti_testati=None):
         .podium-product-image,
         .podium-product-placeholder {
             width: 100%;
-            height: 58px;
+            height: 92px;
             object-fit: contain;
             display: flex;
             align-items: center;
             justify-content: center;
             background: #f7f9fa;
             border: 1px solid #e3e7eb;
-            border-radius: 8px;
-            margin: 0 auto .3rem auto;
+            border-radius: 10px;
+            margin: 0 auto .42rem auto;
+            padding: .35rem;
         }
         .podium-product-image.podium-single-image,
         .podium-product-placeholder.podium-single-image {
-            width: 104px;
-            height: 86px;
+            width: 132px;
+            height: 132px;
         }
         .podium-product-placeholder span {
             color: #a5b0b8;
@@ -7831,17 +7825,17 @@ def _render_test_scorrimento_podium(df_righe, tipo_prodotti_testati=None):
         }
         .podium-product-category {
             color: #8a98a3;
-            font-size: .58rem;
-            line-height: 1.05;
+            font-size: .62rem;
+            line-height: 1.08;
             font-weight: 800;
             text-transform: uppercase;
             letter-spacing: .04em;
-            margin-bottom: .12rem;
+            margin-bottom: .16rem;
         }
         .podium-product-name {
             color: #263238;
-            font-size: .69rem;
-            line-height: 1.12;
+            font-size: .82rem;
+            line-height: 1.16;
             font-weight: 700;
             display: -webkit-box;
             -webkit-line-clamp: 2;
@@ -8099,7 +8093,6 @@ def _render_test_scorrimento_detail_table(df_righe):
             pos_txt = str(int(posizione))
         else:
             pos_txt = str(posizione)
-        numero_sci = html_escape(str(record.get("numero_sci") or "—"))
         note = html_escape(str(record.get("note") or "—"))
 
         is_winner = False
