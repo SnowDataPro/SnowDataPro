@@ -103,6 +103,7 @@ def inizializza_database():
             zero_batteria TEXT,
             zero_modello_sci TEXT,
             tipo_test TEXT,
+            categoria_test_scorrimento TEXT,
             zero_riferimento_id INTEGER,
             note TEXT,
             creato_il TEXT NOT NULL
@@ -253,6 +254,7 @@ def inizializza_database():
         "zero_modello_sci": "TEXT",
         "meteo": "TEXT",
         "tipo_test": "TEXT",
+        "categoria_test_scorrimento": "TEXT",
         "zero_riferimento_id": "INTEGER",
     }
     for nome_colonna, tipo_colonna in nuove_colonne_sessioni.items():
@@ -6141,7 +6143,7 @@ def render_form_test_scorrimento():
             SELECT id, data, ora, luogo, temperatura_aria, temperatura_neve,
                    umidita, meteo, snow_origine, snow_consistenza, snow_umidita,
                    snow_forma_grano, snow_granulometria, snow_caratteristiche,
-                   zero_modello_sci, tipo_test, zero_riferimento_id
+                   zero_modello_sci, tipo_test, categoria_test_scorrimento, zero_riferimento_id
             FROM sessioni
             WHERE id = ?
             """,
@@ -6160,6 +6162,13 @@ def render_form_test_scorrimento():
     if needs_scroll_edit_load and edit_scroll_row is not None:
         metodo_edit = str(edit_scroll_row.get("tipo_test") or "Asta").replace("Test prodotti scorrimento · ", "").strip()
         st.session_state["scroll_test_method"] = metodo_edit if metodo_edit in ["Asta", "Parallel", "Fotocellula"] else "Asta"
+        tipo_prodotti_edit = str(edit_scroll_row.get("categoria_test_scorrimento") or "").strip()
+        tipologie_prodotti_valide = [
+            "Test liquidi", "Test top coating", "Test paraffine", "Test basi", "Test combinazioni"
+        ]
+        st.session_state["scroll_product_test_type"] = (
+            tipo_prodotti_edit if tipo_prodotti_edit in tipologie_prodotti_valide else "Test combinazioni"
+        )
         try:
             st.session_state["scroll_date"] = pd.to_datetime(edit_scroll_row.get("data")).date()
         except Exception:
@@ -6205,7 +6214,10 @@ def render_form_test_scorrimento():
             if st.button("Annulla modifica", use_container_width=True, key="cancel_scroll_edit"):
                 st.session_state.pop("scroll_edit_session_id", None)
                 st.session_state.pop("scroll_edit_loaded_id", None)
-                for k in ["scroll_rods_table_data", "scroll_rods_table_n", "scroll_product_columns"]:
+                for k in [
+                    "scroll_rods_table_data", "scroll_rods_table_n",
+                    "scroll_product_columns", "scroll_product_test_type"
+                ]:
                     st.session_state.pop(k, None)
                 st.rerun()
 
@@ -6214,7 +6226,7 @@ def render_form_test_scorrimento():
     c_tipo_scroll, c_zero_ref = st.columns([1, 1.6])
     with c_tipo_scroll:
         metodo_scroll = st.selectbox(
-            "Tipologia di test",
+            "Metodo test",
             ["Asta", "Parallel", "Fotocellula"],
             key="scroll_test_method",
             help="Seleziona il metodo con cui hai effettuato il test prodotti.",
@@ -6379,6 +6391,43 @@ def render_form_test_scorrimento():
             "I prodotti sono selezionati direttamente dal catalogo SnowDataPro."
         )
 
+        tipologie_prodotti_test = [
+            "Test liquidi",
+            "Test top coating",
+            "Test paraffine",
+            "Test basi",
+            "Test combinazioni",
+        ]
+        if "scroll_product_test_type" not in st.session_state:
+            st.session_state["scroll_product_test_type"] = "Test combinazioni"
+        tipologia_prodotti_testati = st.selectbox(
+            "Tipologia prodotti testati",
+            tipologie_prodotti_test,
+            key="scroll_product_test_type",
+            help=(
+                "Indica quali prodotti stai realmente confrontando. La preparazione completa dello sci "
+                "può comunque contenere altre colonne uguali per tutti. Sul podio verranno mostrati "
+                "solo i prodotti della tipologia scelta."
+            ),
+        )
+        focus_to_column = {
+            "Test liquidi": "Liquido",
+            "Test top coating": "Top coating",
+            "Test paraffine": "Paraffina",
+            "Test basi": "Base",
+            "Test combinazioni": None,
+        }
+        colonna_focus_test = focus_to_column.get(tipologia_prodotti_testati)
+        if colonna_focus_test:
+            st.caption(
+                f"Confronto principale: **{colonna_focus_test}**. Le altre colonne servono a descrivere "
+                "la preparazione completa dello sci e non verranno mostrate sul podio."
+            )
+        else:
+            st.caption(
+                "Confronto combinazioni: sul podio verrà mostrata l'intera preparazione prodotto dello sci."
+            )
+
         numero_aste = st.number_input(
             "Numero di aste",
             min_value=1,
@@ -6424,12 +6473,13 @@ def render_form_test_scorrimento():
             st.session_state["scroll_product_columns"] = colonne_prodotto_disponibili.copy()
 
         colonne_prodotto_selezionate = st.multiselect(
-            "Colonne prodotti da usare",
+            "Colonne della preparazione da inserire",
             colonne_prodotto_disponibili,
             key="scroll_product_columns",
             help=(
-                "Scegli soltanto gli strati/prodotti effettivamente presenti nel test. "
-                "Esempio: per un confronto di soli liquidi seleziona solo 'Liquido'."
+                "Scegli quante e quali colonne compongono lo sci durante il test. "
+                "Esempio: per un Test liquidi puoi usare due colonne, 'Top coating' uguale per tutti "
+                "e 'Liquido' diverso per ogni sci."
             ),
         )
         # Mantiene sempre l'ordine logico delle colonne, indipendentemente
@@ -6657,6 +6707,11 @@ def render_form_test_scorrimento():
         if salva_scroll:
             if not colonne_prodotto_attive:
                 st.error("Seleziona almeno una colonna prodotto da usare nel test.")
+            elif colonna_focus_test and colonna_focus_test not in colonne_prodotto_attive:
+                st.error(
+                    f"Hai selezionato '{tipologia_prodotti_testati}': aggiungi la colonna "
+                    f"'{colonna_focus_test}' alla preparazione del test."
+                )
             elif not str(scroll_luogo or "").strip():
                 st.error("Inserisci il luogo del test.")
             else:
@@ -6713,7 +6768,7 @@ def render_form_test_scorrimento():
                                     umidita = ?, meteo = ?,
                                     snow_origine = ?, snow_consistenza = ?, snow_umidita = ?,
                                     snow_forma_grano = ?, snow_granulometria = ?, snow_caratteristiche = ?,
-                                    zero_modello_sci = ?, tipo_test = ?, zero_riferimento_id = ?
+                                    zero_modello_sci = ?, tipo_test = ?, categoria_test_scorrimento = ?, zero_riferimento_id = ?
                                 WHERE id = ?
                                 """,
                                 (
@@ -6732,6 +6787,7 @@ def render_form_test_scorrimento():
                                     _compatta_neve_sessione(scroll_caratteristiche, snow_options_scroll["Caratteristiche"]),
                                     str(scroll_modello_sci or "").strip(),
                                     f"Test prodotti scorrimento · {metodo_scroll}",
+                                    tipologia_prodotti_testati,
                                     int(zero_ref_id) if zero_ref_id is not None else None,
                                     sessione_scroll_id,
                                 ),
@@ -6745,8 +6801,8 @@ def render_form_test_scorrimento():
                                     umidita, meteo, tipo_neve, condizione_pista,
                                     snow_origine, snow_consistenza, snow_umidita,
                                     snow_forma_grano, snow_granulometria, snow_caratteristiche,
-                                    zero_modello_sci, tipo_test, zero_riferimento_id, note, creato_il
-                                ) VALUES (?, ?, ?, ?, ?, ?, ?, '', '', ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)
+                                    zero_modello_sci, tipo_test, categoria_test_scorrimento, zero_riferimento_id, note, creato_il
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?, '', '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)
                                 """,
                                 (
                                     scroll_data.isoformat(),
@@ -6764,6 +6820,7 @@ def render_form_test_scorrimento():
                                     _compatta_neve_sessione(scroll_caratteristiche, snow_options_scroll["Caratteristiche"]),
                                     str(scroll_modello_sci or "").strip(),
                                     f"Test prodotti scorrimento · {metodo_scroll}",
+                                    tipologia_prodotti_testati,
                                     int(zero_ref_id) if zero_ref_id is not None else None,
                                     datetime.now().isoformat(timespec="seconds"),
                                 ),
@@ -6805,7 +6862,10 @@ def render_form_test_scorrimento():
                         st.session_state.pop("scroll_edit_loaded_id", None)
                     else:
                         st.session_state["scroll_history_notice"] = f"Test prodotti scorrimento salvato correttamente · {len(righe_asta)} righe registrate."
-                    for k in ["scroll_rods_table_data", "scroll_rods_table_n"]:
+                    for k in [
+                        "scroll_rods_table_data", "scroll_rods_table_n",
+                        "scroll_product_columns", "scroll_product_test_type"
+                    ]:
                         st.session_state.pop(k, None)
                     st.rerun()
     else:
@@ -7557,8 +7617,17 @@ def _crea_pdf_test_scorrimento(test, df_righe):
 
 
 
-def _render_test_scorrimento_podium(df_righe):
-    """Podio grafico dei primi tre classificati con foto e nomi dei prodotti/combinazioni."""
+def _normalizza_tipo_prodotti_test_scorrimento(valore):
+    valore = str(valore or "").strip()
+    validi = {
+        "Test liquidi", "Test top coating", "Test paraffine",
+        "Test basi", "Test combinazioni"
+    }
+    return valore if valore in validi else "Test combinazioni"
+
+
+def _render_test_scorrimento_podium(df_righe, tipo_prodotti_testati=None):
+    """Podio dei primi tre: mostra solo il prodotto oggetto del confronto, oppure l'intera combinazione."""
     if df_righe is None or df_righe.empty:
         return
 
@@ -7586,6 +7655,16 @@ def _render_test_scorrimento_podium(df_righe):
         mime = str(foto_mime or "image/png").strip() or "image/png"
         return f"data:{html_escape(mime)};base64,{valore}"
 
+    tipo_focus = _normalizza_tipo_prodotti_test_scorrimento(tipo_prodotti_testati)
+    campi_focus = {
+        "Test basi": {"Base"},
+        "Test paraffine": {"Paraffina"},
+        "Test top coating": {"Top coating"},
+        "Test liquidi": {"Liquido"},
+        "Test combinazioni": {"Base", "Paraffina", "Top coating", "Liquido"},
+    }
+    categorie_podio = campi_focus.get(tipo_focus, campi_focus["Test combinazioni"])
+
     def _prodotti_record(record):
         campi = [
             ("Base", "base", "base_foto", "base_mime"),
@@ -7595,6 +7674,8 @@ def _render_test_scorrimento_podium(df_righe):
         ]
         prodotti = []
         for categoria, nome_key, foto_key, mime_key in campi:
+            if categoria not in categorie_podio:
+                continue
             nome = str(record.get(nome_key) or "").strip()
             if not nome or nome == "—":
                 continue
@@ -8990,7 +9071,7 @@ with st.container(key="sector_page_content"):
                 s.id, s.data, s.ora, s.luogo, s.temperatura_aria, s.temperatura_neve,
                 s.umidita, s.meteo, s.snow_origine, s.snow_consistenza, s.snow_umidita,
                 s.snow_forma_grano, s.snow_granulometria, s.snow_caratteristiche,
-                s.zero_modello_sci, s.tipo_test, s.zero_riferimento_id, s.note, s.creato_il,
+                s.zero_modello_sci, s.tipo_test, s.categoria_test_scorrimento, s.zero_riferimento_id, s.note, s.creato_il,
                 COUNT(a.id) AS righe_test
             FROM sessioni s
             LEFT JOIN test_scorrimento_aste a ON a.sessione_id = s.id
@@ -9061,14 +9142,21 @@ with st.container(key="sector_page_content"):
                     )
                     combinazioni_testate = len(df_righe) if not df_righe.empty else int(test.get("righe_test") or 0)
 
-                    c1, c2, c3, c4 = st.columns(4)
+                    tipo_prodotti_testati_storico = _normalizza_tipo_prodotti_test_scorrimento(
+                        test.get("categoria_test_scorrimento")
+                    )
+                    confronto_label = tipo_prodotti_testati_storico.replace("Test ", "", 1).capitalize()
+
+                    c1, c2, c3, c4, c5 = st.columns(5)
                     with c1:
                         st.metric("Metodo test", metodo)
                     with c2:
-                        st.metric("Prodotti/combinazioni testati", combinazioni_testate)
+                        st.metric("Confronto", confronto_label)
                     with c3:
-                        st.metric("T aria °C", _formatta_temperatura_1d(test.get("temperatura_aria")))
+                        st.metric("Prodotti/combinazioni testati", combinazioni_testate)
                     with c4:
+                        st.metric("T aria °C", _formatta_temperatura_1d(test.get("temperatura_aria")))
+                    with c5:
                         st.metric("T neve °C", _formatta_temperatura_1d(test.get("temperatura_neve")))
 
                     st.markdown("##### Sessione")
@@ -9146,7 +9234,15 @@ with st.container(key="sector_page_content"):
 
                     if not df_righe.empty:
                         st.markdown("##### Podio test")
-                        _render_test_scorrimento_podium(df_righe)
+                        if tipo_prodotti_testati_storico != "Test combinazioni":
+                            st.caption(
+                                "Sul podio sono mostrati solo i prodotti oggetto del confronto: "
+                                f"**{confronto_label}**. La tabella sotto mantiene la preparazione completa dello sci."
+                            )
+                        _render_test_scorrimento_podium(
+                            df_righe,
+                            tipo_prodotti_testati_storico,
+                        )
 
                         st.markdown("##### Dettaglio test")
 
