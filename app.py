@@ -6205,7 +6205,7 @@ def render_form_test_scorrimento():
             if st.button("Annulla modifica", use_container_width=True, key="cancel_scroll_edit"):
                 st.session_state.pop("scroll_edit_session_id", None)
                 st.session_state.pop("scroll_edit_loaded_id", None)
-                for k in ["scroll_rods_table_data", "scroll_rods_table_n"]:
+                for k in ["scroll_rods_table_data", "scroll_rods_table_n", "scroll_product_columns"]:
                     st.session_state.pop(k, None)
                 st.rerun()
 
@@ -6390,6 +6390,62 @@ def render_form_test_scorrimento():
             help="Definisce il numero di posizioni/righe da compilare nel test ad asta.",
         )
 
+        colonne_prodotto_disponibili = ["Base", "Paraffina", "Top coating", "Liquido"]
+
+        # Quando si apre un test in modifica, mostra automaticamente soltanto le
+        # colonne prodotto realmente utilizzate in quel test. Se non è possibile
+        # ricavarle, mantiene la configurazione completa tradizionale.
+        if needs_scroll_edit_load and edit_scroll_session_id is not None:
+            df_colonne_usate = leggi_df(
+                """
+                SELECT base_prodotto_id, paraffina_prodotto_id,
+                       top_coating_prodotto_id, liquido_prodotto_id
+                FROM test_scorrimento_aste
+                WHERE sessione_id = ?
+                """,
+                (int(edit_scroll_session_id),),
+            )
+            mappa_colonne_db = {
+                "Base": "base_prodotto_id",
+                "Paraffina": "paraffina_prodotto_id",
+                "Top coating": "top_coating_prodotto_id",
+                "Liquido": "liquido_prodotto_id",
+            }
+            colonne_rilevate = []
+            if not df_colonne_usate.empty:
+                for nome_colonna, col_db in mappa_colonne_db.items():
+                    if col_db in df_colonne_usate.columns and df_colonne_usate[col_db].notna().any():
+                        colonne_rilevate.append(nome_colonna)
+            st.session_state["scroll_product_columns"] = (
+                colonne_rilevate or colonne_prodotto_disponibili.copy()
+            )
+
+        if "scroll_product_columns" not in st.session_state:
+            st.session_state["scroll_product_columns"] = colonne_prodotto_disponibili.copy()
+
+        colonne_prodotto_selezionate = st.multiselect(
+            "Colonne prodotti da usare",
+            colonne_prodotto_disponibili,
+            key="scroll_product_columns",
+            help=(
+                "Scegli soltanto gli strati/prodotti effettivamente presenti nel test. "
+                "Esempio: per un confronto di soli liquidi seleziona solo 'Liquido'."
+            ),
+        )
+        # Mantiene sempre l'ordine logico delle colonne, indipendentemente
+        # dall'ordine con cui vengono selezionate nel multiselect.
+        colonne_prodotto_attive = [
+            col for col in colonne_prodotto_disponibili
+            if col in colonne_prodotto_selezionate
+        ]
+        st.caption(
+            f"Colonne prodotto visualizzate: {len(colonne_prodotto_attive)}"
+            + (
+                " · " + " · ".join(colonne_prodotto_attive)
+                if colonne_prodotto_attive else " · nessuna selezionata"
+            )
+        )
+
         df_catalogo_scroll = leggi_df("""
             SELECT id, nome, marca, tipo
             FROM catalogo_prodotti
@@ -6505,45 +6561,66 @@ def render_form_test_scorrimento():
 
         df_aste = st.session_state[stato_tabella_key].copy()
 
-        tabella_editata = st.data_editor(
-            df_aste,
-            key=f"scroll_rods_editor_{n_aste}_{st.session_state[versione_key]}",
+        # Le colonne non selezionate vengono realmente escluse dal test corrente:
+        # non compaiono nell'editor e vengono azzerate, così non restano prodotti
+        # nascosti salvati per errore quando si passa, ad esempio, a "solo Liquido".
+        for colonna_prodotto in colonne_prodotto_disponibili:
+            if colonna_prodotto not in colonne_prodotto_attive:
+                df_aste[colonna_prodotto] = "—"
+
+        colonne_editor = [
+            "_ordine_inserimento", "Posizione", "Numero sci",
+            *colonne_prodotto_attive,
+            "Note",
+        ]
+        df_aste_visibile = df_aste[colonne_editor].copy()
+
+        config_editor = {
+            "_ordine_inserimento": None,
+            "Posizione": st.column_config.NumberColumn(
+                "Posizione",
+                min_value=1,
+                max_value=n_aste,
+                step=1,
+                format="%d",
+                width="small",
+                help="Inserisci la posizione ottenuta nel test. Puoi poi riordinare la tabella per classifica.",
+            ),
+            "Numero sci": st.column_config.TextColumn(
+                "Numero sci",
+                width="small",
+                help="Inserisci liberamente il codice dello sci, ad esempio 1A, 1B, 3A, 3B.",
+            ),
+            "Note": st.column_config.TextColumn("Note", width="large"),
+        }
+        for colonna_prodotto in colonne_prodotto_attive:
+            config_editor[colonna_prodotto] = st.column_config.SelectboxColumn(
+                colonna_prodotto,
+                options=opzioni_tutti_prodotti,
+                width="medium",
+                required=False,
+            )
+
+        firma_colonne = "_".join(
+            col.lower().replace(" ", "_") for col in colonne_prodotto_attive
+        ) or "nessuna"
+        tabella_editata_visibile = st.data_editor(
+            df_aste_visibile,
+            key=f"scroll_rods_editor_{n_aste}_{firma_colonne}_{st.session_state[versione_key]}",
             hide_index=True,
             use_container_width=True,
             height=min(650, 38 + n_aste * 36),
-            column_config={
-                "_ordine_inserimento": None,
-                "Posizione": st.column_config.NumberColumn(
-                    "Posizione",
-                    min_value=1,
-                    max_value=n_aste,
-                    step=1,
-                    format="%d",
-                    width="small",
-                    help="Inserisci la posizione ottenuta nel test. Puoi poi riordinare la tabella per classifica.",
-                ),
-                "Numero sci": st.column_config.TextColumn(
-                    "Numero sci",
-                    width="small",
-                    help="Inserisci liberamente il codice dello sci, ad esempio 1A, 1B, 3A, 3B.",
-                ),
-                "Base": st.column_config.SelectboxColumn(
-                    "Base", options=opzioni_tutti_prodotti, width="medium", required=False
-                ),
-                "Paraffina": st.column_config.SelectboxColumn(
-                    "Paraffina", options=opzioni_tutti_prodotti, width="medium", required=False
-                ),
-                "Top coating": st.column_config.SelectboxColumn(
-                    "Top coating", options=opzioni_tutti_prodotti, width="medium", required=False
-                ),
-                "Liquido": st.column_config.SelectboxColumn(
-                    "Liquido", options=opzioni_tutti_prodotti, width="medium", required=False
-                ),
-                "Note": st.column_config.TextColumn(
-                    "Note", width="large"
-                ),
-            },
+            column_config=config_editor,
         )
+
+        # Ricompone lo stato completo richiesto dal database mantenendo invisibili
+        # le colonne non utilizzate.
+        tabella_editata = df_aste.copy()
+        for col in tabella_editata_visibile.columns:
+            tabella_editata[col] = tabella_editata_visibile[col].values
+        for colonna_prodotto in colonne_prodotto_disponibili:
+            if colonna_prodotto not in colonne_prodotto_attive:
+                tabella_editata[colonna_prodotto] = "—"
         st.session_state[stato_tabella_key] = tabella_editata.copy()
 
         c_ordina, c_reset, c_spazio = st.columns([1.4, 1.4, 4])
@@ -6578,7 +6655,9 @@ def render_form_test_scorrimento():
         )
 
         if salva_scroll:
-            if not str(scroll_luogo or "").strip():
+            if not colonne_prodotto_attive:
+                st.error("Seleziona almeno una colonna prodotto da usare nel test.")
+            elif not str(scroll_luogo or "").strip():
                 st.error("Inserisci il luogo del test.")
             else:
                 try:
@@ -7550,7 +7629,6 @@ def _render_test_scorrimento_podium(df_righe):
 
         prodotti = _prodotti_record(record)
         numero_sci = html_escape(str(record.get("numero_sci") or "—"))
-        medal = {1: "🥇", 2: "🥈", 3: "🥉"}[pos]
         rank_word = {1: "1°", 2: "2°", 3: "3°"}[pos]
         place_class = {1: "first", 2: "second", 3: "third"}[pos]
 
@@ -7568,7 +7646,6 @@ def _render_test_scorrimento_podium(df_righe):
         return (
             f'<div class="scroll-podium-entry podium-{place_class}">'
             '<div class="podium-result-card">'
-            f'<div class="podium-medal-large">{medal}</div>'
             f'<div class="podium-ski-label">SCI {numero_sci}</div>'
             f'<div class="podium-product-grid count-{min(len(prodotti), 4)}">{products_html}</div>'
             '</div>'
@@ -7616,30 +7693,13 @@ def _render_test_scorrimento_podium(df_righe):
             background: #ffffff;
             border: 1px solid #d8dde3;
             border-radius: 12px 12px 8px 8px;
-            padding: 1.55rem .7rem .7rem .7rem;
+            padding: .85rem .7rem .7rem .7rem;
             box-shadow: 0 7px 18px rgba(31, 41, 51, .07);
             min-height: 188px;
         }
         .podium-first .podium-result-card {
             border-color: #d8b54c;
             box-shadow: 0 9px 24px rgba(31, 41, 51, .10);
-        }
-        .podium-medal-large {
-            position: absolute;
-            top: -.78rem;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 2.15rem;
-            height: 2.15rem;
-            border-radius: 999px;
-            background: #ffffff;
-            border: 1px solid #d8dde3;
-            box-shadow: 0 4px 10px rgba(31, 41, 51, .10);
-            font-size: 1.22rem;
-            line-height: 1;
         }
         .podium-ski-label {
             text-align: center;
@@ -7888,17 +7948,10 @@ def _render_test_scorrimento_detail_table(df_righe):
             font-weight: 750;
             color: #263238;
         }
-        .winner-position,
-        .podium-position {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: .18rem;
-            white-space: nowrap;
+        .winner-position {
+            font-weight: 800;
             color: #263238;
         }
-        .winner-position { font-weight: 800; }
-        .podium-medal { font-size: .88rem; line-height: 1; }
         .scroll-test-table tbody tr:not(.test-winner) td { background: #ffffff; }
         .test-product-empty {
             color: #9aa7b2;
@@ -7937,17 +7990,8 @@ def _render_test_scorrimento_detail_table(df_righe):
             is_winner = str(posizione or "").strip() == "1"
 
         row_class = ' class="test-winner"' if is_winner else ""
-        medal_map = {1: "🥇", 2: "🥈", 3: "🥉"}
-        pos_num = None
-        try:
-            pos_num = int(float(posizione))
-        except (TypeError, ValueError):
-            pass
-        if pos_num in medal_map:
-            css_pos = "winner-position" if pos_num == 1 else "podium-position"
-            posizione_html = (
-                f'<span class="{css_pos}"><span class="podium-medal">{medal_map[pos_num]}</span>{html_escape(pos_txt)}</span>'
-            )
+        if is_winner:
+            posizione_html = f'<span class="winner-position">{html_escape(pos_txt)}</span>'
         else:
             posizione_html = html_escape(pos_txt)
         righe_html.append(
