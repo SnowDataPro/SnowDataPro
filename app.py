@@ -3503,7 +3503,7 @@ SNOW_OPTION_GROUPS_STANDARD = {
     "Umidità neve": ["Secca", "Umida", "Bagnata", "Molto bagnata"],
     "Forma grano": ["Nuova", "In trasformazione", "Trasformata"],
     "Granulometria": ["Fine", "Media", "Grossa"],
-    "Caratteristiche": ["Sporca", "Salata", "Ventata", "Lucida", "Cadente", "Vecchia", "Aggressiva"],
+    "Caratteristiche": ["Sporca", "Salata", "Ventata", "Lucida", "Cadente", "Vecchia", "Pioggia", "Variabile", "Aggressiva"],
 }
 
 SNOW_GRAIN_LEGACY_MAP = {
@@ -9653,7 +9653,7 @@ with st.container(key="sector_page_content"):
             st.caption("Dimensione prevalente dei grani.")
         with c4:
             st.markdown("**Caratteristiche**")
-            st.caption("Proprietà aggiuntive come sporca, salata, ventata, lucida, cadente o aggressiva.")
+            st.caption("Proprietà aggiuntive come sporca, salata, ventata, lucida, cadente, vecchia, pioggia, variabile o aggressiva.")
 
 
 
