@@ -378,6 +378,52 @@ def inizializza_database():
         WHERE INSTR(COALESCE(snow_consistenza, ''), 'Soffice su fondo ghiacciato') > 0
     """)
 
+
+    # Semplificazione definitiva della forma del grano. La migrazione e'
+    # idempotente e mantiene compatibili prodotti e sessioni storiche.
+    _grain_replacements = [
+        ('Nuova (cristalli esagonali)', 'Nuova'),
+        ('In trasformazione (forte gradiente)', 'In trasformazione'),
+        ('In trasformazione (basso gradiente)', 'In trasformazione'),
+        ('Trasformata (cristalli angolari)', 'Trasformata'),
+        ('Trasformata (grani arrotondati)', 'Trasformata'),
+        ('Mista nuova e trasformata', 'In trasformazione'),
+    ]
+    for _vecchio_grano, _nuovo_grano in _grain_replacements:
+        conn.execute(
+            "UPDATE catalogo_prodotti SET snow_forma_grano = REPLACE(COALESCE(snow_forma_grano, ''), ?, ?) "
+            "WHERE INSTR(COALESCE(snow_forma_grano, ''), ?) > 0",
+            (_vecchio_grano, _nuovo_grano, _vecchio_grano),
+        )
+        conn.execute(
+            "UPDATE catalogo_prodotti SET tipo_neve = REPLACE(COALESCE(tipo_neve, ''), ?, ?) "
+            "WHERE INSTR(COALESCE(tipo_neve, ''), ?) > 0",
+            (_vecchio_grano, _nuovo_grano, _vecchio_grano),
+        )
+        conn.execute(
+            "UPDATE sessioni SET snow_forma_grano = REPLACE(COALESCE(snow_forma_grano, ''), ?, ?) "
+            "WHERE INSTR(COALESCE(snow_forma_grano, ''), ?) > 0",
+            (_vecchio_grano, _nuovo_grano, _vecchio_grano),
+        )
+
+    # Rimuove duplicati che possono nascere quando due vecchie sottocategorie
+    # convergono nella stessa nuova voce.
+    for _tabella, _campo in [
+        ('catalogo_prodotti', 'snow_forma_grano'),
+        ('catalogo_prodotti', 'tipo_neve'),
+        ('sessioni', 'snow_forma_grano'),
+    ]:
+        for _duplicato, _singolo in [
+            ('In trasformazione, In trasformazione', 'In trasformazione'),
+            ('Trasformata, Trasformata', 'Trasformata'),
+            ('Nuova, Nuova', 'Nuova'),
+        ]:
+            conn.execute(
+                f"UPDATE {_tabella} SET {_campo} = REPLACE(COALESCE({_campo}, ''), ?, ?) "
+                f"WHERE INSTR(COALESCE({_campo}, ''), ?) > 0",
+                (_duplicato, _singolo, _duplicato),
+            )
+
     # I prodotti già dotati di temperatura ferro vengono interpretati
     # come applicazione a caldo.
     conn.execute("""
@@ -3422,10 +3468,65 @@ def salva_zero_test_matrice(sessione_id, righe, classificazione):
         conn.close()
     _invalida_cache_dati()
 
+# ============================================================
+# CLASSIFICAZIONE NEVE STANDARDIZZATA
+# ============================================================
+# La forma del grano e' volutamente semplice e operativa: descrive lo stadio
+# evolutivo generale. Le proprieta' funzionali (es. neve aggressiva) restano
+# caratteristiche indipendenti.
+SNOW_OPTION_GROUPS_STANDARD = {
+    "Origine": ["Naturale", "Artificiale", "Mista"],
+    "Consistenza": [
+        "Compatta",
+        "Sfarinata / Soffice",
+        "Sgranata",
+        "Ghiacciata",
+        "Molle su fondo compatto",
+        "Soffice su fondo compatto",
+        "Molle",
+    ],
+    "Umidità neve": ["Secca", "Umida", "Bagnata", "Molto bagnata"],
+    "Forma grano": ["Nuova", "In trasformazione", "Trasformata"],
+    "Granulometria": ["Fine", "Media", "Grossa"],
+    "Caratteristiche": ["Sporca", "Salata", "Ventata", "Lucida", "Cadente", "Aggressiva"],
+}
+
+SNOW_GRAIN_LEGACY_MAP = {
+    "Nuova (cristalli esagonali)": "Nuova",
+    "In trasformazione (forte gradiente)": "In trasformazione",
+    "In trasformazione (basso gradiente)": "In trasformazione",
+    "Trasformata (cristalli angolari)": "Trasformata",
+    "Trasformata (grani arrotondati)": "Trasformata",
+    "Mista nuova e trasformata": "In trasformazione",
+}
+
+def _snow_option_groups_standard():
+    return {nome: list(valori) for nome, valori in SNOW_OPTION_GROUPS_STANDARD.items()}
+
+def _normalizza_forma_grano_voce(voce):
+    testo = str(voce or "").strip()
+    return SNOW_GRAIN_LEGACY_MAP.get(testo, testo)
+
+def _normalizza_forma_grano_valori(valori):
+    risultato = []
+    for voce in valori:
+        normalizzata = _normalizza_forma_grano_voce(voce)
+        if normalizzata and normalizzata not in risultato:
+            risultato.append(normalizzata)
+    return risultato
+
+def _normalizza_forma_grano_testo(valore):
+    valori = [v.strip() for v in str(valore or "").split(",") if v.strip()]
+    if "Tutte" in valori:
+        return "Tutte"
+    return ", ".join(_normalizza_forma_grano_valori(valori))
+
 def _valori_sessione_neve(valore, opzioni):
     valori = [v.strip() for v in str(valore or "").split(",") if v.strip()]
     if "Tutte" in valori:
         return list(opzioni)
+    if list(opzioni) == SNOW_OPTION_GROUPS_STANDARD["Forma grano"]:
+        valori = _normalizza_forma_grano_valori(valori)
     return [v for v in valori if v in opzioni]
 
 
@@ -3619,29 +3720,7 @@ def pagina_trova_prodotto_migliore():
         "mentre la classificazione neve aumenta o riduce il punteggio di compatibilità."
     )
 
-    snow_option_groups = {
-        "Origine": ["Naturale", "Artificiale", "Mista"],
-        "Consistenza": [
-            "Compatta",
-            "Sfarinata / Soffice",
-            "Sgranata",
-            "Ghiacciata",
-            "Molle su fondo compatto",
-            "Soffice su fondo compatto",
-            "Molle",
-        ],
-        "Umidità neve": ["Secca", "Umida", "Bagnata", "Molto bagnata"],
-        "Forma grano": [
-            "Nuova (cristalli esagonali)",
-            "In trasformazione (forte gradiente)",
-            "In trasformazione (basso gradiente)",
-            "Trasformata (cristalli angolari)",
-            "Trasformata (grani arrotondati)",
-            "Mista nuova e trasformata",
-        ],
-        "Granulometria": ["Fine", "Media", "Grossa"],
-        "Caratteristiche": ["Sporca", "Salata", "Ventata", "Lucida", "Cadente"],
-    }
+    snow_option_groups = _snow_option_groups_standard()
     snow_field_map = {
         "Origine": "snow_origine",
         "Consistenza": "snow_consistenza",
@@ -3730,12 +3809,15 @@ def pagina_trova_prodotto_migliore():
         ORDER BY marca COLLATE NOCASE, nome COLLATE NOCASE
     """, (categoria,))
 
-    def _lista_valori(valore):
-        return {
+    def _lista_valori(valore, nome_gruppo=None):
+        valori = [
             voce.strip()
             for voce in str(valore or "").split(",")
             if voce.strip()
-        }
+        ]
+        if nome_gruppo == "Forma grano":
+            valori = _normalizza_forma_grano_valori(valori)
+        return set(valori)
 
     def _intervallo_riga(riga):
         tipo_ref = str(riga.get("tipo_temperatura") or "").strip().lower()
@@ -3748,12 +3830,12 @@ def pagina_trova_prodotto_migliore():
             forma = set(selezioni.get("Forma grano", []))
             caratteristiche = set(selezioni.get("Caratteristiche", []))
             nuova_richiesta = bool(
-                "Nuova (cristalli esagonali)" in forma
+                "Nuova" in forma
                 or "Cadente" in caratteristiche
             )
             trasformata_richiesta = bool(
-                any("trasformat" in voce.lower() for voce in forma)
-                or any("in trasformazione" in voce.lower() for voce in forma)
+                "Trasformata" in forma
+                or "In trasformazione" in forma
             )
 
             intervalli = []
@@ -3813,7 +3895,7 @@ def pagina_trova_prodotto_migliore():
             dettagli_match = []
             for nome_gruppo in parametri_compilati:
                 richiesti = set(selezioni[nome_gruppo])
-                prodotto_vals = _lista_valori(riga.get(snow_field_map[nome_gruppo]))
+                prodotto_vals = _lista_valori(riga.get(snow_field_map[nome_gruppo]), nome_gruppo)
                 if not prodotto_vals:
                     # fallback per prodotti più vecchi
                     prodotto_vals = _lista_valori(riga.get("tipo_neve"))
@@ -3946,38 +4028,19 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
         except ValueError:
             return fallback
 
-    snow_option_groups = {
-        "Origine": ["Naturale", "Artificiale", "Mista"],
-        "Consistenza": [
-            "Compatta",
-            "Sfarinata / Soffice",
-            "Sgranata",
-            "Ghiacciata",
-            "Molle su fondo compatto",
-            "Soffice su fondo compatto",
-            "Molle",
-        ],
-        "Umidità neve": ["Secca", "Umida", "Bagnata", "Molto bagnata"],
-        "Forma grano": [
-            "Nuova (cristalli esagonali)",
-            "In trasformazione (forte gradiente)",
-            "In trasformazione (basso gradiente)",
-            "Trasformata (cristalli angolari)",
-            "Trasformata (grani arrotondati)",
-            "Mista nuova e trasformata",
-        ],
-        "Granulometria": ["Fine", "Media", "Grossa"],
-        "Caratteristiche": ["Sporca", "Salata", "Ventata", "Lucida", "Cadente"],
-    }
+    snow_option_groups = _snow_option_groups_standard()
 
-    def _split_multi_values(valore):
-        return [voce.strip() for voce in str(valore or "").split(",") if voce.strip()]
+    def _split_multi_values(valore, nome_colonna=None):
+        valori = [voce.strip() for voce in str(valore or "").split(",") if voce.strip()]
+        if nome_colonna == "snow_forma_grano":
+            valori = _normalizza_forma_grano_valori(valori)
+        return valori
 
     def _default_snow_values(nome_colonna, opzioni, eredita=None):
         eredita = eredita or []
         valori = []
         if modalita_modifica:
-            valori_salvati = _split_multi_values(prodotto_edit.get(nome_colonna))
+            valori_salvati = _split_multi_values(prodotto_edit.get(nome_colonna), nome_colonna)
             if "Tutte" in valori_salvati:
                 return list(opzioni)
             valori = [voce for voce in valori_salvati if voce in opzioni]
@@ -5235,6 +5298,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
             for valore in df["tipo_neve"].fillna("").astype(str):
                 for voce in valore.split(","):
                     voce = voce.strip()
+                    voce = _normalizza_forma_grano_voce(voce)
                     if voce and voce != "Tutte":
                         neve_presenti.add(voce)
 
@@ -5642,7 +5706,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
 
         def _compatibile_neve(valore):
             tipi_prodotto = {
-                voce.strip()
+                _normalizza_forma_grano_voce(voce.strip())
                 for voce in str(valore or "").split(",")
                 if voce.strip()
             }
@@ -5934,7 +5998,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                 ("Origine", str(prodotto.get("snow_origine") or "").strip()),
                                 ("Consistenza", str(prodotto.get("snow_consistenza") or "").strip()),
                                 ("Umidità neve", str(prodotto.get("snow_umidita") or "").strip()),
-                                ("Forma grano", str(prodotto.get("snow_forma_grano") or "").strip()),
+                                ("Forma grano", _normalizza_forma_grano_testo(prodotto.get("snow_forma_grano"))),
                                 ("Granulometria", str(prodotto.get("snow_granulometria") or "").strip()),
                                 ("Caratteristiche", str(prodotto.get("snow_caratteristiche") or "").strip()),
                             ]
@@ -6115,24 +6179,7 @@ def _stile_moduli_test():
 
 
 def render_form_test_scorrimento():
-    snow_options_scroll = {
-        "Origine": ["Naturale", "Artificiale", "Mista"],
-        "Consistenza": [
-            "Compatta", "Sfarinata / Soffice", "Sgranata", "Ghiacciata",
-            "Molle su fondo compatto", "Soffice su fondo compatto", "Molle",
-        ],
-        "Umidità neve": ["Secca", "Umida", "Bagnata", "Molto bagnata"],
-        "Forma grano": [
-            "Nuova (cristalli esagonali)",
-            "In trasformazione (forte gradiente)",
-            "In trasformazione (basso gradiente)",
-            "Trasformata (cristalli angolari)",
-            "Trasformata (grani arrotondati)",
-            "Mista nuova e trasformata",
-        ],
-        "Granulometria": ["Fine", "Media", "Grossa"],
-        "Caratteristiche": ["Sporca", "Salata", "Ventata", "Lucida", "Cadente"],
-    }
+    snow_options_scroll = _snow_option_groups_standard()
 
     edit_scroll_session_id = st.session_state.get("scroll_edit_session_id")
     edit_scroll_row = None
@@ -7040,24 +7087,7 @@ def render_form_zero_test():
     # ------------------------------------------------------------
     # 3. CLASSIFICAZIONE NEVE
     # ------------------------------------------------------------
-    zero_snow_options = {
-        "Origine": ["Naturale", "Artificiale", "Mista"],
-        "Consistenza": [
-            "Compatta", "Sfarinata / Soffice", "Sgranata", "Ghiacciata",
-            "Molle su fondo compatto", "Soffice su fondo compatto", "Molle",
-        ],
-        "Umidità neve": ["Secca", "Umida", "Bagnata", "Molto bagnata"],
-        "Forma grano": [
-            "Nuova (cristalli esagonali)",
-            "In trasformazione (forte gradiente)",
-            "In trasformazione (basso gradiente)",
-            "Trasformata (cristalli angolari)",
-            "Trasformata (grani arrotondati)",
-            "Mista nuova e trasformata",
-        ],
-        "Granulometria": ["Fine", "Media", "Grossa"],
-        "Caratteristiche": ["Sporca", "Salata", "Ventata", "Lucida", "Cadente"],
-    }
+    zero_snow_options = _snow_option_groups_standard()
 
     st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
     st.markdown('<div class="insert-test-title">Classificazione neve</div>', unsafe_allow_html=True)
@@ -7560,7 +7590,7 @@ def _crea_pdf_test_scorrimento(test, df_righe):
 
     snow = [
         [Paragraph("Origine", label_style), para(test.get("snow_origine")), Paragraph("Consistenza", label_style), para(test.get("snow_consistenza")), Paragraph("Umidità neve", label_style), para(test.get("snow_umidita"))],
-        [Paragraph("Forma grano", label_style), para(test.get("snow_forma_grano")), Paragraph("Granulometria", label_style), para(test.get("snow_granulometria")), Paragraph("Caratteristiche", label_style), para(test.get("snow_caratteristiche"))],
+        [Paragraph("Forma grano", label_style), para(_normalizza_forma_grano_testo(test.get("snow_forma_grano"))), Paragraph("Granulometria", label_style), para(test.get("snow_granulometria")), Paragraph("Caratteristiche", label_style), para(test.get("snow_caratteristiche"))],
     ]
     tn = Table(snow, colWidths=[25*mm, 45*mm, 25*mm, 45*mm, 25*mm, 55*mm], hAlign="LEFT")
     tn.setStyle(TableStyle([
@@ -8960,7 +8990,7 @@ with st.container(key="sector_page_content"):
                             ("Origine", sessione_zero.get("snow_origine")),
                             ("Consistenza", sessione_zero.get("snow_consistenza")),
                             ("Umidità neve", sessione_zero.get("snow_umidita")),
-                            ("Forma grano", sessione_zero.get("snow_forma_grano")),
+                            ("Forma grano", _normalizza_forma_grano_testo(sessione_zero.get("snow_forma_grano"))),
                             ("Granulometria", sessione_zero.get("snow_granulometria")),
                             ("Caratteristiche", sessione_zero.get("snow_caratteristiche")),
                         ]
@@ -9216,7 +9246,7 @@ with st.container(key="sector_page_content"):
                         ("Origine", test.get("snow_origine")),
                         ("Consistenza", test.get("snow_consistenza")),
                         ("Umidità neve", test.get("snow_umidita")),
-                        ("Forma grano", test.get("snow_forma_grano")),
+                        ("Forma grano", _normalizza_forma_grano_testo(test.get("snow_forma_grano"))),
                         ("Granulometria", test.get("snow_granulometria")),
                         ("Caratteristiche", test.get("snow_caratteristiche")),
                     ]
@@ -9533,7 +9563,7 @@ with st.container(key="sector_page_content"):
         st.markdown("### Parametri fondamentali della neve")
         st.caption(
             "Ogni colonna rappresenta un parametro indipendente: le voci non devono essere lette come combinazioni obbligatorie, "
-            "ma come qualità da comporre tra loro per descrivere in modo preciso la neve."
+            "ma come qualità da comporre tra loro. La forma grano indica solo lo stadio evolutivo; proprietà come Aggressiva restano caratteristiche indipendenti."
         )
 
         classificazione_rows = [
@@ -9541,7 +9571,7 @@ with st.container(key="sector_page_content"):
                 "Origine": "Naturale",
                 "Consistenza": "Compatta",
                 "Umidità": "Secca",
-                "Forma grano": "Nuova (cristalli esagonali)",
+                "Forma grano": "Nuova",
                 "Granulometria": "Fine",
                 "Caratteristiche": "Sporca",
             },
@@ -9549,7 +9579,7 @@ with st.container(key="sector_page_content"):
                 "Origine": "Artificiale",
                 "Consistenza": "Sfarinata / Soffice",
                 "Umidità": "Umida",
-                "Forma grano": "In trasformazione (forte gradiente)",
+                "Forma grano": "In trasformazione",
                 "Granulometria": "Media",
                 "Caratteristiche": "Salata",
             },
@@ -9557,7 +9587,7 @@ with st.container(key="sector_page_content"):
                 "Origine": "Mista",
                 "Consistenza": "Sgranata",
                 "Umidità": "Bagnata",
-                "Forma grano": "In trasformazione (basso gradiente)",
+                "Forma grano": "Trasformata",
                 "Granulometria": "Grossa",
                 "Caratteristiche": "Ventata",
             },
@@ -9565,7 +9595,7 @@ with st.container(key="sector_page_content"):
                 "Origine": "",
                 "Consistenza": "Ghiacciata",
                 "Umidità": "Molto bagnata",
-                "Forma grano": "Trasformata (cristalli angolari)",
+                "Forma grano": "",
                 "Granulometria": "",
                 "Caratteristiche": "Lucida",
             },
@@ -9573,7 +9603,7 @@ with st.container(key="sector_page_content"):
                 "Origine": "",
                 "Consistenza": "Molle su fondo compatto",
                 "Umidità": "",
-                "Forma grano": "Trasformata (grani arrotondati)",
+                "Forma grano": "",
                 "Granulometria": "",
                 "Caratteristiche": "Cadente",
             },
@@ -9581,9 +9611,9 @@ with st.container(key="sector_page_content"):
                 "Origine": "",
                 "Consistenza": "Soffice su fondo compatto",
                 "Umidità": "",
-                "Forma grano": "Mista nuova e trasformata",
+                "Forma grano": "",
                 "Granulometria": "",
-                "Caratteristiche": "",
+                "Caratteristiche": "Aggressiva",
             },
             {
                 "Origine": "",
@@ -9652,13 +9682,13 @@ with st.container(key="sector_page_content"):
             st.markdown("**Umidità**")
             st.caption("Stato della neve rispetto alla presenza di acqua liquida.")
             st.markdown("**Forma grano**")
-            st.caption("Forma ed evoluzione del cristallo durante il metamorfismo.")
+            st.caption("Stadio evolutivo del grano: nuova, in trasformazione o trasformata.")
 
         with c3:
             st.markdown("**Granulometria**")
             st.caption("Dimensione prevalente dei grani, distinta dalla loro forma.")
             st.markdown("**Caratteristiche**")
-            st.caption("Condizioni aggiuntive utili per descrivere la neve e scegliere il prodotto.")
+            st.caption("Proprietà funzionali aggiuntive, inclusa la neve aggressiva/abrasiva, utili alla scelta del prodotto.")
 
 
 
