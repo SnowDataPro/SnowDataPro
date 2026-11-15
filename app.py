@@ -7806,11 +7806,12 @@ def _render_test_scorrimento_podium(df_righe, tipo_prodotti_testati=None):
             display: flex;
             align-items: center;
             justify-content: center;
-            background: #f7f9fa;
-            border: 1px solid #e3e7eb;
-            border-radius: 10px;
+            background: transparent;
+            border: none;
+            border-radius: 0;
+            box-shadow: none;
             margin: 0 auto .45rem auto;
-            padding: .3rem;
+            padding: 0;
         }
         .podium-product-image.podium-single-image,
         .podium-product-placeholder.podium-single-image {
@@ -7937,12 +7938,13 @@ def _render_test_scorrimento_detail_table(df_righe):
         .scroll-test-table-wrap {{
             overflow-x: auto;
             overflow-y: visible;
-            border: 1px solid #d8dde3;
-            border-radius: 12px;
+            border: 1px solid #dbe1e6;
+            border-radius: 14px;
             background: #ffffff;
-            margin-top: .35rem;
+            margin-top: .45rem;
             position: relative;
             z-index: 1;
+            box-shadow: 0 8px 24px rgba(31, 41, 51, .05);
         }}
         .scroll-test-table tbody tr {{
             position: relative;
@@ -7958,36 +7960,38 @@ def _render_test_scorrimento_detail_table(df_righe):
             border-spacing: 0;
             table-layout: fixed;
             color: #263238;
-            font-size: .72rem;
+            font-size: .74rem;
             font-weight: 500;
         }}
         .scroll-test-table th {{
-            background: #eef1f4;
-            color: #52616b;
-            font-size: .72rem;
-            font-weight: 650;
-            text-align: left;
-            padding: .38rem .34rem;
-            border-bottom: 1px solid #d8dde3;
+            background: #f3f6f8;
+            color: #51606b;
+            font-size: .73rem;
+            font-weight: 700;
+            text-align: center;
+            padding: .58rem .42rem;
+            border-bottom: 1px solid #dbe1e6;
             white-space: nowrap;
             line-height: 1.15;
         }}
         .scroll-test-table td {{
-            padding: .34rem .34rem;
-            border-bottom: 1px solid #e3e7eb;
+            padding: .54rem .42rem;
+            border-bottom: 1px solid #e7ebef;
             vertical-align: middle;
             overflow: visible;
             position: relative;
             color: #263238;
-            font-size: .72rem;
+            font-size: .74rem;
             font-weight: 500;
-            line-height: 1.12;
+            line-height: 1.18;
+            text-align: center;
         }}
         .scroll-test-table tr:last-child td {{ border-bottom: 0; }}
+        .scroll-test-table tbody tr:nth-child(even) td {{ background: #fbfcfd; }}
         .scroll-test-table th.col-posizione, .scroll-test-table td.col-posizione {{ width: 62px; text-align:center; }}
-        .scroll-test-table th.col-sci, .scroll-test-table td.col-sci {{ width: 88px; }}
-        .scroll-test-table th.col-prodotto, .scroll-test-table td.col-prodotto {{ width: 158px; }}
-        .scroll-test-table th.col-note, .scroll-test-table td.col-note {{ width: 170px; }}
+        .scroll-test-table th.col-sci, .scroll-test-table td.col-sci {{ width: 88px; text-align:center; }}
+        .scroll-test-table th.col-prodotto, .scroll-test-table td.col-prodotto {{ width: 158px; text-align:center; }}
+        .scroll-test-table th.col-note, .scroll-test-table td.col-note {{ width: 170px; text-align:center; }}
         .test-product-cell {{
             min-height: 24px;
             display: flex;
@@ -8041,19 +8045,20 @@ def _render_test_scorrimento_detail_table(df_righe):
             transform: translateY(0) scale(1);
         }}
         .test-product-name {{
-            line-height: 1.08;
+            line-height: 1.18;
             font-weight: 500;
-            font-size: .72rem;
+            font-size: .74rem;
             color: #263238;
-            white-space: nowrap;
-            overflow-wrap: normal;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            text-align: center;
             transition: color .12s ease;
         }}
         .test-product-hover-target:hover .test-product-name {{
             color: #007ea8;
         }}
         .scroll-test-table tbody tr.test-winner td {{
-            background: #ffffff;
+            background: #fdfefe;
             font-weight: 750;
         }}
         .scroll-test-table tbody tr.test-winner .test-product-name,
@@ -8074,10 +8079,11 @@ def _render_test_scorrimento_detail_table(df_righe):
         }}
         .scroll-test-note {{
             color: #263238;
-            line-height: 1.08;
-            white-space: nowrap;
-            font-size: .72rem;
+            line-height: 1.18;
+            white-space: normal;
+            font-size: .74rem;
             font-weight: 500;
+            text-align: center;
         }}
         </style>
         """,
