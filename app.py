@@ -2480,6 +2480,20 @@ st.markdown(
         color: #41515d !important;
     }
 
+    div[class*="st-key-filter_temp_neve_group_"] [data-testid="stRadio"] {
+        margin: 0.12rem 0 0.24rem 0 !important;
+        padding: 0.38rem 0.5rem !important;
+        background: #f7f9fb !important;
+        border: 1px solid #e7edf1 !important;
+        border-radius: 12px !important;
+    }
+
+    div[class*="st-key-filter_temp_neve_group_"] [data-testid="stRadio"] p {
+        font-size: 0.8rem !important;
+        font-weight: 600 !important;
+        color: #4f5f6b !important;
+    }
+
     div[class*="st-key-filter_reset_"] button {
         min-height: 38px !important;
         height: 38px !important;
@@ -5335,6 +5349,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
         filtro_temp_nuova_range = None
         filtro_temp_trasformata_attivo = False
         filtro_temp_trasformata_range = None
+        filtro_temp_neve_tipo = "Neve nuova"
         filtro_neve = []
 
         # -----------------------------------------------------
@@ -5407,14 +5422,9 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
 
             if categoria_tenuta:
                 aria_min, aria_max = _limiti_temperatura_per_riferimento("aria")
-                nuova_min, nuova_max = _limiti_temperatura_colonne(
-                    "temp_nuova_min", "temp_nuova_max"
-                )
-                trasf_min, trasf_max = _limiti_temperatura_colonne(
-                    "temp_trasformata_min", "temp_trasformata_max"
-                )
+                neve_min, neve_max = _limiti_temperatura_per_riferimento("neve")
 
-                c_aria_f, c_nuova_f, c_trasf_f = st.columns(3)
+                c_aria_f, c_neve_f = st.columns(2)
 
                 with c_aria_f:
                     with st.container(key=f"filter_temp_aria_group_{categoria}"):
@@ -5423,7 +5433,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             'Temperatura aria'
                             '</div>'
                             '<div class="catalog-temperature-card-subtitle">'
-                            'Per prodotti con intervallo riferito all’aria.'
+                            'Filtra i prodotti con intervallo riferito all’aria. Se il riferimento generale non è specificato, il prodotto viene comunque mostrato.'
                             '</div>',
                             unsafe_allow_html=True,
                         )
@@ -5442,83 +5452,38 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             key=f"temp_aria_range_catalogo_{categoria}",
                         )
 
-                with c_nuova_f:
-                    with st.container(key=f"filter_temp_nuova_group_{categoria}"):
+                with c_neve_f:
+                    with st.container(key=f"filter_temp_neve_group_{categoria}"):
                         st.markdown(
-                            f'<div class="catalog-temperature-card-title">'
-                            f'{SNOW_ICON_NEW_SVG}Neve nuova'
-                            f'</div>'
+                            '<div class="catalog-temperature-card-title">'
+                            'Temperatura neve'
+                            '</div>'
                             '<div class="catalog-temperature-card-subtitle">'
-                            'Per prodotti con temperatura riferita alla neve.'
+                            'Scegli neve nuova o trasformata. I prodotti validi per entrambe o non specificati per il tipo di neve vengono comunque mostrati.'
                             '</div>',
                             unsafe_allow_html=True,
                         )
-                        filtro_temp_nuova_attivo = st.toggle(
-                            "Attiva filtro neve nuova",
-                            key=f"usa_temp_nuova_{categoria}",
+                        filtro_temp_neve_attivo = st.toggle(
+                            "Attiva filtro neve",
+                            key=f"usa_temp_neve_{categoria}",
                         )
-                        filtro_temp_nuova_range = st.slider(
-                            "Intervallo neve nuova (°C)",
-                            min_value=nuova_min,
-                            max_value=nuova_max,
-                            value=(nuova_min, nuova_max),
+                        filtro_temp_neve_tipo = st.radio(
+                            "Tipo neve",
+                            ["Neve nuova", "Neve trasformata"],
+                            horizontal=True,
+                            disabled=not filtro_temp_neve_attivo,
+                            key=f"temp_neve_tipo_catalogo_{categoria}",
+                        )
+                        filtro_temp_neve_range = st.slider(
+                            "Intervallo neve (°C)",
+                            min_value=neve_min,
+                            max_value=neve_max,
+                            value=(neve_min, neve_max),
                             step=0.5,
                             format="%.1f °C",
-                            disabled=not filtro_temp_nuova_attivo,
-                            key=f"temp_nuova_range_catalogo_{categoria}",
+                            disabled=not filtro_temp_neve_attivo,
+                            key=f"temp_neve_range_catalogo_{categoria}",
                         )
-
-                with c_trasf_f:
-                    with st.container(key=f"filter_temp_trasformata_group_{categoria}"):
-                        st.markdown(
-                            f'<div class="catalog-temperature-card-title">'
-                            f'{SNOW_ICON_TRANSFORMED_SVG}Neve trasformata'
-                            f'</div>'
-                            '<div class="catalog-temperature-card-subtitle">'
-                            'Per prodotti con temperatura riferita alla neve.'
-                            '</div>',
-                            unsafe_allow_html=True,
-                        )
-                        filtro_temp_trasformata_attivo = st.toggle(
-                            "Attiva filtro neve trasformata",
-                            key=f"usa_temp_trasformata_{categoria}",
-                        )
-                        filtro_temp_trasformata_range = st.slider(
-                            "Intervallo neve trasformata (°C)",
-                            min_value=trasf_min,
-                            max_value=trasf_max,
-                            value=(trasf_min, trasf_max),
-                            step=0.5,
-                            format="%.1f °C",
-                            disabled=not filtro_temp_trasformata_attivo,
-                            key=f"temp_trasformata_range_catalogo_{categoria}",
-                        )
-
-                produttore_min, produttore_max = _limiti_temperatura_per_riferimento("range produttore")
-                with st.container(key=f"filter_temp_produttore_group_{categoria}"):
-                    st.markdown(
-                        '<div class="catalog-temperature-card-title">'
-                        'Range produttore'
-                        '</div>'
-                        '<div class="catalog-temperature-card-subtitle">'
-                        'Usa il range dichiarato dal produttore quando non è specificato se si riferisce ad aria o neve.'
-                        '</div>',
-                        unsafe_allow_html=True,
-                    )
-                    filtro_temp_produttore_attivo = st.toggle(
-                        "Attiva filtro range produttore",
-                        key=f"usa_temp_produttore_{categoria}",
-                    )
-                    filtro_temp_produttore_range = st.slider(
-                        "Intervallo produttore (°C)",
-                        min_value=produttore_min,
-                        max_value=produttore_max,
-                        value=(produttore_min, produttore_max),
-                        step=0.5,
-                        format="%.1f °C",
-                        disabled=not filtro_temp_produttore_attivo,
-                        key=f"temp_produttore_range_catalogo_{categoria}",
-                    )
             else:
                 aria_min, aria_max = _limiti_temperatura_per_riferimento("aria")
                 neve_min, neve_max = _limiti_temperatura_per_riferimento("neve")
@@ -5653,12 +5618,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
         filtrato = filtrato[filtrato["tipo"] == filtro_tipo]
 
     if usa_condizioni:
-        if categoria_tenuta and (
-            filtro_temp_aria_attivo
-            or filtro_temp_nuova_attivo
-            or filtro_temp_trasformata_attivo
-            or filtro_temp_produttore_attivo
-        ):
+        if categoria_tenuta and (filtro_temp_aria_attivo or filtro_temp_neve_attivo):
             temp_min_prod = pd.to_numeric(filtrato["temp_min"], errors="coerce")
             temp_max_prod = pd.to_numeric(filtrato["temp_max"], errors="coerce")
             temp_nuova_min_prod = pd.to_numeric(
@@ -5681,62 +5641,48 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                 .str.lower()
             )
 
+            mask_temp_base = temp_min_prod.notna() | temp_max_prod.notna()
+            base_min_eff = temp_min_prod.fillna(float("-inf"))
+            base_max_eff = temp_max_prod.fillna(float("inf"))
+            mask_generico = tipo_temp_prod.isin(["non specificato", "range produttore", ""])
             maschera_temperatura = pd.Series(False, index=filtrato.index)
 
             if filtro_temp_aria_attivo and filtro_temp_aria_range is not None:
                 aria_sel_min, aria_sel_max = filtro_temp_aria_range
                 mask_aria = (
-                    (tipo_temp_prod == "aria")
-                    & (temp_min_prod.notna() | temp_max_prod.notna())
-                    & (temp_min_prod.fillna(float("-inf")) <= float(aria_sel_max))
-                    & (temp_max_prod.fillna(float("inf")) >= float(aria_sel_min))
+                    ((tipo_temp_prod == "aria") | mask_generico)
+                    & mask_temp_base
+                    & (base_min_eff <= float(aria_sel_max))
+                    & (base_max_eff >= float(aria_sel_min))
                 )
                 maschera_temperatura = maschera_temperatura | mask_aria
 
-            if filtro_temp_nuova_attivo and filtro_temp_nuova_range is not None:
-                nuova_sel_min, nuova_sel_max = filtro_temp_nuova_range
-                mask_nuova = (
-                    (tipo_temp_prod == "neve")
-                    & (temp_nuova_min_prod.notna() | temp_nuova_max_prod.notna())
-                    & (
-                        temp_nuova_min_prod.fillna(float("-inf"))
-                        <= float(nuova_sel_max)
-                    )
-                    & (
-                        temp_nuova_max_prod.fillna(float("inf"))
-                        >= float(nuova_sel_min)
-                    )
-                )
-                maschera_temperatura = maschera_temperatura | mask_nuova
+            if filtro_temp_neve_attivo and filtro_temp_neve_range is not None:
+                neve_sel_min, neve_sel_max = filtro_temp_neve_range
+                if str(filtro_temp_neve_tipo or "").strip().lower() == "neve trasformata":
+                    spec_min = temp_trasf_min_prod
+                    spec_max = temp_trasf_max_prod
+                else:
+                    spec_min = temp_nuova_min_prod
+                    spec_max = temp_nuova_max_prod
 
-            if (
-                filtro_temp_trasformata_attivo
-                and filtro_temp_trasformata_range is not None
-            ):
-                trasf_sel_min, trasf_sel_max = filtro_temp_trasformata_range
-                mask_trasf = (
+                spec_min_eff = spec_min.fillna(float("-inf"))
+                spec_max_eff = spec_max.fillna(float("inf"))
+                mask_snow_specifica = (
                     (tipo_temp_prod == "neve")
-                    & (temp_trasf_min_prod.notna() | temp_trasf_max_prod.notna())
-                    & (
-                        temp_trasf_min_prod.fillna(float("-inf"))
-                        <= float(trasf_sel_max)
-                    )
-                    & (
-                        temp_trasf_max_prod.fillna(float("inf"))
-                        >= float(trasf_sel_min)
-                    )
+                    & (spec_min.notna() | spec_max.notna())
+                    & (spec_min_eff <= float(neve_sel_max))
+                    & (spec_max_eff >= float(neve_sel_min))
                 )
-                maschera_temperatura = maschera_temperatura | mask_trasf
-
-            if filtro_temp_produttore_attivo and filtro_temp_produttore_range is not None:
-                prod_sel_min, prod_sel_max = filtro_temp_produttore_range
-                mask_produttore = (
-                    (tipo_temp_prod == "range produttore")
-                    & (temp_min_prod.notna() | temp_max_prod.notna())
-                    & (temp_min_prod.fillna(float("-inf")) <= float(prod_sel_max))
-                    & (temp_max_prod.fillna(float("inf")) >= float(prod_sel_min))
+                mask_snow_generica = (
+                    (((tipo_temp_prod == "neve") & ~(spec_min.notna() | spec_max.notna())) | mask_generico)
+                    & mask_temp_base
+                    & (base_min_eff <= float(neve_sel_max))
+                    & (base_max_eff >= float(neve_sel_min))
                 )
-                maschera_temperatura = maschera_temperatura | mask_produttore
+                maschera_temperatura = (
+                    maschera_temperatura | mask_snow_specifica | mask_snow_generica
+                )
 
             filtrato = filtrato[maschera_temperatura]
         elif (filtro_temp_aria_attivo or filtro_temp_neve_attivo or filtro_temp_produttore_attivo):
