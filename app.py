@@ -23,7 +23,7 @@ st.set_page_config(
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "ski_material_lab.db")
-VERSIONE_DATABASE_APP = 13
+VERSIONE_DATABASE_APP = 14
 
 
 # ============================================================
@@ -237,6 +237,9 @@ def inizializza_database():
             temp_nuova_max REAL,
             temp_trasformata_min REAL,
             temp_trasformata_max REAL,
+            materiale TEXT,
+            larghezza_mm REAL,
+            angolo_gradi REAL,
             url_fonte TEXT
         )
     """)
@@ -312,6 +315,9 @@ def inizializza_database():
         "temp_nuova_max": "REAL",
         "temp_trasformata_min": "REAL",
         "temp_trasformata_max": "REAL",
+        "materiale": "TEXT",
+        "larghezza_mm": "REAL",
+        "angolo_gradi": "REAL",
         "url_fonte": "TEXT",
     }
     for nome_colonna, tipo_colonna in nuove_colonne_catalogo.items():
@@ -407,11 +413,14 @@ def inizializza_database():
 
     # Aggiorna le categorie delle rigature manuali secondo la nuova nomenclatura.
     _rigatura_type_migrations = [
-        ('Incrociata', 'X cut'),
-        ('V', 'V cut'),
-        ('Altro', 'Special'),
-        ('Rullo', 'Special'),
-        ('Utensile', 'Special'),
+        ('Incrociata', 'Lineare interrotta X'),
+        ('V', 'Lineare interrotta V'),
+        ('V cut', 'Lineare interrotta V'),
+        ('X cut', 'Lineare interrotta X'),
+        ('Altro', 'Special cut'),
+        ('Rullo', 'Special cut'),
+        ('Utensile', 'Special cut'),
+        ('Special', 'Special cut'),
     ]
     for _old_tipo, _new_tipo in _rigatura_type_migrations:
         conn.execute(
@@ -4117,11 +4126,11 @@ def pagina_trova_prodotto_migliore():
 @st.fragment
 def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
     mostra_banner(titolo, sottotitolo)
-    usa_condizioni = categoria != "rigatura"
+    usa_condizioni = categoria in {"scorrimento", "tenuta", "rigatura"}
     categoria_tenuta = categoria == "tenuta"
     categoria_rigatura = categoria == "rigatura"
     label_nome_prodotto = "Nome riga *" if categoria_rigatura else "Nome prodotto *"
-    placeholder_nome_prodotto = "es. R1 1.0 mm" if categoria_rigatura else "es. UHX Block Middle 26"
+    placeholder_nome_prodotto = "es. LMV 1.0" if categoria_rigatura else "es. UHX Block Middle 26"
     label_tipo_prodotto = "Disegno" if categoria_rigatura else "Categoria prodotto"
     label_filtro_tipo = "Disegno" if categoria_rigatura else "Categoria"
 
@@ -4143,6 +4152,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                 umidita_min, umidita_max, temp_applicazione,
                 tipo_applicazione, temp_nuova_min, temp_nuova_max,
                 temp_trasformata_min, temp_trasformata_max,
+                materiale, larghezza_mm, angolo_gradi,
                 descrizione, note
             FROM catalogo_prodotti
             WHERE id = ? AND categoria = ?
@@ -4224,9 +4234,13 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
         nome_exp = str(prodotto_edit.get("nome") or "").strip()
         marca_exp = str(prodotto_edit.get("marca") or "").strip()
         titolo_exp = f"{marca_exp} - {nome_exp}" if marca_exp else nome_exp
-        expander_label = f"✏️ Modifica prodotto — {titolo_exp}"
+        expander_label = (
+            f"✏️ Modifica riga — {titolo_exp}"
+            if categoria_rigatura
+            else f"✏️ Modifica prodotto — {titolo_exp}"
+        )
     else:
-        expander_label = "➕ Inserimento prodotto"
+        expander_label = "➕ Inserimento riga" if categoria_rigatura else "➕ Inserimento prodotto"
 
     app_widget_suffix = edit_id if modalita_modifica else "new"
     app_state_key = f"tipo_applicazione_ui_{categoria}_{app_widget_suffix}"
@@ -4658,14 +4672,49 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                         marca = st.text_input(
                             "Marca",
                             value=valore_marca,
-                            placeholder="es. HWK",
+                            placeholder="es. SRB" if categoria_rigatura else "es. HWK",
                         )
                     with c_tipo:
+                        tipi_form = list(tipi)
+                        if categoria_rigatura and valore_tipo and valore_tipo not in tipi_form:
+                            tipi_form = [valore_tipo] + tipi_form
                         tipo = st.selectbox(
                             label_tipo_prodotto,
-                            tipi,
-                            index=_indice_opzione(tipi, valore_tipo, 0),
+                            tipi_form,
+                            index=_indice_opzione(tipi_form, valore_tipo, 0),
                         )
+
+                    materiale = ""
+                    larghezza_mm_txt = ""
+                    angolo_gradi_txt = ""
+                    if categoria_rigatura:
+                        materiale_default = str(prodotto_edit.get("materiale") or "") if modalita_modifica else ""
+                        larghezza_default = _input_numero_da_db(prodotto_edit.get("larghezza_mm")) if modalita_modifica else ""
+                        angolo_default = _input_numero_da_db(prodotto_edit.get("angolo_gradi")) if modalita_modifica else ""
+                        c_materiale, c_larghezza, c_angolo = st.columns(3)
+                        with c_materiale:
+                            materiali = ["Acciaio", "Ottone"]
+                            materiale = st.selectbox(
+                                "Materiale",
+                                materiali,
+                                index=_indice_opzione(materiali, materiale_default, 0),
+                            )
+                        with c_larghezza:
+                            larghezza_mm_txt = st.text_input(
+                                "Larghezza (mm)",
+                                value=larghezza_default,
+                                placeholder="es. 1.0",
+                            )
+                        with c_angolo:
+                            angolo_gradi_txt = st.text_input(
+                                "Angolo della riga (°)",
+                                value=angolo_default,
+                                placeholder="es. 45",
+                            )
+                else:
+                    materiale = ""
+                    larghezza_mm_txt = ""
+                    angolo_gradi_txt = ""
 
                 tipo_neve_val = ""
                 snow_origine_val = ""
@@ -4688,7 +4737,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
 
                 if usa_condizioni:
                     st.markdown("#### Condizioni di utilizzo")
-                    st.caption("Definisci il campo di utilizzo del prodotto e la classificazione neve di riferimento.")
+                    st.caption("Definisci il campo di utilizzo della riga e la classificazione neve di riferimento." if categoria_rigatura else "Definisci il campo di utilizzo del prodotto e la classificazione neve di riferimento.")
 
                     temp_min_default = (
                         _input_numero_da_db(prodotto_edit.get("temp_min"))
@@ -4888,7 +4937,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                         )
 
                     foto_upload = st.file_uploader(
-                        "Nuova foto" if modalita_modifica else "Foto prodotto",
+                        "Nuova foto" if modalita_modifica else ("Foto riga" if categoria_rigatura else "Foto prodotto"),
                         type=["jpg", "jpeg", "png", "webp"],
                         key=(
                             f"upload_foto_edit_{categoria}_{edit_id}"
@@ -4996,7 +5045,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                     c_submit, c_cancel = st.columns([2.2, 1])
                     with c_submit:
                         submit = st.form_submit_button(
-                            "Modifica prodotto",
+                            "Modifica riga" if categoria_rigatura else "Modifica prodotto",
                             type="primary",
                             use_container_width=True,
                         )
@@ -5007,7 +5056,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                         )
                 else:
                     submit = st.form_submit_button(
-                        "Salva prodotto",
+                        "Salva riga" if categoria_rigatura else "Salva prodotto",
                         type="primary",
                         use_container_width=True,
                     )
@@ -5101,6 +5150,20 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             "(es. -8, -2, 150)."
                         )
 
+                    materiale_salvato = materiale.strip() if categoria_rigatura else ""
+                    larghezza_mm = None
+                    angolo_gradi = None
+                    if categoria_rigatura:
+                        try:
+                            larghezza_mm = _numero_opzionale(larghezza_mm_txt)
+                            angolo_gradi = _numero_opzionale(angolo_gradi_txt)
+                        except ValueError:
+                            errori.append("Larghezza e angolo devono essere valori numerici.")
+                        if larghezza_mm is not None and larghezza_mm <= 0:
+                            errori.append("La larghezza deve essere maggiore di 0 mm.")
+                        if angolo_gradi is not None and not (0 <= angolo_gradi <= 180):
+                            errori.append("L'angolo della riga deve essere compreso tra 0° e 180°.")
+
                     # I vecchi campi di umidità percentuale non vengono più usati.
                     umidita_min = None
                     umidita_max = None
@@ -5180,7 +5243,10 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                     temp_nuova_min = ?,
                                     temp_nuova_max = ?,
                                     temp_trasformata_min = ?,
-                                    temp_trasformata_max = ?
+                                    temp_trasformata_max = ?,
+                                    materiale = ?,
+                                    larghezza_mm = ?,
+                                    angolo_gradi = ?
                                 WHERE id = ? AND categoria = ?
                             """, (
                                 nome.strip(),
@@ -5210,6 +5276,9 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                 temp_nuova_max if categoria_tenuta else None,
                                 temp_trasformata_min if categoria_tenuta else None,
                                 temp_trasformata_max if categoria_tenuta else None,
+                                materiale_salvato if categoria_rigatura else "",
+                                larghezza_mm if categoria_rigatura else None,
+                                angolo_gradi if categoria_rigatura else None,
                                 int(edit_id),
                                 categoria,
                             ))
@@ -5218,7 +5287,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                             if categoria_tenuta:
                                 for chiave_ui in tenuta_ui_keys:
                                     st.session_state.pop(chiave_ui, None)
-                            st.success("Prodotto modificato.")
+                            st.success("Riga modificata." if categoria_rigatura else "Prodotto modificato.")
                             st.rerun()
 
                         else:
@@ -5235,9 +5304,10 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                     umidita_min, umidita_max,
                                     temp_applicazione, tipo_applicazione,
                                     temp_nuova_min, temp_nuova_max,
-                                    temp_trasformata_min, temp_trasformata_max
+                                    temp_trasformata_min, temp_trasformata_max,
+                                    materiale, larghezza_mm, angolo_gradi
                                 )
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             """, (
                                 categoria,
                                 nome.strip(),
@@ -5268,15 +5338,18 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                 temp_nuova_max if categoria_tenuta else None,
                                 temp_trasformata_min if categoria_tenuta else None,
                                 temp_trasformata_max if categoria_tenuta else None,
+                                materiale_salvato if categoria_rigatura else "",
+                                larghezza_mm if categoria_rigatura else None,
+                                angolo_gradi if categoria_rigatura else None,
                             ))
                             st.session_state.pop(expander_keep_key, None)
                             if categoria_tenuta:
                                 for chiave_ui in tenuta_ui_keys:
                                     st.session_state.pop(chiave_ui, None)
-                            st.success("Prodotto salvato.")
+                            st.success("Riga salvata." if categoria_rigatura else "Prodotto salvato.")
                             st.rerun()
 
-    st.markdown("### Catalogo prodotti")
+    st.markdown("### Catalogo righe" if categoria_rigatura else "### Catalogo prodotti")
 
     df = leggi_df("""
         SELECT
@@ -5287,6 +5360,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
             umidita_min, umidita_max, temp_applicazione,
             tipo_applicazione, temp_nuova_min, temp_nuova_max,
             temp_trasformata_min, temp_trasformata_max,
+            materiale, larghezza_mm, angolo_gradi,
             descrizione, note
         FROM catalogo_prodotti
         WHERE categoria = ?
@@ -5294,7 +5368,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
     """, (categoria,))
 
     if df.empty:
-        st.info("Nessun prodotto ancora inserito in questo catalogo.")
+        st.info("Nessuna riga ancora inserita in questo catalogo." if categoria_rigatura else "Nessun prodotto ancora inserito in questo catalogo.")
         return
 
     with st.container(key=f"catalog_filter_panel_{categoria}"):
@@ -5303,11 +5377,14 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
         # -----------------------------------------------------
         h1, h2 = st.columns([4.2, 1], vertical_alignment="center")
         with h1:
+            filtro_sottotitolo = (
+                "Affina rapidamente le righe visualizzate."
+                if categoria_rigatura
+                else "Affina rapidamente i prodotti visualizzati."
+            )
             st.markdown(
                 '<div class="catalog-filter-title">Filtri catalogo</div>'
-                '<div class="catalog-filter-subtitle">'
-                'Affina rapidamente i prodotti visualizzati.'
-                '</div>',
+                f'<div class="catalog-filter-subtitle">{filtro_sottotitolo}</div>',
                 unsafe_allow_html=True,
             )
 
@@ -5799,10 +5876,10 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
             filtrato["tipo_neve"].apply(_compatibile_neve)
         ]
 
-    st.caption(f"{len(filtrato)} prodotti visualizzati su {len(df)}")
+    st.caption(f"{len(filtrato)} righe visualizzate su {len(df)}" if categoria_rigatura else f"{len(filtrato)} prodotti visualizzati su {len(df)}")
 
     if filtrato.empty:
-        st.info("Nessun prodotto corrisponde ai filtri selezionati.")
+        st.info("Nessuna riga corrisponde ai filtri selezionati." if categoria_rigatura else "Nessun prodotto corrisponde ai filtri selezionati.")
         return
 
     # Le foto non partecipano ai filtri: vengono recuperate separatamente
@@ -5863,6 +5940,20 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                         else nome_prodotto
                     )
                     st.markdown(f"### {titolo_card}")
+
+                    if categoria_rigatura:
+                        dettagli_tecnici = []
+                        materiale_card = str(prodotto.get("materiale") or "").strip()
+                        if materiale_card:
+                            dettagli_tecnici.append(materiale_card)
+                        larghezza_card = prodotto.get("larghezza_mm")
+                        if larghezza_card is not None and not pd.isna(larghezza_card):
+                            dettagli_tecnici.append(f"{float(larghezza_card):g} mm")
+                        angolo_card = prodotto.get("angolo_gradi")
+                        if angolo_card is not None and not pd.isna(angolo_card):
+                            dettagli_tecnici.append(f"{float(angolo_card):g}°")
+                        if dettagli_tecnici:
+                            st.caption(" · ".join(dettagli_tecnici))
 
                     temp_card_html = ""
                     if usa_condizioni:
@@ -5982,6 +6073,17 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                         if note_prodotto:
                             st.markdown("**Note personali**")
                             st.write(note_prodotto)
+
+                        if categoria_rigatura:
+                            materiale_scheda = str(prodotto.get("materiale") or "").strip()
+                            larghezza_scheda = prodotto.get("larghezza_mm")
+                            angolo_scheda = prodotto.get("angolo_gradi")
+                            if materiale_scheda:
+                                st.markdown(f"**Materiale:** {materiale_scheda}")
+                            if larghezza_scheda is not None and not pd.isna(larghezza_scheda):
+                                st.markdown(f"**Larghezza:** {float(larghezza_scheda):g} mm")
+                            if angolo_scheda is not None and not pd.isna(angolo_scheda):
+                                st.markdown(f"**Angolo riga:** {float(angolo_scheda):g}°")
 
                         if usa_condizioni:
                             if usa_applicazione:
@@ -6147,7 +6249,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                         # MODIFICA PRODOTTO
                         # --------------------------------------------
                         if st.button(
-                            "Modifica prodotto",
+                            "Modifica riga" if categoria_rigatura else "Modifica prodotto",
                             key=f"edit_product_{categoria}_{prodotto_id}",
                             use_container_width=True,
                         ):
@@ -6173,7 +6275,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
 
                         if not st.session_state.get(conferma_key, False):
                             if st.button(
-                                "Elimina prodotto",
+                                "Elimina riga" if categoria_rigatura else "Elimina prodotto",
                                 key=f"delete_product_{categoria}_{prodotto_id}",
                                 use_container_width=True,
                             ):
@@ -6181,9 +6283,14 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                 st.rerun()
 
                         else:
+                            delete_question = (
+                                "Eliminare definitivamente la riga?"
+                                if categoria_rigatura
+                                else "Eliminare definitivamente il prodotto?"
+                            )
                             st.markdown(
-                                '<div class="catalog-delete-warning">'
-                                '<strong>Eliminare definitivamente il prodotto?</strong><br>'
+                                f'<div class="catalog-delete-warning">'
+                                f'<strong>{delete_question}</strong><br>'
                                 'Questa operazione non può essere annullata.'
                                 '</div>',
                                 unsafe_allow_html=True,
@@ -9626,8 +9733,16 @@ with st.container(key="sector_page_content"):
         pagina_catalogo_prodotti(
             "rigatura",
             "Rigature manuali",
-            "Catalogo delle configurazioni di rigatura manuale.",
-            ["Lineare", "Screws", "V cut", "X cut", "Special"],
+            "Catalogo tecnico delle righe manuali con geometria, materiale e condizioni di utilizzo.",
+            [
+                "Lineare",
+                "Lineare interrotta V",
+                "Lineare interrotta X",
+                "Screw left",
+                "Screw right",
+                "Double screw",
+                "Special cut",
+            ],
         )
 
 
