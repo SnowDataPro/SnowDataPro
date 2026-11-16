@@ -23,7 +23,7 @@ st.set_page_config(
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "ski_material_lab.db")
-VERSIONE_DATABASE_APP = 16
+VERSIONE_DATABASE_APP = 17
 
 
 # ============================================================
@@ -204,6 +204,9 @@ def inizializza_database():
             rigatura_prodotto_id INTEGER,
             direzione TEXT,
             hand_drive INTEGER DEFAULT 0,
+            tecnica_sci TEXT,
+            zona_da TEXT,
+            zona_a TEXT,
             FOREIGN KEY(test_rigatura_asta_id) REFERENCES test_rigature_aste(id),
             FOREIGN KEY(rigatura_prodotto_id) REFERENCES catalogo_prodotti(id)
         )
@@ -316,6 +319,9 @@ def inizializza_database():
     nuove_colonne_test_rigature_componenti = {
         "direzione": "TEXT",
         "hand_drive": "INTEGER DEFAULT 0",
+        "tecnica_sci": "TEXT",
+        "zona_da": "TEXT",
+        "zona_a": "TEXT",
     }
     for nome_colonna, tipo_colonna in nuove_colonne_test_rigature_componenti.items():
         if nome_colonna not in colonne_test_rigature_componenti:
@@ -7151,6 +7157,36 @@ def _rigatura_catalog_label(record):
     return str(record.get("nome") or "").strip()
 
 
+def _zone_rigatura_per_tecnica(tecnica):
+    """Riferimenti longitudinali coerenti con lo schema grafico dell'utente."""
+    if str(tecnica or "").strip().lower() == "classico":
+        return ["Coda", "Fine ponte", "Inizio ponte", "Inizio canalina", "Punta"]
+    # Nello schema skating ci sono due riferimenti 'inizio canalina':
+    # li distinguiamo solo nel menu per evitare ambiguità, mantenendo la grafica originale.
+    return [
+        "Coda",
+        "Fine attacco",
+        "Inizio canalina (lato coda)",
+        "Inizio canalina (lato punta)",
+        "Punta",
+    ]
+
+
+def _schema_zone_rigatura_path(tecnica):
+    nome = "schema_zone_classico.png" if str(tecnica or "").strip().lower() == "classico" else "schema_zone_skating.png"
+    return os.path.join(BASE_DIR, "assets", nome)
+
+
+def _zona_rigatura_testo(zona_da, zona_a):
+    da = str(zona_da or "").strip()
+    a = str(zona_a or "").strip()
+    if not da and not a:
+        return "—"
+    if da and a:
+        return f"{da} → {a}"
+    return da or a or "—"
+
+
 def render_form_test_rigature():
     """Inserimento/modifica Test rigature manuali, allineato al Test prodotti scorrimento."""
     snow_options = _snow_option_groups_standard()
@@ -7214,6 +7250,19 @@ def render_form_test_rigature():
         if not df_cols.empty and not pd.isna(df_cols.iloc[0]["n"]):
             ncols = max(1, int(df_cols.iloc[0]["n"]))
         st.session_state["rig_test_num_columns"] = ncols
+        df_tecnica = leggi_df(
+            """SELECT c.tecnica_sci
+               FROM test_rigature_componenti c
+               JOIN test_rigature_aste a ON a.id = c.test_rigatura_asta_id
+               WHERE a.sessione_id = ? AND TRIM(COALESCE(c.tecnica_sci, '')) <> ''
+               ORDER BY c.id LIMIT 1""", (int(edit_id),)
+        )
+        tecnica_edit = "Skating"
+        if not df_tecnica.empty:
+            val = str(df_tecnica.iloc[0].get("tecnica_sci") or "").strip()
+            if val in ["Skating", "Classico"]:
+                tecnica_edit = val
+        st.session_state["rig_test_technique"] = tecnica_edit
 
     st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
     st.markdown('<div class="insert-test-title">Test rigature manuali</div>', unsafe_allow_html=True)
@@ -7324,7 +7373,23 @@ def render_form_test_rigature():
         st.info(f"La struttura di inserimento per il test {metodo_test} segue la stessa logica della pagina prodotti scorrimento e verrà definita quando userai questo metodo.")
         return
 
-    st.caption("Imposta il numero di aste e quante rigature compongono ciascuno sci. Per ogni riga selezioni nome, direzione (V / Λ / VΛ) e se è stata applicata con Hand drive.")
+    st.caption("Imposta il numero di aste e quante rigature compongono ciascuno sci. Per ogni rigatura selezioni nome, direzione, Hand drive e zona dello sci su cui è stata applicata.")
+
+    tecnica_sci = st.selectbox(
+        "Tecnica sci",
+        ["Skating", "Classico"],
+        key="rig_test_technique",
+        help="La suddivisione delle zone cambia tra sci da skating e sci da classico.",
+    )
+    zone_tecnica = _zone_rigatura_per_tecnica(tecnica_sci)
+    schema_path = _schema_zone_rigatura_path(tecnica_sci)
+    st.markdown("##### Schema zone dello sci")
+    if os.path.exists(schema_path):
+        st.image(schema_path, use_container_width=True)
+    st.caption(
+        "Usa lo schema come riferimento e indica, per ogni rigatura, il punto di inizio e il punto di fine dell'applicazione."
+    )
+
     cc1, cc2 = st.columns(2)
     with cc1:
         numero_aste = st.number_input("Numero di aste", min_value=1, max_value=30, value=10, step=1, format="%d", key="rig_test_num_rods")
@@ -7365,6 +7430,7 @@ def render_form_test_rigature():
         df_rows = leggi_df("SELECT id, posizione, numero_sci, note FROM test_rigature_aste WHERE sessione_id = ? ORDER BY id", (int(edit_id),))
         comp = leggi_df(
             """SELECT c.test_rigatura_asta_id, c.colonna_numero, c.direzione, c.hand_drive,
+                      c.tecnica_sci, c.zona_da, c.zona_a,
                       p.id AS prodotto_id, p.nome, p.marca, p.tipo, p.materiale, p.larghezza_mm, p.angolo_gradi
                FROM test_rigature_componenti c
                LEFT JOIN catalogo_prodotti p ON p.id = c.rigatura_prodotto_id
@@ -7379,16 +7445,20 @@ def render_form_test_rigature():
                 "label": label_da_id.get(prod_id, _rigatura_catalog_label(c)) if prod_id is not None else "—",
                 "direzione": str(c.get("direzione") or "—").strip() or "—",
                 "hand_drive": bool(int(c.get("hand_drive") or 0)),
+                "zona_da": str(c.get("zona_da") or "—").strip() or "—",
+                "zona_a": str(c.get("zona_a") or "—").strip() or "—",
             }
         righe = []
         for idx, r in df_rows.reset_index(drop=True).iterrows():
             rr = {"_ordine_inserimento": idx, "Posizione": None if pd.isna(r.get("posizione")) else int(r.get("posizione")), "Numero sci": str(r.get("numero_sci") or ""), "Note": str(r.get("note") or "")}
             rid = int(r["id"])
             for i in range(1, n_cols + 1):
-                comp_val = comp_map.get((rid, i), {"label": "—", "direzione": "—", "hand_drive": False})
+                comp_val = comp_map.get((rid, i), {"label": "—", "direzione": "—", "hand_drive": False, "zona_da": "—", "zona_a": "—"})
                 rr[f"Rigatura {i}"] = comp_val["label"]
                 rr[f"Direzione {i}"] = comp_val["direzione"]
                 rr[f"Hand drive {i}"] = comp_val["hand_drive"]
+                rr[f"Da {i}"] = comp_val["zona_da"] if comp_val["zona_da"] in zone_tecnica else "—"
+                rr[f"A {i}"] = comp_val["zona_a"] if comp_val["zona_a"] in zone_tecnica else "—"
             righe.append(rr)
         if righe:
             st.session_state["rig_test_table_data"] = pd.DataFrame(righe)
@@ -7403,6 +7473,8 @@ def render_form_test_rigature():
             d[f"Rigatura {i}"] = ["—"] * n
             d[f"Direzione {i}"] = ["—"] * n
             d[f"Hand drive {i}"] = [False] * n
+            d[f"Da {i}"] = ["—"] * n
+            d[f"A {i}"] = ["—"] * n
         d["Note"] = [""] * n
         return pd.DataFrame(d)
 
@@ -7428,6 +7500,17 @@ def render_form_test_rigature():
         st.session_state["rig_test_table_version"] += 1
 
     df_tab = st.session_state[state_key].copy()
+    # Se la tecnica viene cambiata, elimina solo le zone non compatibili con il nuovo schema.
+    zone_valide = set(["—"] + zone_tecnica)
+    for i in range(1, n_cols + 1):
+        for prefisso in ["Da", "A"]:
+            col_zona = f"{prefisso} {i}"
+            if col_zona in df_tab.columns:
+                df_tab[col_zona] = df_tab[col_zona].apply(
+                    lambda v: str(v).strip() if str(v).strip() in zone_valide else "—"
+                )
+    st.session_state[state_key] = df_tab.copy()
+
     config = {
         "_ordine_inserimento": None,
         "Posizione": st.column_config.NumberColumn("Posizione", min_value=1, max_value=n_aste, step=1, format="%d", width="small"),
@@ -7439,9 +7522,13 @@ def render_form_test_rigature():
         config[col] = st.column_config.SelectboxColumn(col, options=opzioni, width="medium", required=False)
         dir_col = f"Direzione {i}"
         hd_col = f"Hand drive {i}"
+        da_col = f"Da {i}"
+        a_col = f"A {i}"
         config[dir_col] = st.column_config.SelectboxColumn(dir_col, options=["—", "V", "Λ", "VΛ"], width="small", required=False, help="V = un verso, Λ = verso opposto, VΛ = applicata in entrambi i sensi.")
         config[hd_col] = st.column_config.CheckboxColumn(hd_col, width="small", default=False, help="Attiva se la rigatura è stata trascinata con il rotellone SRB Hand drive.")
-        visible_cols.extend([col, dir_col, hd_col])
+        config[da_col] = st.column_config.SelectboxColumn(da_col, options=["—"] + zone_tecnica, width="medium", required=False, help="Punto da cui inizia la rigatura sullo sci.")
+        config[a_col] = st.column_config.SelectboxColumn(a_col, options=["—"] + zone_tecnica, width="medium", required=False, help="Punto in cui termina la rigatura sullo sci.")
+        visible_cols.extend([col, dir_col, hd_col, da_col, a_col])
     visible_cols.append("Note")
     edited = st.data_editor(
         df_tab[visible_cols], hide_index=True, use_container_width=True,
@@ -7495,10 +7582,15 @@ def render_form_test_rigature():
             prod_id = id_da_label.get(lab)
             direzione = str(r.get(f"Direzione {i}") or "—").strip() or "—"
             hand_drive = bool(r.get(f"Hand drive {i}") or False)
+            zona_da = str(r.get(f"Da {i}") or "—").strip() or "—"
+            zona_a = str(r.get(f"A {i}") or "—").strip() or "—"
             componenti.append({
                 "prod_id": prod_id,
                 "direzione": direzione,
                 "hand_drive": hand_drive,
+                "tecnica_sci": tecnica_sci,
+                "zona_da": zona_da,
+                "zona_a": zona_a,
             })
         if not numero_sci and not any(c["prod_id"] for c in componenti) and not note:
             continue
@@ -7561,9 +7653,15 @@ def render_form_test_rigature():
                 if prod_id is not None:
                     conn.execute(
                         """INSERT INTO test_rigature_componenti
-                           (test_rigatura_asta_id, colonna_numero, rigatura_prodotto_id, direzione, hand_drive)
-                           VALUES (?, ?, ?, ?, ?)""",
-                        (asta_id, idx, int(prod_id), str(componente.get("direzione") or "—"), 1 if componente.get("hand_drive") else 0)
+                           (test_rigatura_asta_id, colonna_numero, rigatura_prodotto_id, direzione, hand_drive, tecnica_sci, zona_da, zona_a)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (
+                            asta_id, idx, int(prod_id), str(componente.get("direzione") or "—"),
+                            1 if componente.get("hand_drive") else 0,
+                            str(componente.get("tecnica_sci") or tecnica_sci),
+                            str(componente.get("zona_da") or "—"),
+                            str(componente.get("zona_a") or "—"),
+                        )
                     )
         conn.commit()
     except Exception:
@@ -7589,6 +7687,7 @@ def _carica_righe_test_rigature(sessione_id):
     )
     df_comp = leggi_df(
         """SELECT c.test_rigatura_asta_id, c.colonna_numero, c.direzione, c.hand_drive,
+                  c.tecnica_sci, c.zona_da, c.zona_a,
                   p.id AS prodotto_id, p.nome, p.marca, p.tipo, p.materiale, p.larghezza_mm, p.angolo_gradi,
                   p.foto_data, p.foto_mime
            FROM test_rigature_componenti c
@@ -7658,9 +7757,11 @@ def _render_podio_rigature(df_rows, df_comp):
             img=f'<img class="podium-product-image podium-single-image" src="{src}" alt="{html_escape(label)}">' if src else ''
             direzione = str(c.get("direzione") or "—").strip() or "—"
             hd = bool(int(c.get("hand_drive") or 0))
+            zona = _zona_rigatura_testo(c.get("zona_da"), c.get("zona_a"))
             meta = []
             if direzione != "—": meta.append(direzione)
             if hd: meta.append("Hand drive")
+            if zona != "—": meta.append(zona)
             meta_html = f'<div class="podium-product-category">{" · ".join(meta)}</div>' if meta else '<div class="podium-product-category">RIGATURA</div>'
             tiles.append(f'<div class="podium-product-tile">{img}{meta_html}<div class="podium-product-name">{html_escape(label)}</div></div>')
         return f'<div class="scroll-podium-entry podium-{cls}"><div class="podium-result-card"><div class="podium-product-grid count-{max(1,min(len(tiles),4))}">{"".join(tiles)}</div></div><div class="podium-step podium-step-{cls}"><span class="podium-step-rank">{pos}°</span></div></div>'
@@ -7679,16 +7780,19 @@ def _render_tabella_rigature(df_rows, df_comp):
             "nome": _rigatura_catalog_label(c) or "—",
             "direzione": str(c.get("direzione") or "—").strip() or "—",
             "hand_drive": bool(int(c.get("hand_drive") or 0)),
+            "tecnica_sci": str(c.get("tecnica_sci") or "").strip(),
+            "zona": _zona_rigatura_testo(c.get("zona_da"), c.get("zona_a")),
         }
     records=[]
     for _, r in df_rows.iterrows():
         rr={"Posizione": r.get("posizione"), "Numero sci": r.get("numero_sci")}
         rid=int(r["id"])
         for i in range(1,max_col+1):
-            comp = comp_map.get((rid,i), {"nome":"—", "direzione":"—", "hand_drive":False})
+            comp = comp_map.get((rid,i), {"nome":"—", "direzione":"—", "hand_drive":False, "tecnica_sci":"", "zona":"—"})
             rr[f"Rigatura {i}"] = comp["nome"]
             rr[f"Direzione {i}"] = comp["direzione"]
             rr[f"Hand drive {i}"] = "Sì" if comp["hand_drive"] else "—"
+            rr[f"Zona {i}"] = comp["zona"]
         rr["Note"]=r.get("note") or "—"
         records.append(rr)
     st.dataframe(pd.DataFrame(records), hide_index=True, use_container_width=True)
@@ -7718,17 +7822,18 @@ def _crea_pdf_test_rigature(test, df_rows, df_comp):
             "nome": _rigatura_catalog_label(c) or "-",
             "direzione": str(c.get("direzione") or "—").strip() or "—",
             "hand_drive": bool(int(c.get("hand_drive") or 0)),
+            "zona": _zona_rigatura_testo(c.get("zona_da"), c.get("zona_a")),
         }
     header=["Pos.","Sci"]
     for i in range(1,max_col+1):
-        header += [f"Rigatura {i}", f"Dir. {i}", f"Hand drive {i}"]
+        header += [f"Rigatura {i}", f"Dir. {i}", f"Hand drive {i}", f"Zona {i}"]
     header += ["Note"]
     data=[header]
     for _,r in df_rows.iterrows():
         rid=int(r["id"]); row=[str(r.get("posizione") or "-"),str(r.get("numero_sci") or "-")]
         for i in range(1,max_col+1):
-            comp=comp_map.get((rid,i), {"nome":"-", "direzione":"-", "hand_drive":False})
-            row += [comp["nome"], comp["direzione"], "Sì" if comp["hand_drive"] else "-"]
+            comp=comp_map.get((rid,i), {"nome":"-", "direzione":"-", "hand_drive":False, "zona":"-"})
+            row += [comp["nome"], comp["direzione"], "Sì" if comp["hand_drive"] else "-", comp["zona"]]
         row += [str(r.get("note") or "-")]
         data.append(row)
     tab=Table(data,repeatRows=1); tab.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),colors.HexColor("#eef1f4")),("GRID",(0,0),(-1,-1),0.4,colors.HexColor("#d8dde3")),("FONTSIZE",(0,0),(-1,-1),7),("VALIGN",(0,0),(-1,-1),"MIDDLE"),("ALIGN",(0,0),(-1,-1),"CENTER")]))
