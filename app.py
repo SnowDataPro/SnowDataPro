@@ -339,10 +339,10 @@ def inizializza_database():
     # informazioni e mantiene compatibili i database gia' popolati.
     _consistency_migrations = [
         ('Molle su fondo compatto', 'Molle', 'Compatto'),
-        ('Soffice su fondo compatto', 'Soffice / Sfarinata', 'Compatto'),
-        ('Soffice su fondo ghiacciato', 'Soffice / Sfarinata', 'Ghiacciato'),
+        ('Soffice su fondo compatto', 'Soffice, Sfarinata', 'Compatto'),
+        ('Soffice su fondo ghiacciato', 'Soffice, Sfarinata', 'Ghiacciato'),
         ('Molle su fondo ghiacciato', 'Molle', 'Ghiacciato'),
-        ('Soffice su superficie dura', 'Soffice / Sfarinata', 'Compatto'),
+        ('Soffice su superficie dura', 'Soffice, Sfarinata', 'Compatto'),
     ]
     for _tabella in ('catalogo_prodotti', 'sessioni'):
         for _vecchia, _superficie, _fondo in _consistency_migrations:
@@ -358,8 +358,14 @@ def inizializza_database():
     for _tabella in ('catalogo_prodotti', 'sessioni'):
         conn.execute(
             f"UPDATE {_tabella} SET snow_consistenza = REPLACE("
-            f"COALESCE(snow_consistenza, ''), 'Sfarinata / Soffice', 'Soffice / Sfarinata') "
+            f"COALESCE(snow_consistenza, ''), 'Sfarinata / Soffice', 'Soffice, Sfarinata') "
             f"WHERE INSTR(COALESCE(snow_consistenza, ''), 'Sfarinata / Soffice') > 0"
+        )
+    for _tabella in ('catalogo_prodotti', 'sessioni'):
+        conn.execute(
+            f"UPDATE {_tabella} SET snow_consistenza = REPLACE("
+            f"COALESCE(snow_consistenza, ''), 'Soffice / Sfarinata', 'Soffice, Sfarinata') "
+            f"WHERE INSTR(COALESCE(snow_consistenza, ''), 'Soffice / Sfarinata') > 0"
         )
 
     # Aggiorna anche il riepilogo legacy usato dai filtri del catalogo.
@@ -371,8 +377,13 @@ def inizializza_database():
         )
     conn.execute(
         "UPDATE catalogo_prodotti SET tipo_neve = REPLACE(COALESCE(tipo_neve, ''), "
-        "'Sfarinata / Soffice', 'Soffice / Sfarinata') "
+        "'Sfarinata / Soffice', 'Soffice, Sfarinata') "
         "WHERE INSTR(COALESCE(tipo_neve, ''), 'Sfarinata / Soffice') > 0"
+    )
+    conn.execute(
+        "UPDATE catalogo_prodotti SET tipo_neve = REPLACE(COALESCE(tipo_neve, ''), "
+        "'Soffice / Sfarinata', 'Soffice, Sfarinata') "
+        "WHERE INSTR(COALESCE(tipo_neve, ''), 'Soffice / Sfarinata') > 0"
     )
 
     # I record universali devono restare universali anche nel nuovo campo.
@@ -3582,7 +3593,8 @@ def salva_zero_test_matrice(sessione_id, righe, classificazione):
 SNOW_OPTION_GROUPS_STANDARD = {
     "Origine": ["Naturale", "Artificiale", "Mista"],
     "Consistenza": [
-        "Soffice / Sfarinata",
+        "Soffice",
+        "Sfarinata",
         "Compatta",
         "Sgranata",
         "Ghiacciata",
@@ -3626,10 +3638,11 @@ def _normalizza_forma_grano_testo(valore):
     return ", ".join(_normalizza_forma_grano_valori(valori))
 
 SNOW_CONSISTENCY_LEGACY_MAP = {
-    "Sfarinata / Soffice": ("Soffice / Sfarinata", "Omogeneo / n.d."),
+    "Sfarinata / Soffice": ("Soffice, Sfarinata", "Omogeneo / n.d."),
+    "Soffice / Sfarinata": ("Soffice, Sfarinata", "Omogeneo / n.d."),
     "Molle su fondo compatto": ("Molle", "Compatto"),
-    "Soffice su fondo compatto": ("Soffice / Sfarinata", "Compatto"),
-    "Soffice su fondo ghiacciato": ("Soffice / Sfarinata", "Ghiacciato"),
+    "Soffice su fondo compatto": ("Soffice, Sfarinata", "Compatto"),
+    "Soffice su fondo ghiacciato": ("Soffice, Sfarinata", "Ghiacciato"),
     "Molle su fondo ghiacciato": ("Molle", "Ghiacciato"),
 }
 
@@ -3639,6 +3652,16 @@ def _valori_sessione_neve(valore, opzioni):
         return list(opzioni)
     if list(opzioni) == SNOW_OPTION_GROUPS_STANDARD["Forma grano"]:
         valori = _normalizza_forma_grano_valori(valori)
+    if list(opzioni) == SNOW_OPTION_GROUPS_STANDARD["Consistenza"]:
+        espansi = []
+        for voce in valori:
+            if voce in {"Soffice / Sfarinata", "Sfarinata / Soffice", "Soffice, Sfarinata"}:
+                for extra in ["Soffice", "Sfarinata"]:
+                    if extra not in espansi:
+                        espansi.append(extra)
+            elif voce and voce not in espansi:
+                espansi.append(voce)
+        valori = espansi
     return [v for v in valori if v in opzioni]
 
 
@@ -9636,7 +9659,7 @@ with st.container(key="sector_page_content"):
                         </div>
                         <div class="snow-reference-mini">
                             <div class="snow-reference-mini-title">Condizioni di transizione</div>
-                            <div class="snow-reference-mini-text">Esempio: neve nuova su pista battuta = Soffice / Sfarinata + Fondo compatto. Neve che molla sopra ghiaccio = Molle + Fondo ghiacciato.</div>
+                            <div class="snow-reference-mini-text">Esempio: neve nuova su pista battuta = Soffice o Sfarinata + Fondo compatto. Neve che molla sopra ghiaccio = Molle + Fondo ghiacciato.</div>
                         </div>
                         <div class="snow-reference-mini">
                             <div class="snow-reference-mini-title">Uso nel motore prodotti</div>
