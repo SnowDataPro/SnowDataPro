@@ -7220,6 +7220,45 @@ def _schema_zone_rigatura_path(tecnica):
     return os.path.join(BASE_DIR, "assets", nome)
 
 
+def _asset_image_src(path, mime="image/png"):
+    """Converte un asset locale in data-URL per i tooltip HTML."""
+    try:
+        dati = Path(path).read_bytes()
+        return f"data:{mime};base64,{base64.b64encode(dati).decode('ascii')}"
+    except Exception:
+        return ""
+
+
+def _zona_overlay_rigatura(tecnica, zona_da, zona_a):
+    """Restituisce left/width (%) per evidenziare la zona sulla soletta nello schema."""
+    tecnica_norm = str(tecnica or "").strip().lower()
+    if tecnica_norm == "classico":
+        punti = {
+            "Coda": 5.7,
+            "Fine ponte": 34.6,
+            "Inizio ponte": 57.6,
+            "Inizio canalina": 79.1,
+            "Punta": 89.9,
+        }
+    else:
+        punti = {
+            "Coda": 5.7,
+            "Fine attacco": 32.6,
+            "Inizio canalina (lato coda)": 52.9,
+            "Inizio canalina (lato punta)": 81.3,
+            "Inizio canalina": 81.3,
+            "Punta": 91.6,
+        }
+    da = str(zona_da or "").strip()
+    a = str(zona_a or "").strip()
+    if da not in punti or a not in punti:
+        return None
+    x1, x2 = punti[da], punti[a]
+    left = min(x1, x2)
+    width = max(1.2, abs(x2 - x1))
+    return left, width
+
+
 def _zona_rigatura_testo(zona_da, zona_a):
     da = str(zona_da or "").strip()
     a = str(zona_a or "").strip()
@@ -7830,9 +7869,19 @@ def _render_podio_rigature(df_rows, df_comp):
         .rig-image-placeholder { width:90px; height:112px; display:flex; align-items:center; justify-content:center; color:#a5b0b8; font-size:.65rem; font-weight:700; }
         .rig-work-name-wrap { position:relative; display:inline-flex; justify-content:center; max-width:100%; }
         .rig-work-name { color:#263238; font-size:.86rem; line-height:1.15; font-weight:780; overflow-wrap:anywhere; cursor:help; border-bottom:1px dotted rgba(38,50,56,.32); }
-        .rig-work-tooltip { position:absolute; left:50%; bottom:calc(100% + .48rem); transform:translateX(-50%) translateY(4px); min-width:150px; max-width:240px; padding:.5rem .62rem; background:#202a32; color:#fff; border-radius:8px; box-shadow:0 8px 22px rgba(20,30,38,.20); font-size:.68rem; line-height:1.3; font-weight:650; letter-spacing:.01em; text-align:center; white-space:normal; opacity:0; visibility:hidden; pointer-events:none; transition:opacity .14s ease, transform .14s ease, visibility .14s ease; z-index:40; }
-        .rig-work-tooltip::after { content:""; position:absolute; left:50%; top:100%; transform:translateX(-50%); border:6px solid transparent; border-top-color:#202a32; }
-        .rig-work-name-wrap:hover .rig-work-tooltip { opacity:1; visibility:visible; transform:translateX(-50%) translateY(0); }
+        .rig-work-tooltip { position:fixed; top:150px; right:32px; width:min(560px,42vw); padding:1rem 1.05rem; background:#fff; color:#263238; border:1px solid #d7dee4; border-radius:16px; box-shadow:0 22px 58px rgba(25,39,52,.26); text-align:left; white-space:normal; opacity:0; visibility:hidden; transform:translateY(8px) scale(.985); pointer-events:none; transition:opacity .14s ease, transform .14s ease, visibility .14s ease; z-index:2147483647; }
+        .rig-tooltip-title { font-size:1rem; line-height:1.2; font-weight:850; margin:0 0 .65rem 0; color:#1f2a33; }
+        .rig-tooltip-ski { position:relative; width:100%; overflow:hidden; border-radius:10px; background:#fbfcfd; }
+        .rig-tooltip-ski img { display:block; width:100%; height:auto; }
+        .rig-tooltip-zone { position:absolute; top:32.4%; height:8.8%; background:rgba(0,174,239,.50); border-top:2px solid #00aeea; border-bottom:2px solid #00aeea; box-shadow:0 0 0 1px rgba(0,174,239,.12); border-radius:4px; }
+        .rig-tooltip-divider { height:1px; background:#e5eaee; margin:.8rem 0 .7rem; }
+        .rig-tooltip-meta-row { display:flex; align-items:center; gap:.75rem; min-height:44px; }
+        .rig-tooltip-wheel { width:74px; height:74px; flex:0 0 74px; object-fit:contain; border-radius:10px; background:#fff; }
+        .rig-tooltip-meta { min-width:0; color:#3f4d57; font-size:.78rem; line-height:1.4; font-weight:650; }
+        .rig-tooltip-handdrive { display:inline-flex; align-items:center; gap:.3rem; margin-bottom:.28rem; padding:.24rem .48rem; border-radius:8px; background:#eaf5ff; color:#1879b5; font-size:.72rem; font-weight:800; }
+        .rig-tooltip-detail { color:#3f4d57; font-size:.78rem; font-weight:650; }
+        .rig-work-name-wrap:hover .rig-work-tooltip { opacity:1; visibility:visible; transform:translateY(0) scale(1); }
+        @media (max-width: 980px) { .rig-work-tooltip { right:12px; width:min(520px,76vw); top:120px; } }
         .rig-podium-step { display:flex; align-items:flex-start; justify-content:center; border:1px solid #cfd6dc; border-top-width:4px; border-radius:5px 5px 0 0; background:#eef1f4; margin:.35rem .25rem 0; padding-top:.6rem; }
         .rig-podium-step-first { height:108px; border-top-color:#d4af37; background:linear-gradient(180deg,#fffaf0 0%,#eef1f4 100%); }
         .rig-podium-step-second { height:78px; border-top-color:#aeb7bf; }
@@ -7872,18 +7921,52 @@ def _render_podio_rigature(df_rows, df_comp):
         pair_class = "single" if len(imgs) <= 1 and not _testo_pulito(c.get("nome_2")) else ""
         direzione = str(c.get("direzione") or "—").strip() or "—"
         hd = bool(int(c.get("hand_drive") or 0))
-        zona = _zona_rigatura_testo(c.get("zona_da"), c.get("zona_a"))
-        meta = []
-        if direzione != "—": meta.append(direzione)
-        if hd: meta.append("Hand drive")
-        if zona != "—": meta.append(zona)
-        meta_html = " · ".join(meta) if meta else "Dettagli non specificati"
+        tecnica = str(c.get("tecnica_sci") or "Skating").strip() or "Skating"
+        zona_da = c.get("zona_da")
+        zona_a = c.get("zona_a")
+        zona = _zona_rigatura_testo(zona_da, zona_a)
+
+        schema_src = _asset_image_src(_schema_zone_rigatura_path(tecnica))
+        overlay = _zona_overlay_rigatura(tecnica, zona_da, zona_a)
+        overlay_html = ""
+        if overlay is not None:
+            left, width = overlay
+            overlay_html = f'<div class="rig-tooltip-zone" style="left:{left:.2f}%;width:{width:.2f}%;"></div>'
+        ski_html = (
+            f'<div class="rig-tooltip-ski"><img src="{schema_src}" alt="Schema zone {html_escape(tecnica)}">{overlay_html}</div>'
+            if schema_src else ""
+        )
+
+        dettagli = []
+        if direzione != "—":
+            dettagli.append(direzione)
+        if zona != "—":
+            dettagli.append(zona)
+        dettaglio_html = " · ".join(html_escape(x) for x in dettagli) if dettagli else "Dettagli non specificati"
+
+        wheel_html = ""
+        handdrive_badge = ""
+        if hd:
+            wheel_src = _asset_image_src(os.path.join(BASE_DIR, "assets", "hand_drive_wheel.png"))
+            if wheel_src:
+                wheel_html = f'<img class="rig-tooltip-wheel" src="{wheel_src}" alt="Rotella Hand drive">'
+            handdrive_badge = '<div class="rig-tooltip-handdrive">⚙ Hand drive</div>'
+
+        tooltip_html = (
+            f'<div class="rig-work-tooltip">'
+            f'<div class="rig-tooltip-title">{html_escape(label)}</div>'
+            f'{ski_html}'
+            f'<div class="rig-tooltip-divider"></div>'
+            f'<div class="rig-tooltip-meta-row">{wheel_html}'
+            f'<div class="rig-tooltip-meta">{handdrive_badge}<div class="rig-tooltip-detail">{dettaglio_html}</div></div>'
+            f'</div></div>'
+        )
         return (
             '<div class="rig-work-block">'
             f'<div class="rig-pair-images {pair_class}">{imgs_html}</div>'
             '<div class="rig-work-name-wrap">'
             f'<div class="rig-work-name">{html_escape(label)}</div>'
-            f'<div class="rig-work-tooltip">{html_escape(meta_html)}</div>'
+            f'{tooltip_html}'
             '</div>'
             '</div>'
         )
