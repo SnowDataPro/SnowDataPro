@@ -7500,6 +7500,45 @@ def render_form_test_rigature():
         st.session_state["rig_test_table_version"] += 1
 
     df_tab = st.session_state[state_key].copy()
+
+    # Compatibilità con session_state creati da versioni precedenti dell'app.
+    # Un redeploy Streamlit può mantenere nel browser una tabella già esistente
+    # priva delle nuove colonne Da/A: le creiamo sempre prima del data_editor.
+    colonne_richieste = {
+        "_ordine_inserimento": list(range(len(df_tab))),
+        "Posizione": [None] * len(df_tab),
+        "Numero sci": [""] * len(df_tab),
+        "Note": [""] * len(df_tab),
+    }
+    for i in range(1, n_cols + 1):
+        colonne_richieste[f"Rigatura {i}"] = ["—"] * len(df_tab)
+        colonne_richieste[f"Direzione {i}"] = ["—"] * len(df_tab)
+        colonne_richieste[f"Hand drive {i}"] = [False] * len(df_tab)
+        colonne_richieste[f"Da {i}"] = ["—"] * len(df_tab)
+        colonne_richieste[f"A {i}"] = ["—"] * len(df_tab)
+
+    colonne_aggiunte = False
+    for nome_colonna, valori_default in colonne_richieste.items():
+        if nome_colonna not in df_tab.columns:
+            df_tab[nome_colonna] = valori_default
+            colonne_aggiunte = True
+
+    # Mantiene solo il numero di righe richiesto e completa eventuali righe mancanti.
+    if len(df_tab) != n_aste:
+        nuova = _tabella_vuota(n_aste, n_cols)
+        old = df_tab.copy().reset_index(drop=True)
+        if "_ordine_inserimento" in old.columns:
+            old = old.sort_values("_ordine_inserimento", kind="stable").reset_index(drop=True)
+        for idx in range(min(len(old), n_aste)):
+            for col in nuova.columns:
+                if col in old.columns:
+                    nuova.at[idx, col] = old.at[idx, col]
+        df_tab = nuova
+        colonne_aggiunte = True
+
+    if colonne_aggiunte:
+        st.session_state["rig_test_table_version"] += 1
+
     # Se la tecnica viene cambiata, elimina solo le zone non compatibili con il nuovo schema.
     zone_valide = set(["—"] + zone_tecnica)
     for i in range(1, n_cols + 1):
