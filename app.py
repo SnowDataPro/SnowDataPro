@@ -405,6 +405,22 @@ def inizializza_database():
         )
 
 
+    # Aggiorna le categorie delle rigature manuali secondo la nuova nomenclatura.
+    _rigatura_type_migrations = [
+        ('Incrociata', 'X cut'),
+        ('V', 'V cut'),
+        ('Altro', 'Special'),
+        ('Rullo', 'Special'),
+        ('Utensile', 'Special'),
+    ]
+    for _old_tipo, _new_tipo in _rigatura_type_migrations:
+        conn.execute(
+            "UPDATE catalogo_prodotti SET tipo = ? "
+            "WHERE categoria = 'rigatura' AND TRIM(COALESCE(tipo, '')) = ?",
+            (_new_tipo, _old_tipo),
+        )
+
+
     # Semplificazione definitiva della forma del grano. La migrazione e'
     # idempotente e mantiene compatibili prodotti e sessioni storiche.
     _grain_replacements = [
@@ -4103,6 +4119,11 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
     mostra_banner(titolo, sottotitolo)
     usa_condizioni = categoria != "rigatura"
     categoria_tenuta = categoria == "tenuta"
+    categoria_rigatura = categoria == "rigatura"
+    label_nome_prodotto = "Nome riga *" if categoria_rigatura else "Nome prodotto *"
+    placeholder_nome_prodotto = "es. R1 1.0 mm" if categoria_rigatura else "es. UHX Block Middle 26"
+    label_tipo_prodotto = "Disegno" if categoria_rigatura else "Categoria prodotto"
+    label_filtro_tipo = "Disegno" if categoria_rigatura else "Categoria"
 
     # --------------------------------------------------------
     # MODALITÀ MODIFICA
@@ -4486,11 +4507,11 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
             with c_cond_range:
                 condizioni_range_tenuta = st.multiselect(
                     "Range valido con",
-                    ["Neve nuova", "Neve trasformata", "Tutte le tipologie di neve", "Non specificato"],
+                    ["Neve nuova/fine", "Neve vecchia/trasformata", "Tutte le tipologie di neve", "Non specificato"],
                     key=tenuta_condizioni_key,
                     placeholder="Seleziona una o più opzioni",
                     help=(
-                        "Scegli se il range produttore vale per neve nuova, neve trasformata, "
+                        "Scegli se il range produttore vale per neve nuova/fine, neve vecchia/trasformata, "
                         "per tutte le tipologie di neve oppure se il produttore non lo specifica. "
                         "Se selezioni 'Tutte le tipologie di neve' o 'Non specificato', "
                         "inserirai un solo intervallo."
@@ -4506,8 +4527,8 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
 
             mostra_tutte = "Tutte le tipologie di neve" in condizioni_range_tenuta
             mostra_non_specificato = "Non specificato" in condizioni_range_tenuta
-            mostra_nuova = ("Neve nuova" in condizioni_range_tenuta) and not mostra_tutte and not mostra_non_specificato
-            mostra_trasformata = ("Neve trasformata" in condizioni_range_tenuta) and not mostra_tutte and not mostra_non_specificato
+            mostra_nuova = ("Neve nuova/fine" in condizioni_range_tenuta) and not mostra_tutte and not mostra_non_specificato
+            mostra_trasformata = ("Neve vecchia/trasformata" in condizioni_range_tenuta) and not mostra_tutte and not mostra_non_specificato
 
             if mostra_tutte or mostra_non_specificato:
                 intestazione_range = "Tutte le tipologie di neve" if mostra_tutte else "Non specificato"
@@ -4554,20 +4575,20 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                     with target_col:
                         st.markdown(
                             f'<div style="display:flex;align-items:center;gap:.45rem;margin:.15rem 0 .55rem 0;">'
-                            f'{SNOW_ICON_NEW_SVG}<strong>Neve nuova</strong>'
+                            f'{SNOW_ICON_NEW_SVG}<strong>Neve nuova/fine</strong>'
                             f'</div>',
                             unsafe_allow_html=True,
                         )
                         n1, n2, n3 = st.columns(3)
                         with n1:
                             temp_nuova_min_txt = st.text_input(
-                                "Min neve nuova (°C)",
+                                "Min neve nuova/fine (°C)",
                                 key=tenuta_temp_nuova_min_key,
                                 placeholder="-10",
                             )
                         with n2:
                             temp_nuova_max_txt = st.text_input(
-                                "Max neve nuova (°C)",
+                                "Max neve nuova/fine (°C)",
                                 key=tenuta_temp_nuova_max_key,
                                 placeholder="-2",
                             )
@@ -4583,20 +4604,20 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                     with target_col:
                         st.markdown(
                             f'<div style="display:flex;align-items:center;gap:.45rem;margin:.15rem 0 .55rem 0;">'
-                            f'{SNOW_ICON_TRANSFORMED_SVG}<strong>Neve trasformata</strong>'
+                            f'{SNOW_ICON_TRANSFORMED_SVG}<strong>Neve vecchia/trasformata</strong>'
                             f'</div>',
                             unsafe_allow_html=True,
                         )
                         t1, t2, t3 = st.columns(3)
                         with t1:
                             temp_trasformata_min_txt = st.text_input(
-                                "Min neve trasformata (°C)",
+                                "Min neve vecchia/trasformata (°C)",
                                 key=tenuta_temp_trasf_min_key,
                                 placeholder="-15",
                             )
                         with t2:
                             temp_trasformata_max_txt = st.text_input(
-                                "Max neve trasformata (°C)",
+                                "Max neve vecchia/trasformata (°C)",
                                 key=tenuta_temp_trasf_max_key,
                                 placeholder="-5",
                             )
@@ -4629,9 +4650,9 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                     c_nome, c_marca, c_tipo = st.columns(3)
                     with c_nome:
                         nome = st.text_input(
-                            "Nome prodotto *",
+                            label_nome_prodotto,
                             value=valore_nome,
-                            placeholder="es. UHX Block Middle 26",
+                            placeholder=placeholder_nome_prodotto,
                         )
                     with c_marca:
                         marca = st.text_input(
@@ -4641,7 +4662,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                         )
                     with c_tipo:
                         tipo = st.selectbox(
-                            "Categoria prodotto",
+                            label_tipo_prodotto,
                             tipi,
                             index=_indice_opzione(tipi, valore_tipo, 0),
                         )
@@ -5035,14 +5056,14 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                 temp_min = temp_tutte_min
                                 temp_max = temp_tutte_max
                             else:
-                                if "Neve nuova" in condizioni_range_tenuta:
+                                if "Neve nuova/fine" in condizioni_range_tenuta:
                                     temp_nuova_unica = _numero_opzionale(temp_nuova_unica_txt)
                                     if temp_nuova_unica is not None:
                                         temp_nuova_min = temp_nuova_max = temp_nuova_unica
                                     else:
                                         temp_nuova_min = _numero_opzionale(temp_nuova_min_txt)
                                         temp_nuova_max = _numero_opzionale(temp_nuova_max_txt)
-                                if "Neve trasformata" in condizioni_range_tenuta:
+                                if "Neve vecchia/trasformata" in condizioni_range_tenuta:
                                     temp_trasformata_unica = _numero_opzionale(temp_trasformata_unica_txt)
                                     if temp_trasformata_unica is not None:
                                         temp_trasformata_min = temp_trasformata_max = temp_trasformata_unica
@@ -5357,7 +5378,7 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                 key=str.lower,
             )
             filtro_tipo = st.selectbox(
-                "Categoria",
+                label_filtro_tipo,
                 tipi_presenti,
                 key=f"filtro_tipo_{categoria}",
             )
@@ -9605,8 +9626,8 @@ with st.container(key="sector_page_content"):
         pagina_catalogo_prodotti(
             "rigatura",
             "Rigature manuali",
-            "Catalogo degli utensili e delle configurazioni di rigatura manuale.",
-            ["Lineare", "Incrociata", "V", "Rullo", "Utensile", "Altro"],
+            "Catalogo delle configurazioni di rigatura manuale.",
+            ["Lineare", "Screws", "V cut", "X cut", "Special"],
         )
 
 
