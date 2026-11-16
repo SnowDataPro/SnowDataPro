@@ -7160,11 +7160,24 @@ def _rigatura_catalog_label(record):
     return str(record.get("nome") or "").strip()
 
 
+def _testo_pulito(valore):
+    """Converte un valore in testo ignorando None/NaN/NA."""
+    if valore is None:
+        return ""
+    try:
+        if pd.isna(valore):
+            return ""
+    except Exception:
+        pass
+    testo = str(valore).strip()
+    return "" if testo.lower() in {"nan", "none", "<na>"} else testo
+
+
 def _rigatura_component_names(record):
     """Restituisce i nomi della singola rigatura o della coppia salvata nella stessa cella."""
     nomi = []
-    nome_1 = str(record.get("nome") or "").strip()
-    nome_2 = str(record.get("nome_2") or "").strip()
+    nome_1 = _testo_pulito(record.get("nome"))
+    nome_2 = _testo_pulito(record.get("nome_2"))
     if nome_1:
         nomi.append(nome_1)
     if nome_2:
@@ -7489,7 +7502,7 @@ def render_form_test_rigature():
             if prod_id is None:
                 label_comp = "—"
             elif prod_id_2 is not None:
-                label_comp = f"{label_da_id.get(prod_id, str(c.get('nome') or '').strip())}/{label_da_id.get(prod_id_2, str(c.get('nome_2') or '').strip())}"
+                label_comp = f"{label_da_id.get(prod_id, _testo_pulito(c.get('nome')))}/{label_da_id.get(prod_id_2, _testo_pulito(c.get('nome_2')))}"
             else:
                 label_comp = label_da_id.get(prod_id, _rigatura_catalog_label(c))
             comp_map[key_comp] = {
@@ -7845,14 +7858,14 @@ def _render_podio_rigature(df_rows, df_comp):
         imgs = []
         src1 = _rigatura_image_src(c.get("foto_data"), c.get("foto_mime"))
         src2 = _rigatura_image_src(c.get("foto_data_2"), c.get("foto_mime_2"))
-        for src, alt in [(src1, str(c.get("nome") or "")), (src2, str(c.get("nome_2") or ""))]:
+        for src, alt in [(src1, _testo_pulito(c.get("nome"))), (src2, _testo_pulito(c.get("nome_2")))]:
             if src:
                 imgs.append(f'<img src="{src}" alt="{html_escape(alt)}">')
         if not imgs:
             imgs_html = '<div class="rig-image-placeholder">Nessuna foto</div>'
         else:
             imgs_html = "".join(imgs)
-        pair_class = "single" if len(imgs) <= 1 and not str(c.get("nome_2") or "").strip() else ""
+        pair_class = "single" if len(imgs) <= 1 and not _testo_pulito(c.get("nome_2")) else ""
         direzione = str(c.get("direzione") or "—").strip() or "—"
         hd = bool(int(c.get("hand_drive") or 0))
         zona = _zona_rigatura_testo(c.get("zona_da"), c.get("zona_a"))
@@ -7921,7 +7934,7 @@ def _render_tabella_rigature(df_rows, df_comp):
         ]:
             src = _rigatura_image_src(c.get(foto_key), c.get(mime_key))
             if src:
-                previews.append(f'<img src="{src}" alt="{html_escape(str(c.get(nome_key) or ""))}">')
+                previews.append(f'<img src="{src}" alt="{html_escape(_testo_pulito(c.get(nome_key)))}">')
         preview_html = ""
         if previews:
             preview_html = '<div class="rig-hover-preview"><div class="rig-hover-images">' + "".join(previews) + '</div></div>'
