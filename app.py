@@ -7192,10 +7192,11 @@ def _rigatura_component_label(record):
 
 
 def _rigatura_image_src(foto_data, foto_mime):
-    valore = str(foto_data or "").strip()
+    """Restituisce una data-URL solo quando esiste davvero una foto valida."""
+    valore = _testo_pulito(foto_data)
     if not valore:
         return ""
-    mime = str(foto_mime or "image/png").strip() or "image/png"
+    mime = _testo_pulito(foto_mime) or "image/png"
     return f"data:{html_escape(mime)};base64,{valore}"
 
 
