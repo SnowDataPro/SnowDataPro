@@ -2380,48 +2380,104 @@ st.markdown(
 
     div[class*="st-key-filter_temp_aria_group_"],
     div[class*="st-key-filter_temp_neve_group_"],
+    div[class*="st-key-filter_temp_produttore_group_"],
     div[class*="st-key-filter_snow_group_"] {
-        background: #f7f9fa !important;
-        border: 1px solid #e1e6ea !important;
-        border-radius: 10px !important;
-        padding: 0.90rem 0.95rem 0.78rem 0.95rem !important;
-        box-shadow: 0 1px 3px rgba(31, 41, 51, 0.025) !important;
+        background: linear-gradient(180deg, #ffffff 0%, #fbfcfd 100%) !important;
+        border: 1px solid #dbe3e8 !important;
+        border-radius: 16px !important;
+        padding: 1rem 1.05rem 0.95rem 1.05rem !important;
+        box-shadow: 0 10px 24px rgba(31, 41, 51, 0.05) !important;
+        transition: box-shadow .16s ease, transform .16s ease, border-color .16s ease;
     }
 
     div[class*="st-key-filter_temp_aria_group_"],
-    div[class*="st-key-filter_temp_neve_group_"] {
-        min-height: 178px !important;
+    div[class*="st-key-filter_temp_neve_group_"],
+    div[class*="st-key-filter_temp_produttore_group_"] {
+        min-height: 196px !important;
     }
 
     div[class*="st-key-filter_snow_group_"] {
-        min-height: 112px !important;
+        min-height: 120px !important;
+    }
+
+    div[class*="st-key-filter_temp_aria_group_"] {
+        border-top: 4px solid #1aa4d8 !important;
+    }
+
+    div[class*="st-key-filter_temp_nuova_group_"],
+    div[class*="st-key-filter_temp_neve_group_"] {
+        border-top: 4px solid #47b4e7 !important;
+    }
+
+    div[class*="st-key-filter_temp_trasformata_group_"] {
+        border-top: 4px solid #607588 !important;
+    }
+
+    div[class*="st-key-filter_temp_produttore_group_"] {
+        border-top: 4px solid #8ea1ad !important;
+    }
+
+    div[class*="st-key-filter_temp_aria_group_"]:hover,
+    div[class*="st-key-filter_temp_neve_group_"]:hover,
+    div[class*="st-key-filter_temp_produttore_group_"]:hover,
+    div[class*="st-key-filter_snow_group_"]:hover {
+        box-shadow: 0 14px 30px rgba(31, 41, 51, 0.08) !important;
+        border-color: #cfd8de !important;
+        transform: translateY(-1px);
     }
 
     .catalog-temperature-card-title {
         color: var(--text-main);
-        font-size: 0.93rem;
-        font-weight: 700;
+        font-size: 1rem;
+        font-weight: 750;
         line-height: 1.2;
-        margin-bottom: 0.14rem;
+        margin-bottom: 0.2rem;
+        display: flex;
+        align-items: center;
+        gap: 0.42rem;
+    }
+
+    .catalog-temperature-card-title svg {
+        width: 16px;
+        height: 16px;
+        flex: 0 0 16px;
     }
 
     .catalog-temperature-card-subtitle {
-        color: var(--text-light);
-        font-size: 0.76rem;
-        line-height: 1.35;
-        min-height: 2.1rem;
-        margin-bottom: 0.28rem;
+        color: #70808c;
+        font-size: 0.77rem;
+        line-height: 1.42;
+        min-height: 2.2rem;
+        margin-bottom: 0.42rem;
     }
 
     div[class*="st-key-filter_temp_aria_group_"] [data-testid="stSlider"],
     div[class*="st-key-filter_temp_neve_group_"] [data-testid="stSlider"],
+    div[class*="st-key-filter_temp_produttore_group_"] [data-testid="stSlider"],
     div[class*="st-key-filter_snow_group_"] [data-testid="stMultiSelect"] {
-        margin-top: 0.18rem !important;
+        margin-top: 0.22rem !important;
     }
 
     div[class*="st-key-filter_temp_aria_group_"] [data-testid="stToggle"],
-    div[class*="st-key-filter_temp_neve_group_"] [data-testid="stToggle"] {
-        margin-bottom: 0.20rem !important;
+    div[class*="st-key-filter_temp_neve_group_"] [data-testid="stToggle"],
+    div[class*="st-key-filter_temp_produttore_group_"] [data-testid="stToggle"] {
+        margin-bottom: 0.28rem !important;
+        padding: 0.05rem 0 0.1rem 0 !important;
+        border-bottom: 1px solid #edf1f3;
+    }
+
+    div[class*="st-key-filter_temp_aria_group_"] [data-testid="stToggle"] label,
+    div[class*="st-key-filter_temp_neve_group_"] [data-testid="stToggle"] label,
+    div[class*="st-key-filter_temp_produttore_group_"] [data-testid="stToggle"] label {
+        gap: 0.55rem !important;
+    }
+
+    div[class*="st-key-filter_temp_aria_group_"] [data-testid="stToggle"] p,
+    div[class*="st-key-filter_temp_neve_group_"] [data-testid="stToggle"] p,
+    div[class*="st-key-filter_temp_produttore_group_"] [data-testid="stToggle"] p {
+        font-size: 0.82rem !important;
+        font-weight: 600 !important;
+        color: #41515d !important;
     }
 
     div[class*="st-key-filter_reset_"] button {
@@ -2447,15 +2503,34 @@ st.markdown(
         border-color: #aeb8bf !important;
     }
 
-    /* Slider più sobrio e coerente con il design Sector. */
+    /* Slider più moderno e coerente con il layout filtri temperatura. */
     div[class*="st-key-filter_temp_aria_group_"] [data-testid="stSlider"],
-    div[class*="st-key-filter_temp_neve_group_"] [data-testid="stSlider"] {
-        padding-top: 0.05rem !important;
+    div[class*="st-key-filter_temp_neve_group_"] [data-testid="stSlider"],
+    div[class*="st-key-filter_temp_produttore_group_"] [data-testid="stSlider"] {
+        padding-top: 0.12rem !important;
+    }
+
+    div[class*="st-key-filter_temp_aria_group_"] [data-testid="stSlider"] > div,
+    div[class*="st-key-filter_temp_neve_group_"] [data-testid="stSlider"] > div,
+    div[class*="st-key-filter_temp_produttore_group_"] [data-testid="stSlider"] > div {
+        background: #f7f9fb;
+        border: 1px solid #e7edf1;
+        border-radius: 12px;
+        padding: 0.55rem 0.7rem 0.5rem 0.7rem;
     }
 
     div[class*="st-key-filter_temp_aria_group_"] [data-testid="stSlider"] p,
-    div[class*="st-key-filter_temp_neve_group_"] [data-testid="stSlider"] p {
-        font-size: 0.82rem !important;
+    div[class*="st-key-filter_temp_neve_group_"] [data-testid="stSlider"] p,
+    div[class*="st-key-filter_temp_produttore_group_"] [data-testid="stSlider"] p {
+        font-size: 0.81rem !important;
+        color: #566672 !important;
+        font-weight: 600 !important;
+    }
+
+    div[class*="st-key-filter_temp_aria_group_"] [data-baseweb="slider"] [role="slider"],
+    div[class*="st-key-filter_temp_neve_group_"] [data-baseweb="slider"] [role="slider"],
+    div[class*="st-key-filter_temp_produttore_group_"] [data-baseweb="slider"] [role="slider"] {
+        box-shadow: 0 0 0 4px rgba(24, 160, 214, 0.10) !important;
     }
 
     div[class*="st-key-zero_snow_panel"],
