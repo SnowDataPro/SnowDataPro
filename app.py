@@ -7828,8 +7828,11 @@ def _render_podio_rigature(df_rows, df_comp):
         .rig-pair-images img { width:min(105px,46%); height:112px; object-fit:contain; display:block; }
         .rig-pair-images.single img { width:148px; max-width:92%; height:148px; }
         .rig-image-placeholder { width:90px; height:112px; display:flex; align-items:center; justify-content:center; color:#a5b0b8; font-size:.65rem; font-weight:700; }
-        .rig-work-meta { color:#8a98a3; font-size:.62rem; line-height:1.12; font-weight:800; text-transform:uppercase; letter-spacing:.035em; margin-bottom:.18rem; min-height:1.25em; }
-        .rig-work-name { color:#263238; font-size:.83rem; line-height:1.15; font-weight:750; overflow-wrap:anywhere; }
+        .rig-work-name-wrap { position:relative; display:inline-flex; justify-content:center; max-width:100%; }
+        .rig-work-name { color:#263238; font-size:.86rem; line-height:1.15; font-weight:780; overflow-wrap:anywhere; cursor:help; border-bottom:1px dotted rgba(38,50,56,.32); }
+        .rig-work-tooltip { position:absolute; left:50%; bottom:calc(100% + .48rem); transform:translateX(-50%) translateY(4px); min-width:150px; max-width:240px; padding:.5rem .62rem; background:#202a32; color:#fff; border-radius:8px; box-shadow:0 8px 22px rgba(20,30,38,.20); font-size:.68rem; line-height:1.3; font-weight:650; letter-spacing:.01em; text-align:center; white-space:normal; opacity:0; visibility:hidden; pointer-events:none; transition:opacity .14s ease, transform .14s ease, visibility .14s ease; z-index:40; }
+        .rig-work-tooltip::after { content:""; position:absolute; left:50%; top:100%; transform:translateX(-50%); border:6px solid transparent; border-top-color:#202a32; }
+        .rig-work-name-wrap:hover .rig-work-tooltip { opacity:1; visibility:visible; transform:translateX(-50%) translateY(0); }
         .rig-podium-step { display:flex; align-items:flex-start; justify-content:center; border:1px solid #cfd6dc; border-top-width:4px; border-radius:5px 5px 0 0; background:#eef1f4; margin:.35rem .25rem 0; padding-top:.6rem; }
         .rig-podium-step-first { height:108px; border-top-color:#d4af37; background:linear-gradient(180deg,#fffaf0 0%,#eef1f4 100%); }
         .rig-podium-step-second { height:78px; border-top-color:#aeb7bf; }
@@ -7874,12 +7877,14 @@ def _render_podio_rigature(df_rows, df_comp):
         if direzione != "—": meta.append(direzione)
         if hd: meta.append("Hand drive")
         if zona != "—": meta.append(zona)
-        meta_html = " · ".join(meta) if meta else "RIGATURA"
+        meta_html = " · ".join(meta) if meta else "Dettagli non specificati"
         return (
             '<div class="rig-work-block">'
             f'<div class="rig-pair-images {pair_class}">{imgs_html}</div>'
-            f'<div class="rig-work-meta">{html_escape(meta_html)}</div>'
+            '<div class="rig-work-name-wrap">'
             f'<div class="rig-work-name">{html_escape(label)}</div>'
+            f'<div class="rig-work-tooltip">{html_escape(meta_html)}</div>'
+            '</div>'
             '</div>'
         )
 
