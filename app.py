@@ -23,7 +23,7 @@ st.set_page_config(
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "ski_material_lab.db")
-VERSIONE_DATABASE_APP = 17
+VERSIONE_DATABASE_APP = 18
 
 
 # ============================================================
@@ -202,13 +202,15 @@ def inizializza_database():
             test_rigatura_asta_id INTEGER NOT NULL,
             colonna_numero INTEGER NOT NULL,
             rigatura_prodotto_id INTEGER,
+            rigatura_prodotto_id_2 INTEGER,
             direzione TEXT,
             hand_drive INTEGER DEFAULT 0,
             tecnica_sci TEXT,
             zona_da TEXT,
             zona_a TEXT,
             FOREIGN KEY(test_rigatura_asta_id) REFERENCES test_rigature_aste(id),
-            FOREIGN KEY(rigatura_prodotto_id) REFERENCES catalogo_prodotti(id)
+            FOREIGN KEY(rigatura_prodotto_id) REFERENCES catalogo_prodotti(id),
+            FOREIGN KEY(rigatura_prodotto_id_2) REFERENCES catalogo_prodotti(id)
         )
     """)
 
@@ -317,6 +319,7 @@ def inizializza_database():
         r[1] for r in conn.execute("PRAGMA table_info(test_rigature_componenti)").fetchall()
     }
     nuove_colonne_test_rigature_componenti = {
+        "rigatura_prodotto_id_2": "INTEGER",
         "direzione": "TEXT",
         "hand_drive": "INTEGER DEFAULT 0",
         "tecnica_sci": "TEXT",
@@ -7157,6 +7160,32 @@ def _rigatura_catalog_label(record):
     return str(record.get("nome") or "").strip()
 
 
+def _rigatura_component_names(record):
+    """Restituisce i nomi della singola rigatura o della coppia salvata nella stessa cella."""
+    nomi = []
+    nome_1 = str(record.get("nome") or "").strip()
+    nome_2 = str(record.get("nome_2") or "").strip()
+    if nome_1:
+        nomi.append(nome_1)
+    if nome_2:
+        nomi.append(nome_2)
+    return nomi
+
+
+def _rigatura_component_label(record):
+    """Una cella doppia viene rappresentata come V301/V302, senza segno +."""
+    nomi = _rigatura_component_names(record)
+    return "/".join(nomi) if nomi else "—"
+
+
+def _rigatura_image_src(foto_data, foto_mime):
+    valore = str(foto_data or "").strip()
+    if not valore:
+        return ""
+    mime = str(foto_mime or "image/png").strip() or "image/png"
+    return f"data:{html_escape(mime)};base64,{valore}"
+
+
 def _zone_rigatura_per_tecnica(tecnica):
     """Riferimenti longitudinali coerenti con lo schema grafico dell'utente."""
     if str(tecnica or "").strip().lower() == "classico":
@@ -7405,8 +7434,9 @@ def render_form_test_rigature():
            ORDER BY COALESCE(marca, ''), nome"""
     )
     opzioni = ["—"]
-    id_da_label = {"—": None}
+    ids_da_label = {"—": (None, None)}
     label_da_id = {}
+    rigature_catalogo = []
     if not df_catalogo.empty:
         conteggi_nome = df_catalogo["nome"].fillna("").astype(str).str.strip().value_counts().to_dict()
         for _, prod in df_catalogo.iterrows():
@@ -7418,9 +7448,21 @@ def render_form_test_rigature():
             if conteggi_nome.get(nome_riga, 0) > 1:
                 marca = str(prod.get("marca") or "").strip()
                 label = f"{nome_riga} ({marca})" if marca else f"{nome_riga} #{int(prod['id'])}"
+            prod_id = int(prod["id"])
+            rigature_catalogo.append((prod_id, label))
             opzioni.append(label)
-            id_da_label[label] = int(prod["id"])
-            label_da_id[int(prod["id"])] = label
+            ids_da_label[label] = (prod_id, None)
+            label_da_id[prod_id] = label
+
+        # Una singola cella può contenere una rigatura oppure una coppia di rigature.
+        # Le coppie vengono mostrate con "/" e condividono direzione, Hand drive e zona.
+        for idx_a in range(len(rigature_catalogo)):
+            id_a, label_a = rigature_catalogo[idx_a]
+            for idx_b in range(idx_a + 1, len(rigature_catalogo)):
+                id_b, label_b = rigature_catalogo[idx_b]
+                pair_label = f"{label_a}/{label_b}"
+                opzioni.append(pair_label)
+                ids_da_label[pair_label] = (id_a, id_b)
 
     n_aste = int(numero_aste)
     n_cols = int(numero_colonne)
@@ -7431,9 +7473,11 @@ def render_form_test_rigature():
         comp = leggi_df(
             """SELECT c.test_rigatura_asta_id, c.colonna_numero, c.direzione, c.hand_drive,
                       c.tecnica_sci, c.zona_da, c.zona_a,
-                      p.id AS prodotto_id, p.nome, p.marca, p.tipo, p.materiale, p.larghezza_mm, p.angolo_gradi
+                      p.id AS prodotto_id, p.nome, p.marca, p.tipo, p.materiale, p.larghezza_mm, p.angolo_gradi,
+                      p2.id AS prodotto_id_2, p2.nome AS nome_2, p2.marca AS marca_2
                FROM test_rigature_componenti c
                LEFT JOIN catalogo_prodotti p ON p.id = c.rigatura_prodotto_id
+               LEFT JOIN catalogo_prodotti p2 ON p2.id = c.rigatura_prodotto_id_2
                JOIN test_rigature_aste a ON a.id = c.test_rigatura_asta_id
                WHERE a.sessione_id = ? ORDER BY c.test_rigatura_asta_id, c.colonna_numero""", (int(edit_id),)
         )
@@ -7441,8 +7485,15 @@ def render_form_test_rigature():
         for _, c in comp.iterrows():
             key_comp = (int(c["test_rigatura_asta_id"]), int(c["colonna_numero"]))
             prod_id = None if pd.isna(c.get("prodotto_id")) else int(c.get("prodotto_id"))
+            prod_id_2 = None if pd.isna(c.get("prodotto_id_2")) else int(c.get("prodotto_id_2"))
+            if prod_id is None:
+                label_comp = "—"
+            elif prod_id_2 is not None:
+                label_comp = f"{label_da_id.get(prod_id, str(c.get('nome') or '').strip())}/{label_da_id.get(prod_id_2, str(c.get('nome_2') or '').strip())}"
+            else:
+                label_comp = label_da_id.get(prod_id, _rigatura_catalog_label(c))
             comp_map[key_comp] = {
-                "label": label_da_id.get(prod_id, _rigatura_catalog_label(c)) if prod_id is not None else "—",
+                "label": label_comp,
                 "direzione": str(c.get("direzione") or "—").strip() or "—",
                 "hand_drive": bool(int(c.get("hand_drive") or 0)),
                 "zona_da": str(c.get("zona_da") or "—").strip() or "—",
@@ -7618,13 +7669,14 @@ def render_form_test_rigature():
         componenti = []
         for i, col in enumerate(col_rig, start=1):
             lab = str(r.get(col) or "—").strip()
-            prod_id = id_da_label.get(lab)
+            prod_id, prod_id_2 = ids_da_label.get(lab, (None, None))
             direzione = str(r.get(f"Direzione {i}") or "—").strip() or "—"
             hand_drive = bool(r.get(f"Hand drive {i}") or False)
             zona_da = str(r.get(f"Da {i}") or "—").strip() or "—"
             zona_a = str(r.get(f"A {i}") or "—").strip() or "—"
             componenti.append({
                 "prod_id": prod_id,
+                "prod_id_2": prod_id_2,
                 "direzione": direzione,
                 "hand_drive": hand_drive,
                 "tecnica_sci": tecnica_sci,
@@ -7692,10 +7744,12 @@ def render_form_test_rigature():
                 if prod_id is not None:
                     conn.execute(
                         """INSERT INTO test_rigature_componenti
-                           (test_rigatura_asta_id, colonna_numero, rigatura_prodotto_id, direzione, hand_drive, tecnica_sci, zona_da, zona_a)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                           (test_rigatura_asta_id, colonna_numero, rigatura_prodotto_id, rigatura_prodotto_id_2, direzione, hand_drive, tecnica_sci, zona_da, zona_a)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                         (
-                            asta_id, idx, int(prod_id), str(componente.get("direzione") or "—"),
+                            asta_id, idx, int(prod_id),
+                            int(componente.get("prod_id_2")) if componente.get("prod_id_2") is not None else None,
+                            str(componente.get("direzione") or "—"),
                             1 if componente.get("hand_drive") else 0,
                             str(componente.get("tecnica_sci") or tecnica_sci),
                             str(componente.get("zona_da") or "—"),
@@ -7728,10 +7782,14 @@ def _carica_righe_test_rigature(sessione_id):
         """SELECT c.test_rigatura_asta_id, c.colonna_numero, c.direzione, c.hand_drive,
                   c.tecnica_sci, c.zona_da, c.zona_a,
                   p.id AS prodotto_id, p.nome, p.marca, p.tipo, p.materiale, p.larghezza_mm, p.angolo_gradi,
-                  p.foto_data, p.foto_mime
+                  p.foto_data, p.foto_mime,
+                  p2.id AS prodotto_id_2, p2.nome AS nome_2, p2.marca AS marca_2,
+                  p2.tipo AS tipo_2, p2.materiale AS materiale_2, p2.larghezza_mm AS larghezza_mm_2,
+                  p2.angolo_gradi AS angolo_gradi_2, p2.foto_data AS foto_data_2, p2.foto_mime AS foto_mime_2
            FROM test_rigature_componenti c
            JOIN test_rigature_aste a ON a.id = c.test_rigatura_asta_id
            LEFT JOIN catalogo_prodotti p ON p.id = c.rigatura_prodotto_id
+           LEFT JOIN catalogo_prodotti p2 ON p2.id = c.rigatura_prodotto_id_2
            WHERE a.sessione_id = ? ORDER BY c.test_rigatura_asta_id, c.colonna_numero""",
         (int(sessione_id),)
     )
@@ -7744,29 +7802,35 @@ def _render_podio_rigature(df_rows, df_comp):
     st.markdown(
         """
         <style>
-        .scroll-podium-wrap { margin:.35rem 0 1.1rem 0; padding:1rem 1rem .15rem 1rem; border:1px solid #d8dde3; border-radius:14px; background:linear-gradient(180deg,#fff 0%,#f7f9fa 100%); overflow-x:auto; }
-        .scroll-podium { min-width:760px; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.8rem; align-items:end; }
-        .scroll-podium-entry { display:flex; flex-direction:column; justify-content:flex-end; min-width:0; }
-        .podium-result-card { position:relative; background:#fff; border:1px solid #d8dde3; border-radius:12px 12px 8px 8px; padding:1rem .8rem .8rem .8rem; box-shadow:0 7px 18px rgba(31,41,51,.07); min-height:238px; display:flex; align-items:center; justify-content:center; }
-        .podium-first .podium-result-card { border-color:#d8b54c; box-shadow:0 9px 24px rgba(31,41,51,.10); }
-        .podium-product-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.82rem; align-items:start; width:100%; }
-        .podium-product-grid.count-1 { grid-template-columns:1fr; }
-        .podium-product-tile { min-width:0; text-align:center; }
-        .podium-product-image { width:100%; height:108px; object-fit:contain; display:block; background:transparent; border:none; margin:0 auto .45rem auto; padding:0; }
-        .podium-product-image.podium-single-image { width:152px; height:152px; }
-        .podium-product-category { color:#8a98a3; font-size:.64rem; line-height:1.08; font-weight:800; text-transform:uppercase; letter-spacing:.04em; margin-bottom:.18rem; }
-        .podium-product-name { color:#263238; font-size:.80rem; line-height:1.16; font-weight:700; overflow-wrap:anywhere; }
-        .podium-step { display:flex; align-items:flex-start; justify-content:center; border:1px solid #cfd6dc; border-top-width:4px; border-radius:5px 5px 0 0; background:#eef1f4; margin:.35rem .25rem 0 .25rem; padding-top:.6rem; }
-        .podium-step-first { height:108px; border-top-color:#d4af37; background:linear-gradient(180deg,#fffaf0 0%,#eef1f4 100%); }
-        .podium-step-second { height:78px; border-top-color:#aeb7bf; }
-        .podium-step-third { height:58px; border-top-color:#b97a45; }
-        .podium-step-rank { color:#263238; font-size:1.05rem; line-height:1; font-weight:850; }
+        .rig-podium-wrap { margin:.35rem 0 1.1rem 0; padding:1rem 1rem .15rem 1rem; border:1px solid #d8dde3; border-radius:14px; background:linear-gradient(180deg,#fff 0%,#f7f9fa 100%); overflow-x:auto; }
+        .rig-podium { min-width:800px; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.8rem; align-items:end; }
+        .rig-podium-entry { display:flex; flex-direction:column; justify-content:flex-end; min-width:0; }
+        .rig-podium-card { position:relative; background:#fff; border:1px solid #d8dde3; border-radius:12px 12px 8px 8px; padding:1rem .75rem .8rem; box-shadow:0 7px 18px rgba(31,41,51,.07); min-height:260px; display:flex; align-items:center; justify-content:center; }
+        .rig-podium-first .rig-podium-card { border-color:#d8b54c; box-shadow:0 9px 24px rgba(31,41,51,.10); }
+        .rig-work-row { display:flex; align-items:center; justify-content:center; gap:.45rem; width:100%; min-width:0; }
+        .rig-work-block { flex:1 1 0; min-width:0; text-align:center; }
+        .rig-work-plus { flex:0 0 auto; color:#1f2a33; font-size:1.7rem; line-height:1; font-weight:850; padding:0 .05rem; transform:translateY(-10px); }
+        .rig-pair-images { display:flex; align-items:center; justify-content:center; gap:.25rem; width:100%; min-height:118px; margin:0 auto .38rem; }
+        .rig-pair-images img { width:min(105px,46%); height:112px; object-fit:contain; display:block; }
+        .rig-pair-images.single img { width:148px; max-width:92%; height:148px; }
+        .rig-image-placeholder { width:90px; height:112px; display:flex; align-items:center; justify-content:center; color:#a5b0b8; font-size:.65rem; font-weight:700; }
+        .rig-work-meta { color:#8a98a3; font-size:.62rem; line-height:1.12; font-weight:800; text-transform:uppercase; letter-spacing:.035em; margin-bottom:.18rem; min-height:1.25em; }
+        .rig-work-name { color:#263238; font-size:.83rem; line-height:1.15; font-weight:750; overflow-wrap:anywhere; }
+        .rig-podium-step { display:flex; align-items:flex-start; justify-content:center; border:1px solid #cfd6dc; border-top-width:4px; border-radius:5px 5px 0 0; background:#eef1f4; margin:.35rem .25rem 0; padding-top:.6rem; }
+        .rig-podium-step-first { height:108px; border-top-color:#d4af37; background:linear-gradient(180deg,#fffaf0 0%,#eef1f4 100%); }
+        .rig-podium-step-second { height:78px; border-top-color:#aeb7bf; }
+        .rig-podium-step-third { height:58px; border-top-color:#b97a45; }
+        .rig-podium-rank { color:#263238; font-size:1.05rem; line-height:1; font-weight:850; }
         </style>
         """, unsafe_allow_html=True
     )
+
     comp_by_row = {}
     for _, c in df_comp.iterrows():
         comp_by_row.setdefault(int(c["test_rigatura_asta_id"]), []).append(c.to_dict())
+    for rid in comp_by_row:
+        comp_by_row[rid].sort(key=lambda x: int(x.get("colonna_numero") or 0))
+
     by_pos = {}
     for _, r in df_rows.iterrows():
         try:
@@ -7776,65 +7840,164 @@ def _render_podio_rigature(df_rows, df_comp):
         if pos in (1, 2, 3) and pos not in by_pos:
             by_pos[pos] = r.to_dict()
 
-    def foto_src(c):
-        val = str(c.get("foto_data") or "").strip()
-        if not val:
-            return ""
-        mime = str(c.get("foto_mime") or "image/png").strip() or "image/png"
-        return f"data:{html_escape(mime)};base64,{val}"
+    def work_html(c):
+        label = _rigatura_component_label(c)
+        imgs = []
+        src1 = _rigatura_image_src(c.get("foto_data"), c.get("foto_mime"))
+        src2 = _rigatura_image_src(c.get("foto_data_2"), c.get("foto_mime_2"))
+        for src, alt in [(src1, str(c.get("nome") or "")), (src2, str(c.get("nome_2") or ""))]:
+            if src:
+                imgs.append(f'<img src="{src}" alt="{html_escape(alt)}">')
+        if not imgs:
+            imgs_html = '<div class="rig-image-placeholder">Nessuna foto</div>'
+        else:
+            imgs_html = "".join(imgs)
+        pair_class = "single" if len(imgs) <= 1 and not str(c.get("nome_2") or "").strip() else ""
+        direzione = str(c.get("direzione") or "—").strip() or "—"
+        hd = bool(int(c.get("hand_drive") or 0))
+        zona = _zona_rigatura_testo(c.get("zona_da"), c.get("zona_a"))
+        meta = []
+        if direzione != "—": meta.append(direzione)
+        if hd: meta.append("Hand drive")
+        if zona != "—": meta.append(zona)
+        meta_html = " · ".join(meta) if meta else "RIGATURA"
+        return (
+            '<div class="rig-work-block">'
+            f'<div class="rig-pair-images {pair_class}">{imgs_html}</div>'
+            f'<div class="rig-work-meta">{html_escape(meta_html)}</div>'
+            f'<div class="rig-work-name">{html_escape(label)}</div>'
+            '</div>'
+        )
 
     def entry(pos):
         r = by_pos.get(pos)
         cls = {1:"first",2:"second",3:"third"}[pos]
         if not r:
-            return f'<div class="scroll-podium-entry podium-{cls}"><div class="podium-result-card"></div><div class="podium-step podium-step-{cls}"><span class="podium-step-rank">{pos}°</span></div></div>'
+            return f'<div class="rig-podium-entry rig-podium-{cls}"><div class="rig-podium-card"></div><div class="rig-podium-step rig-podium-step-{cls}"><span class="rig-podium-rank">{pos}°</span></div></div>'
         comps = comp_by_row.get(int(r["id"]), [])
-        tiles=[]
-        for c in comps:
-            label = _rigatura_catalog_label(c)
-            src=foto_src(c)
-            img=f'<img class="podium-product-image podium-single-image" src="{src}" alt="{html_escape(label)}">' if src else ''
-            direzione = str(c.get("direzione") or "—").strip() or "—"
-            hd = bool(int(c.get("hand_drive") or 0))
-            zona = _zona_rigatura_testo(c.get("zona_da"), c.get("zona_a"))
-            meta = []
-            if direzione != "—": meta.append(direzione)
-            if hd: meta.append("Hand drive")
-            if zona != "—": meta.append(zona)
-            meta_html = f'<div class="podium-product-category">{" · ".join(meta)}</div>' if meta else '<div class="podium-product-category">RIGATURA</div>'
-            tiles.append(f'<div class="podium-product-tile">{img}{meta_html}<div class="podium-product-name">{html_escape(label)}</div></div>')
-        return f'<div class="scroll-podium-entry podium-{cls}"><div class="podium-result-card"><div class="podium-product-grid count-{max(1,min(len(tiles),4))}">{"".join(tiles)}</div></div><div class="podium-step podium-step-{cls}"><span class="podium-step-rank">{pos}°</span></div></div>'
-    st.markdown('<div class="scroll-podium-wrap"><div class="scroll-podium">'+entry(2)+entry(1)+entry(3)+'</div></div>', unsafe_allow_html=True)
+        works = []
+        for idx, c in enumerate(comps):
+            if idx > 0:
+                # + SOLO tra celle/lavorazioni diverse. Una coppia dentro la stessa cella usa "/" nel nome.
+                works.append('<div class="rig-work-plus">+</div>')
+            works.append(work_html(c))
+        content = "".join(works) if works else '<div class="rig-work-block"><div class="rig-work-name">—</div></div>'
+        return (
+            f'<div class="rig-podium-entry rig-podium-{cls}">'
+            f'<div class="rig-podium-card"><div class="rig-work-row">{content}</div></div>'
+            f'<div class="rig-podium-step rig-podium-step-{cls}"><span class="rig-podium-rank">{pos}°</span></div>'
+            '</div>'
+        )
+
+    st.markdown(
+        '<div class="rig-podium-wrap"><div class="rig-podium">' + entry(2) + entry(1) + entry(3) + '</div></div>',
+        unsafe_allow_html=True,
+    )
 
 
 def _render_tabella_rigature(df_rows, df_comp):
+    """Tabella rigature con nome compatto e preview foto al passaggio del mouse."""
     if df_rows.empty:
         return
+
     max_col = 0
     comp_map = {}
     for _, c in df_comp.iterrows():
-        rid=int(c["test_rigatura_asta_id"]); n=int(c["colonna_numero"])
-        max_col=max(max_col,n)
-        comp_map[(rid,n)] = {
-            "nome": _rigatura_catalog_label(c) or "—",
-            "direzione": str(c.get("direzione") or "—").strip() or "—",
-            "hand_drive": bool(int(c.get("hand_drive") or 0)),
-            "tecnica_sci": str(c.get("tecnica_sci") or "").strip(),
-            "zona": _zona_rigatura_testo(c.get("zona_da"), c.get("zona_a")),
-        }
-    records=[]
+        rid = int(c["test_rigatura_asta_id"])
+        n = int(c["colonna_numero"])
+        max_col = max(max_col, n)
+        comp_map[(rid, n)] = c.to_dict()
+
+    def hover_cell(c):
+        if not c:
+            return '<div class="rig-table-empty">—</div>'
+        label = _rigatura_component_label(c)
+        if label == "—":
+            return '<div class="rig-table-empty">—</div>'
+        previews = []
+        for foto_key, mime_key, nome_key in [
+            ("foto_data", "foto_mime", "nome"),
+            ("foto_data_2", "foto_mime_2", "nome_2"),
+        ]:
+            src = _rigatura_image_src(c.get(foto_key), c.get(mime_key))
+            if src:
+                previews.append(f'<img src="{src}" alt="{html_escape(str(c.get(nome_key) or ""))}">')
+        preview_html = ""
+        if previews:
+            preview_html = '<div class="rig-hover-preview"><div class="rig-hover-images">' + "".join(previews) + '</div></div>'
+        return (
+            '<div class="rig-hover-target">'
+            f'<span class="rig-table-name">{html_escape(label)}</span>'
+            f'{preview_html}'
+            '</div>'
+        )
+
+    headers = ['<th class="col-pos">Posizione</th>', '<th class="col-sci">Numero sci</th>']
+    for i in range(1, max_col + 1):
+        headers += [
+            f'<th class="col-rig">Rigatura {i}</th>',
+            f'<th class="col-dir">Direzione {i}</th>',
+            f'<th class="col-hand">Hand drive {i}</th>',
+            f'<th class="col-zone">Zona {i}</th>',
+        ]
+    headers.append('<th class="col-note">Note</th>')
+
+    rows_html = []
     for _, r in df_rows.iterrows():
-        rr={"Posizione": r.get("posizione"), "Numero sci": r.get("numero_sci")}
-        rid=int(r["id"])
-        for i in range(1,max_col+1):
-            comp = comp_map.get((rid,i), {"nome":"—", "direzione":"—", "hand_drive":False, "tecnica_sci":"", "zona":"—"})
-            rr[f"Rigatura {i}"] = comp["nome"]
-            rr[f"Direzione {i}"] = comp["direzione"]
-            rr[f"Hand drive {i}"] = "Sì" if comp["hand_drive"] else "—"
-            rr[f"Zona {i}"] = comp["zona"]
-        rr["Note"]=r.get("note") or "—"
-        records.append(rr)
-    st.dataframe(pd.DataFrame(records), hide_index=True, use_container_width=True)
+        rid = int(r["id"])
+        cells = [
+            f'<td class="col-pos">{html_escape(str(r.get("posizione") if not pd.isna(r.get("posizione")) else "—"))}</td>',
+            f'<td class="col-sci">{html_escape(str(r.get("numero_sci") or "—"))}</td>',
+        ]
+        for i in range(1, max_col + 1):
+            c = comp_map.get((rid, i))
+            if c:
+                direzione = str(c.get("direzione") or "—").strip() or "—"
+                hand = "Sì" if bool(int(c.get("hand_drive") or 0)) else "—"
+                zona = _zona_rigatura_testo(c.get("zona_da"), c.get("zona_a"))
+            else:
+                direzione, hand, zona = "—", "—", "—"
+            cells += [
+                f'<td class="col-rig">{hover_cell(c)}</td>',
+                f'<td class="col-dir">{html_escape(direzione)}</td>',
+                f'<td class="col-hand">{html_escape(hand)}</td>',
+                f'<td class="col-zone">{html_escape(zona)}</td>',
+            ]
+        cells.append(f'<td class="col-note">{html_escape(str(r.get("note") or "—"))}</td>')
+        rows_html.append('<tr>' + ''.join(cells) + '</tr>')
+
+    min_width = 300 + max_col * 560
+    st.markdown(
+        f"""
+        <style>
+        .rig-detail-wrap {{ overflow-x:auto; overflow-y:visible; border:1px solid #dbe1e6; border-radius:14px; background:#fff; margin-top:.45rem; box-shadow:0 8px 24px rgba(31,41,51,.05); }}
+        table.rig-detail-table {{ width:100%; min-width:{min_width}px; border-collapse:separate; border-spacing:0; table-layout:fixed; color:#263238; font-size:.74rem; }}
+        .rig-detail-table th {{ background:#f3f6f8; color:#51606b; font-size:.73rem; font-weight:700; text-align:center; padding:.58rem .42rem; border-bottom:1px solid #dbe1e6; white-space:nowrap; }}
+        .rig-detail-table td {{ padding:.54rem .42rem; border-bottom:1px solid #e7ebef; vertical-align:middle; position:relative; text-align:center; background:#fff; }}
+        .rig-detail-table tbody tr:nth-child(even) td {{ background:#fbfcfd; }}
+        .rig-detail-table tr:last-child td {{ border-bottom:0; }}
+        .rig-detail-table .col-pos {{ width:70px; }} .rig-detail-table .col-sci {{ width:90px; }}
+        .rig-detail-table .col-rig {{ width:150px; }} .rig-detail-table .col-dir {{ width:85px; }}
+        .rig-detail-table .col-hand {{ width:95px; }} .rig-detail-table .col-zone {{ width:205px; }} .rig-detail-table .col-note {{ width:150px; }}
+        .rig-hover-target {{ position:relative; display:inline-block; max-width:100%; cursor:zoom-in; }}
+        .rig-table-name {{ font-weight:600; line-height:1.18; overflow-wrap:anywhere; transition:color .12s ease; }}
+        .rig-hover-target:hover .rig-table-name {{ color:#007ea8; }}
+        .rig-hover-preview {{ position:fixed; top:138px; right:32px; width:min(430px,32vw); height:min(390px,52vh); padding:14px; background:#fff; border:1px solid #c8d0d7; border-radius:15px; box-shadow:0 24px 64px rgba(31,41,51,.34); opacity:0; visibility:hidden; transform:translateY(8px) scale(.97); pointer-events:none; z-index:2147483647!important; transition:opacity .12s ease,transform .12s ease,visibility .12s ease; }}
+        .rig-hover-images {{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; gap:12px; }}
+        .rig-hover-images img {{ max-width:48%; width:auto; height:100%; object-fit:contain; display:block; }}
+        .rig-hover-images img:only-child {{ max-width:100%; }}
+        .rig-hover-target:hover .rig-hover-preview {{ opacity:1; visibility:visible; transform:translateY(0) scale(1); }}
+        .rig-table-empty {{ color:#9aa5ad; }}
+        </style>
+        <div class="rig-detail-wrap">
+            <table class="rig-detail-table">
+                <thead><tr>{''.join(headers)}</tr></thead>
+                <tbody>{''.join(rows_html)}</tbody>
+            </table>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def _nome_file_pdf_test_rigature(test):
@@ -7858,7 +8021,7 @@ def _crea_pdf_test_rigature(test, df_rows, df_comp):
     for _,c in df_comp.iterrows():
         rid=int(c["test_rigatura_asta_id"]); n=int(c["colonna_numero"]); max_col=max(max_col,n)
         comp_map[(rid,n)] = {
-            "nome": _rigatura_catalog_label(c) or "-",
+            "nome": _rigatura_component_label(c) or "-",
             "direzione": str(c.get("direzione") or "—").strip() or "—",
             "hand_drive": bool(int(c.get("hand_drive") or 0)),
             "zona": _zona_rigatura_testo(c.get("zona_da"), c.get("zona_a")),
