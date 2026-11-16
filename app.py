@@ -23,7 +23,7 @@ st.set_page_config(
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "ski_material_lab.db")
-VERSIONE_DATABASE_APP = 14
+VERSIONE_DATABASE_APP = 15
 
 
 # ============================================================
@@ -181,6 +181,29 @@ def inizializza_database():
             FOREIGN KEY(paraffina_prodotto_id) REFERENCES catalogo_prodotti(id),
             FOREIGN KEY(top_coating_prodotto_id) REFERENCES catalogo_prodotti(id),
             FOREIGN KEY(liquido_prodotto_id) REFERENCES catalogo_prodotti(id)
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS test_rigature_aste (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sessione_id INTEGER NOT NULL,
+            posizione INTEGER,
+            numero_sci TEXT,
+            note TEXT,
+            creato_il TEXT NOT NULL,
+            FOREIGN KEY(sessione_id) REFERENCES sessioni(id)
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS test_rigature_componenti (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            test_rigatura_asta_id INTEGER NOT NULL,
+            colonna_numero INTEGER NOT NULL,
+            rigatura_prodotto_id INTEGER,
+            FOREIGN KEY(test_rigatura_asta_id) REFERENCES test_rigature_aste(id),
+            FOREIGN KEY(rigatura_prodotto_id) REFERENCES catalogo_prodotti(id)
         )
     """)
 
@@ -7107,6 +7130,552 @@ def render_form_test_scorrimento():
     return
 
 
+
+def _rigatura_catalog_label(record):
+    marca = str(record.get("marca") or "").strip()
+    nome = str(record.get("nome") or "").strip()
+    disegno = str(record.get("tipo") or "").strip()
+    materiale = str(record.get("materiale") or "").strip()
+    larghezza = record.get("larghezza_mm")
+    angolo = record.get("angolo_gradi")
+    base = f"{marca} - {nome}" if marca else nome
+    dettagli = []
+    if disegno:
+        dettagli.append(disegno)
+    if materiale:
+        dettagli.append(materiale)
+    try:
+        if larghezza is not None and not pd.isna(larghezza):
+            dettagli.append(f"{float(larghezza):g} mm")
+    except Exception:
+        pass
+    try:
+        if angolo is not None and not pd.isna(angolo):
+            dettagli.append(f"{float(angolo):g}°")
+    except Exception:
+        pass
+    return base + (" · " + " · ".join(dettagli) if dettagli else "")
+
+
+def render_form_test_rigature():
+    """Inserimento/modifica Test rigature manuali, allineato al Test prodotti scorrimento."""
+    snow_options = _snow_option_groups_standard()
+    edit_id = st.session_state.get("rig_test_edit_session_id")
+    edit_row = None
+    needs_load = False
+    if edit_id is not None:
+        df_edit = leggi_df(
+            """
+            SELECT id, data, ora, luogo, temperatura_aria, temperatura_neve,
+                   umidita, meteo, snow_origine, snow_consistenza, snow_fondo, snow_umidita,
+                   snow_forma_grano, snow_granulometria, snow_caratteristiche,
+                   zero_modello_sci, tipo_test, zero_riferimento_id
+            FROM sessioni WHERE id = ?
+            """, (int(edit_id),)
+        )
+        if not df_edit.empty:
+            edit_row = df_edit.iloc[0]
+            needs_load = st.session_state.get("rig_test_edit_loaded_id") != int(edit_id)
+        else:
+            st.session_state.pop("rig_test_edit_session_id", None)
+            st.session_state.pop("rig_test_edit_loaded_id", None)
+            edit_id = None
+
+    if needs_load and edit_row is not None:
+        metodo = str(edit_row.get("tipo_test") or "Asta").replace("Test rigature manuali · ", "").strip()
+        st.session_state["rig_test_method"] = metodo if metodo in ["Asta", "Parallel", "Fotocellula"] else "Asta"
+        try:
+            st.session_state["rig_test_date"] = pd.to_datetime(edit_row.get("data")).date()
+        except Exception:
+            st.session_state["rig_test_date"] = date.today()
+        try:
+            st.session_state["rig_test_time"] = datetime.strptime(str(edit_row.get("ora") or "00:00")[:5], "%H:%M").time()
+        except Exception:
+            st.session_state["rig_test_time"] = datetime.now().time().replace(second=0, microsecond=0)
+        st.session_state["rig_test_place"] = str(edit_row.get("luogo") or "")
+        st.session_state["rig_test_air"] = _formatta_temperatura_1d(edit_row.get("temperatura_aria"))
+        st.session_state["rig_test_snow"] = _formatta_temperatura_1d(edit_row.get("temperatura_neve"))
+        ur = edit_row.get("umidita")
+        st.session_state["rig_test_rh_missing"] = bool(pd.isna(ur))
+        st.session_state["rig_test_rh"] = 70 if pd.isna(ur) else int(round(float(ur)))
+        st.session_state["rig_test_ski_model"] = str(edit_row.get("zero_modello_sci") or "")
+        meteo = str(edit_row.get("meteo") or "").strip()
+        st.session_state["rig_test_weather"] = meteo if meteo in METEO_OPZIONI else None
+        st.session_state["rig_test_origin"] = _valori_sessione_neve(edit_row.get("snow_origine"), snow_options["Origine"])
+        st.session_state["rig_test_consistency"] = _valori_sessione_neve(edit_row.get("snow_consistenza"), snow_options["Consistenza"])
+        st.session_state["rig_test_base"] = _valori_sessione_neve(edit_row.get("snow_fondo"), snow_options["Fondo sottostante"])
+        st.session_state["rig_test_humidity"] = _valori_sessione_neve(edit_row.get("snow_umidita"), snow_options["Umidità neve"])
+        st.session_state["rig_test_grain"] = _valori_sessione_neve(edit_row.get("snow_forma_grano"), snow_options["Forma grano"])
+        st.session_state["rig_test_size"] = _valori_sessione_neve(edit_row.get("snow_granulometria"), snow_options["Granulometria"])
+        st.session_state["rig_test_features"] = _valori_sessione_neve(edit_row.get("snow_caratteristiche"), snow_options["Caratteristiche"])
+        df_count = leggi_df("SELECT COUNT(*) AS n FROM test_rigature_aste WHERE sessione_id = ?", (int(edit_id),))
+        st.session_state["rig_test_num_rods"] = max(1, int(df_count.iloc[0]["n"] or 1)) if not df_count.empty else 1
+        df_cols = leggi_df(
+            """SELECT MAX(c.colonna_numero) AS n
+               FROM test_rigature_componenti c
+               JOIN test_rigature_aste a ON a.id = c.test_rigatura_asta_id
+               WHERE a.sessione_id = ?""", (int(edit_id),)
+        )
+        ncols = 1
+        if not df_cols.empty and not pd.isna(df_cols.iloc[0]["n"]):
+            ncols = max(1, int(df_cols.iloc[0]["n"]))
+        st.session_state["rig_test_num_columns"] = ncols
+
+    st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="insert-test-title">Test rigature manuali</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="insert-test-caption">Stessa struttura del Test prodotti scorrimento: registra metodo, condizioni, classificazione neve e combinazioni di rigature utilizzate su ogni sci.</div>',
+        unsafe_allow_html=True,
+    )
+
+    if edit_id is not None:
+        ce1, ce2 = st.columns([4, 1.25])
+        with ce1:
+            st.info("Modalità modifica attiva: stai aggiornando un test rigature manuali già presente nello storico.")
+        with ce2:
+            if st.button("Annulla modifica", use_container_width=True, key="cancel_rig_test_edit"):
+                for k in ["rig_test_edit_session_id", "rig_test_edit_loaded_id", "rig_test_table_data", "rig_test_table_n", "rig_test_table_cols"]:
+                    st.session_state.pop(k, None)
+                st.rerun()
+
+    st.markdown("#### Impostazione test")
+    c_metodo, c_zero = st.columns([1, 1.6])
+    with c_metodo:
+        metodo_test = st.selectbox(
+            "Metodo test", ["Asta", "Parallel", "Fotocellula"],
+            key="rig_test_method",
+            help="Seleziona il metodo con cui hai effettuato il test rigature.",
+        )
+
+    df_zero = leggi_df(
+        """
+        SELECT s.id, s.data, s.ora, s.luogo, s.zero_batteria, s.zero_modello_sci
+        FROM sessioni s JOIN zero_test z ON z.sessione_id = s.id
+        WHERE COALESCE(s.zero_batteria, '') = 'Batteria rigature manuali'
+        GROUP BY s.id
+        ORDER BY s.data DESC, COALESCE(s.ora, '') DESC, s.id DESC
+        """
+    )
+    labels = ["Nessuno"]
+    ref_map = {"Nessuno": None}
+    for _, ref in df_zero.iterrows():
+        lab = f"{str(ref.get('data') or '')} · {str(ref.get('luogo') or '—')}"
+        mod = str(ref.get("zero_modello_sci") or "").strip()
+        if mod:
+            lab += f" · {mod}"
+        labels.append(lab)
+        ref_map[lab] = int(ref["id"])
+    if needs_load and edit_row is not None:
+        rid = edit_row.get("zero_riferimento_id")
+        ref_label = "Nessuno"
+        if rid is not None and not pd.isna(rid):
+            for lab, val in ref_map.items():
+                if val == int(rid):
+                    ref_label = lab
+                    break
+        st.session_state["rig_test_zero_reference"] = ref_label
+    with c_zero:
+        zero_label = st.selectbox(
+            "Zero Test di riferimento", labels, key="rig_test_zero_reference",
+            help="Solo riferimento informativo; non modifica i risultati del test.",
+        )
+    zero_ref_id = ref_map.get(zero_label)
+
+    st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
+    st.markdown("#### Dati sessione")
+    st.caption("Inserisci le condizioni effettive rilevate durante il test rigature.")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        data_test = st.date_input("Data", value=date.today(), key="rig_test_date")
+        luogo = st.text_input("Luogo *", key="rig_test_place", placeholder="es. Davos (SUI)")
+    with c2:
+        ora = st.time_input("Ora", value=datetime.now().time().replace(second=0, microsecond=0), key="rig_test_time")
+        taria_txt = st.text_input("Temperatura aria (°C)", value="0.0", key="rig_test_air")
+    with c3:
+        tneve_txt = st.text_input("Temperatura neve (°C)", value="0.0", key="rig_test_snow")
+        if "rig_test_rh_missing" not in st.session_state:
+            st.session_state["rig_test_rh_missing"] = False
+        ur = st.number_input("Umidità relativa (%)", 0, 100, 70, 1, disabled=bool(st.session_state.get("rig_test_rh_missing", False)), key="rig_test_rh")
+        ur_missing = st.checkbox("Umidità non disponibile", key="rig_test_rh_missing")
+    c4, c5 = st.columns(2)
+    with c4:
+        modello_sci = st.text_input("Modello sci", key="rig_test_ski_model", placeholder="es. Speedmax 3D")
+    with c5:
+        meteo = st.selectbox("Meteo", METEO_OPZIONI, index=None, placeholder="Seleziona meteo", key="rig_test_weather")
+
+    st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
+    st.markdown("#### Classificazione neve")
+    st.caption("Usa la stessa classificazione indipendente adottata nel catalogo e nei test di scorrimento.")
+    s1, s2, s3, s4 = st.columns(4)
+    with s1:
+        origine = st.multiselect("Origine", snow_options["Origine"], key="rig_test_origin")
+    with s2:
+        consistenza = st.multiselect("Consistenza superficiale", snow_options["Consistenza"], key="rig_test_consistency")
+    with s3:
+        fondo = st.multiselect("Fondo sottostante", snow_options["Fondo sottostante"], key="rig_test_base")
+    with s4:
+        umidita_neve = st.multiselect("Umidità neve", snow_options["Umidità neve"], key="rig_test_humidity")
+    s5, s6, s7 = st.columns(3)
+    with s5:
+        forma = st.multiselect("Forma grano", snow_options["Forma grano"], key="rig_test_grain")
+    with s6:
+        granulometria = st.multiselect("Granulometria", snow_options["Granulometria"], key="rig_test_size")
+    with s7:
+        caratteristiche = st.multiselect("Caratteristiche", snow_options["Caratteristiche"], key="rig_test_features")
+
+    st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
+    st.markdown("#### Rigature testate")
+
+    if metodo_test != "Asta":
+        st.info(f"La struttura di inserimento per il test {metodo_test} segue la stessa logica della pagina prodotti scorrimento e verrà definita quando userai questo metodo.")
+        return
+
+    st.caption("Imposta il numero di aste e quante rigature compongono ciascuno sci. Le righe vengono selezionate direttamente dall'inventario Rigature manuali.")
+    cc1, cc2 = st.columns(2)
+    with cc1:
+        numero_aste = st.number_input("Numero di aste", min_value=1, max_value=30, value=10, step=1, format="%d", key="rig_test_num_rods")
+    with cc2:
+        numero_colonne = st.number_input(
+            "Numero di rigature per sci", min_value=1, max_value=6, value=1, step=1, format="%d", key="rig_test_num_columns",
+            help="1 = una sola riga per sci. Aumenta il numero per testare combinazioni di più rigature sullo stesso sci.",
+        )
+
+    df_catalogo = leggi_df(
+        """SELECT id, nome, marca, tipo, materiale, larghezza_mm, angolo_gradi
+           FROM catalogo_prodotti WHERE categoria = 'rigatura'
+           ORDER BY COALESCE(marca, ''), nome"""
+    )
+    opzioni = ["—"]
+    id_da_label = {"—": None}
+    if not df_catalogo.empty:
+        for _, prod in df_catalogo.iterrows():
+            label = _rigatura_catalog_label(prod)
+            if label and label not in id_da_label:
+                opzioni.append(label)
+                id_da_label[label] = int(prod["id"])
+
+    n_aste = int(numero_aste)
+    n_cols = int(numero_colonne)
+    col_rig = [f"Rigatura {i}" for i in range(1, n_cols + 1)]
+
+    if needs_load and edit_id is not None:
+        df_rows = leggi_df("SELECT id, posizione, numero_sci, note FROM test_rigature_aste WHERE sessione_id = ? ORDER BY id", (int(edit_id),))
+        comp = leggi_df(
+            """SELECT c.test_rigatura_asta_id, c.colonna_numero, p.id AS prodotto_id, p.nome, p.marca, p.tipo, p.materiale, p.larghezza_mm, p.angolo_gradi
+               FROM test_rigature_componenti c
+               LEFT JOIN catalogo_prodotti p ON p.id = c.rigatura_prodotto_id
+               JOIN test_rigature_aste a ON a.id = c.test_rigatura_asta_id
+               WHERE a.sessione_id = ? ORDER BY c.test_rigatura_asta_id, c.colonna_numero""", (int(edit_id),)
+        )
+        comp_map = {}
+        for _, c in comp.iterrows():
+            comp_map[(int(c["test_rigatura_asta_id"]), int(c["colonna_numero"]))] = _rigatura_catalog_label(c) if not pd.isna(c.get("prodotto_id")) else "—"
+        righe = []
+        for idx, r in df_rows.reset_index(drop=True).iterrows():
+            rr = {"_ordine_inserimento": idx, "Posizione": None if pd.isna(r.get("posizione")) else int(r.get("posizione")), "Numero sci": str(r.get("numero_sci") or ""), "Note": str(r.get("note") or "")}
+            rid = int(r["id"])
+            for i in range(1, n_cols + 1):
+                rr[f"Rigatura {i}"] = comp_map.get((rid, i), "—")
+            righe.append(rr)
+        if righe:
+            st.session_state["rig_test_table_data"] = pd.DataFrame(righe)
+            st.session_state["rig_test_table_n"] = len(righe)
+            st.session_state["rig_test_table_cols"] = n_cols
+            st.session_state["rig_test_table_version"] = st.session_state.get("rig_test_table_version", 0) + 1
+        st.session_state["rig_test_edit_loaded_id"] = int(edit_id)
+
+    def _tabella_vuota(n, nc):
+        d = {"_ordine_inserimento": list(range(n)), "Posizione": [None] * n, "Numero sci": [""] * n}
+        for i in range(1, nc + 1):
+            d[f"Rigatura {i}"] = ["—"] * n
+        d["Note"] = [""] * n
+        return pd.DataFrame(d)
+
+    state_key = "rig_test_table_data"
+    if "rig_test_table_version" not in st.session_state:
+        st.session_state["rig_test_table_version"] = 0
+    prev_n = st.session_state.get("rig_test_table_n")
+    prev_cols = st.session_state.get("rig_test_table_cols")
+    if state_key not in st.session_state or prev_n != n_aste or prev_cols != n_cols:
+        nuova = _tabella_vuota(n_aste, n_cols)
+        old = st.session_state.get(state_key)
+        if isinstance(old, pd.DataFrame) and not old.empty:
+            old = old.copy().reset_index(drop=True)
+            if "_ordine_inserimento" in old.columns:
+                old = old.sort_values("_ordine_inserimento", kind="stable").reset_index(drop=True)
+            for idx in range(min(len(old), n_aste)):
+                for col in nuova.columns:
+                    if col in old.columns:
+                        nuova.at[idx, col] = old.at[idx, col]
+        st.session_state[state_key] = nuova
+        st.session_state["rig_test_table_n"] = n_aste
+        st.session_state["rig_test_table_cols"] = n_cols
+        st.session_state["rig_test_table_version"] += 1
+
+    df_tab = st.session_state[state_key].copy()
+    config = {
+        "_ordine_inserimento": None,
+        "Posizione": st.column_config.NumberColumn("Posizione", min_value=1, max_value=n_aste, step=1, format="%d", width="small"),
+        "Numero sci": st.column_config.TextColumn("Numero sci", width="small"),
+        "Note": st.column_config.TextColumn("Note", width="large"),
+    }
+    for col in col_rig:
+        config[col] = st.column_config.SelectboxColumn(col, options=opzioni, width="medium", required=False)
+    visible_cols = ["_ordine_inserimento", "Posizione", "Numero sci", *col_rig, "Note"]
+    edited = st.data_editor(
+        df_tab[visible_cols], hide_index=True, use_container_width=True,
+        height=min(650, 38 + n_aste * 36), column_config=config,
+        key=f"rig_test_editor_{n_aste}_{n_cols}_{st.session_state['rig_test_table_version']}",
+    )
+    st.session_state[state_key] = edited.copy()
+
+    co1, co2, _ = st.columns([1.4, 1.4, 4])
+    with co1:
+        if st.button("↕ Riordina per classifica", use_container_width=True, key="rig_test_sort_rank"):
+            tab = st.session_state[state_key].copy()
+            tab["_pos_sort"] = pd.to_numeric(tab["Posizione"], errors="coerce")
+            tab = tab.sort_values(["_pos_sort", "_ordine_inserimento"], na_position="last", kind="stable").drop(columns=["_pos_sort"]).reset_index(drop=True)
+            st.session_state[state_key] = tab
+            st.session_state["rig_test_table_version"] += 1
+            st.rerun()
+    with co2:
+        if st.button("↺ Ripristina ordine inserimento", use_container_width=True, key="rig_test_reset_order"):
+            tab = st.session_state[state_key].copy().sort_values("_ordine_inserimento", kind="stable").reset_index(drop=True)
+            st.session_state[state_key] = tab
+            st.session_state["rig_test_table_version"] += 1
+            st.rerun()
+
+    st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
+    salva = st.button(
+        "Salva modifiche test" if edit_id is not None else "Salva test rigature manuali",
+        type="primary", use_container_width=True, key="save_rig_test",
+    )
+    if not salva:
+        return
+    if not str(luogo or "").strip():
+        st.error("Inserisci il luogo del test.")
+        return
+    try:
+        taria = _parse_temperatura_1d(taria_txt)
+        tneve = _parse_temperatura_1d(tneve_txt)
+    except Exception:
+        st.error("Controlla temperatura aria e temperatura neve. Usa valori come -3.0 o 0.0.")
+        return
+
+    righe_salva = []
+    for _, r in st.session_state[state_key].iterrows():
+        numero_sci = str(r.get("Numero sci") or "").strip()
+        note = str(r.get("Note") or "").strip()
+        pos_raw = r.get("Posizione")
+        pos = None if pos_raw is None or pd.isna(pos_raw) or not str(pos_raw).strip() else int(float(pos_raw))
+        rig_ids = []
+        for col in col_rig:
+            lab = str(r.get(col) or "—").strip()
+            rig_ids.append(id_da_label.get(lab))
+        if not numero_sci and not any(rig_ids) and not note:
+            continue
+        righe_salva.append({"posizione": pos, "numero_sci": numero_sci, "rig_ids": rig_ids, "note": note})
+    if not righe_salva:
+        st.error("Compila almeno una riga della tabella prima di salvare il test.")
+        return
+
+    conn = apri_connessione_database()
+    try:
+        if edit_id is not None:
+            sid = int(edit_id)
+            conn.execute(
+                """UPDATE sessioni SET data=?, ora=?, luogo=?, temperatura_aria=?, temperatura_neve=?, umidita=?, meteo=?,
+                   snow_origine=?, snow_consistenza=?, snow_fondo=?, snow_umidita=?, snow_forma_grano=?, snow_granulometria=?, snow_caratteristiche=?,
+                   zero_modello_sci=?, tipo_test=?, zero_riferimento_id=? WHERE id=?""",
+                (data_test.isoformat(), ora.strftime("%H:%M"), str(luogo).strip(), taria, tneve,
+                 None if ur_missing else int(ur), meteo or "",
+                 _compatta_neve_sessione(origine, snow_options["Origine"]),
+                 _compatta_neve_sessione(consistenza, snow_options["Consistenza"]),
+                 _compatta_neve_sessione(fondo, snow_options["Fondo sottostante"]),
+                 _compatta_neve_sessione(umidita_neve, snow_options["Umidità neve"]),
+                 _compatta_neve_sessione(forma, snow_options["Forma grano"]),
+                 _compatta_neve_sessione(granulometria, snow_options["Granulometria"]),
+                 _compatta_neve_sessione(caratteristiche, snow_options["Caratteristiche"]),
+                 str(modello_sci or "").strip(), f"Test rigature manuali · {metodo_test}",
+                 int(zero_ref_id) if zero_ref_id is not None else None, sid)
+            )
+            ids_old = [int(x[0]) for x in conn.execute("SELECT id FROM test_rigature_aste WHERE sessione_id = ?", (sid,)).fetchall()]
+            for rid in ids_old:
+                conn.execute("DELETE FROM test_rigature_componenti WHERE test_rigatura_asta_id = ?", (rid,))
+            conn.execute("DELETE FROM test_rigature_aste WHERE sessione_id = ?", (sid,))
+        else:
+            cur = conn.execute(
+                """INSERT INTO sessioni (data, ora, luogo, temperatura_aria, temperatura_neve, umidita, meteo, tipo_neve, condizione_pista,
+                   snow_origine, snow_consistenza, snow_fondo, snow_umidita, snow_forma_grano, snow_granulometria, snow_caratteristiche,
+                   zero_modello_sci, tipo_test, zero_riferimento_id, note, creato_il)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, '', '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)""",
+                (data_test.isoformat(), ora.strftime("%H:%M"), str(luogo).strip(), taria, tneve,
+                 None if ur_missing else int(ur), meteo or "",
+                 _compatta_neve_sessione(origine, snow_options["Origine"]),
+                 _compatta_neve_sessione(consistenza, snow_options["Consistenza"]),
+                 _compatta_neve_sessione(fondo, snow_options["Fondo sottostante"]),
+                 _compatta_neve_sessione(umidita_neve, snow_options["Umidità neve"]),
+                 _compatta_neve_sessione(forma, snow_options["Forma grano"]),
+                 _compatta_neve_sessione(granulometria, snow_options["Granulometria"]),
+                 _compatta_neve_sessione(caratteristiche, snow_options["Caratteristiche"]),
+                 str(modello_sci or "").strip(), f"Test rigature manuali · {metodo_test}",
+                 int(zero_ref_id) if zero_ref_id is not None else None, datetime.now().isoformat(timespec="seconds"))
+            )
+            sid = int(cur.lastrowid)
+        for rr in righe_salva:
+            cur = conn.execute(
+                "INSERT INTO test_rigature_aste (sessione_id, posizione, numero_sci, note, creato_il) VALUES (?, ?, ?, ?, ?)",
+                (sid, rr["posizione"], rr["numero_sci"], rr["note"], datetime.now().isoformat(timespec="seconds"))
+            )
+            asta_id = int(cur.lastrowid)
+            for idx, prod_id in enumerate(rr["rig_ids"], start=1):
+                if prod_id is not None:
+                    conn.execute(
+                        "INSERT INTO test_rigature_componenti (test_rigatura_asta_id, colonna_numero, rigatura_prodotto_id) VALUES (?, ?, ?)",
+                        (asta_id, idx, int(prod_id))
+                    )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+    _invalida_cache_dati()
+    st.session_state["rig_test_history_notice"] = (
+        f"Test rigature manuali aggiornato correttamente · {len(righe_salva)} righe registrate."
+        if edit_id is not None else
+        f"Test rigature manuali salvato correttamente · {len(righe_salva)} righe registrate."
+    )
+    for k in ["rig_test_edit_session_id", "rig_test_edit_loaded_id", "rig_test_table_data", "rig_test_table_n", "rig_test_table_cols"]:
+        st.session_state.pop(k, None)
+    st.rerun()
+
+
+def _carica_righe_test_rigature(sessione_id):
+    df_rows = leggi_df(
+        "SELECT id, posizione, numero_sci, note FROM test_rigature_aste WHERE sessione_id = ? ORDER BY id",
+        (int(sessione_id),)
+    )
+    df_comp = leggi_df(
+        """SELECT c.test_rigatura_asta_id, c.colonna_numero, p.id AS prodotto_id,
+                  p.nome, p.marca, p.tipo, p.materiale, p.larghezza_mm, p.angolo_gradi,
+                  p.foto_data, p.foto_mime
+           FROM test_rigature_componenti c
+           JOIN test_rigature_aste a ON a.id = c.test_rigatura_asta_id
+           LEFT JOIN catalogo_prodotti p ON p.id = c.rigatura_prodotto_id
+           WHERE a.sessione_id = ? ORDER BY c.test_rigatura_asta_id, c.colonna_numero""",
+        (int(sessione_id),)
+    )
+    return df_rows, df_comp
+
+
+def _render_podio_rigature(df_rows, df_comp):
+    if df_rows.empty:
+        return
+    st.markdown(
+        """
+        <style>
+        .scroll-podium-wrap { margin:.35rem 0 1.1rem 0; padding:1rem 1rem .15rem 1rem; border:1px solid #d8dde3; border-radius:14px; background:linear-gradient(180deg,#fff 0%,#f7f9fa 100%); overflow-x:auto; }
+        .scroll-podium { min-width:760px; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.8rem; align-items:end; }
+        .scroll-podium-entry { display:flex; flex-direction:column; justify-content:flex-end; min-width:0; }
+        .podium-result-card { position:relative; background:#fff; border:1px solid #d8dde3; border-radius:12px 12px 8px 8px; padding:1rem .8rem .8rem .8rem; box-shadow:0 7px 18px rgba(31,41,51,.07); min-height:238px; display:flex; align-items:center; justify-content:center; }
+        .podium-first .podium-result-card { border-color:#d8b54c; box-shadow:0 9px 24px rgba(31,41,51,.10); }
+        .podium-product-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.82rem; align-items:start; width:100%; }
+        .podium-product-grid.count-1 { grid-template-columns:1fr; }
+        .podium-product-tile { min-width:0; text-align:center; }
+        .podium-product-image { width:100%; height:108px; object-fit:contain; display:block; background:transparent; border:none; margin:0 auto .45rem auto; padding:0; }
+        .podium-product-image.podium-single-image { width:152px; height:152px; }
+        .podium-product-category { color:#8a98a3; font-size:.64rem; line-height:1.08; font-weight:800; text-transform:uppercase; letter-spacing:.04em; margin-bottom:.18rem; }
+        .podium-product-name { color:#263238; font-size:.80rem; line-height:1.16; font-weight:700; overflow-wrap:anywhere; }
+        .podium-step { display:flex; align-items:flex-start; justify-content:center; border:1px solid #cfd6dc; border-top-width:4px; border-radius:5px 5px 0 0; background:#eef1f4; margin:.35rem .25rem 0 .25rem; padding-top:.6rem; }
+        .podium-step-first { height:108px; border-top-color:#d4af37; background:linear-gradient(180deg,#fffaf0 0%,#eef1f4 100%); }
+        .podium-step-second { height:78px; border-top-color:#aeb7bf; }
+        .podium-step-third { height:58px; border-top-color:#b97a45; }
+        .podium-step-rank { color:#263238; font-size:1.05rem; line-height:1; font-weight:850; }
+        </style>
+        """, unsafe_allow_html=True
+    )
+    comp_by_row = {}
+    for _, c in df_comp.iterrows():
+        comp_by_row.setdefault(int(c["test_rigatura_asta_id"]), []).append(c.to_dict())
+    by_pos = {}
+    for _, r in df_rows.iterrows():
+        try:
+            pos = int(float(r.get("posizione")))
+        except Exception:
+            continue
+        if pos in (1, 2, 3) and pos not in by_pos:
+            by_pos[pos] = r.to_dict()
+
+    def foto_src(c):
+        val = str(c.get("foto_data") or "").strip()
+        if not val:
+            return ""
+        mime = str(c.get("foto_mime") or "image/png").strip() or "image/png"
+        return f"data:{html_escape(mime)};base64,{val}"
+
+    def entry(pos):
+        r = by_pos.get(pos)
+        cls = {1:"first",2:"second",3:"third"}[pos]
+        if not r:
+            return f'<div class="scroll-podium-entry podium-{cls}"><div class="podium-result-card"></div><div class="podium-step podium-step-{cls}"><span class="podium-step-rank">{pos}°</span></div></div>'
+        comps = comp_by_row.get(int(r["id"]), [])
+        tiles=[]
+        for c in comps:
+            label = _rigatura_catalog_label(c)
+            src=foto_src(c)
+            img=f'<img class="podium-product-image podium-single-image" src="{src}" alt="{html_escape(label)}">' if src else ''
+            tiles.append(f'<div class="podium-product-tile">{img}<div class="podium-product-category">RIGATURA</div><div class="podium-product-name">{html_escape(label)}</div></div>')
+        return f'<div class="scroll-podium-entry podium-{cls}"><div class="podium-result-card"><div class="podium-product-grid count-{max(1,min(len(tiles),4))}">{"".join(tiles)}</div></div><div class="podium-step podium-step-{cls}"><span class="podium-step-rank">{pos}°</span></div></div>'
+    st.markdown('<div class="scroll-podium-wrap"><div class="scroll-podium">'+entry(2)+entry(1)+entry(3)+'</div></div>', unsafe_allow_html=True)
+
+
+def _render_tabella_rigature(df_rows, df_comp):
+    if df_rows.empty:
+        return
+    max_col = 0
+    comp_map = {}
+    for _, c in df_comp.iterrows():
+        rid=int(c["test_rigatura_asta_id"]); n=int(c["colonna_numero"])
+        max_col=max(max_col,n)
+        comp_map[(rid,n)] = _rigatura_catalog_label(c)
+    records=[]
+    for _, r in df_rows.iterrows():
+        rr={"Posizione": r.get("posizione"), "Numero sci": r.get("numero_sci")}
+        rid=int(r["id"])
+        for i in range(1,max_col+1): rr[f"Rigatura {i}"]=comp_map.get((rid,i),"—")
+        rr["Note"]=r.get("note") or "—"
+        records.append(rr)
+    st.dataframe(pd.DataFrame(records), hide_index=True, use_container_width=True)
+
+
+def _nome_file_pdf_test_rigature(test):
+    data=str(test.get("data") or "test").replace("/","-")
+    luogo=re.sub(r"[^A-Za-z0-9_-]+","_",str(test.get("luogo") or "")).strip("_")
+    return f"SnowDataPro_test_rigature_{data}" + (f"_{luogo}" if luogo else "") + ".pdf"
+
+
+def _crea_pdf_test_rigature(test, df_rows, df_comp):
+    from io import BytesIO
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    buf=BytesIO(); doc=SimpleDocTemplate(buf,pagesize=landscape(A4),rightMargin=12*mm,leftMargin=12*mm,topMargin=12*mm,bottomMargin=12*mm,title="SnowDataPro - Test rigature manuali")
+    styles=getSampleStyleSheet(); story=[Paragraph("SnowDataPro - Test rigature manuali",styles["Title"]),Spacer(1,4*mm)]
+    metodo=str(test.get("tipo_test") or "").replace("Test rigature manuali · ","")
+    story.append(Paragraph(f"{test.get('data','')} · {test.get('luogo','')} · {metodo}",styles["Heading2"]))
+    comp_map={}; max_col=0
+    for _,c in df_comp.iterrows():
+        rid=int(c["test_rigatura_asta_id"]); n=int(c["colonna_numero"]); max_col=max(max_col,n); comp_map[(rid,n)]=_rigatura_catalog_label(c)
+    header=["Pos.","Sci"]+[f"Rigatura {i}" for i in range(1,max_col+1)]+["Note"]
+    data=[header]
+    for _,r in df_rows.iterrows():
+        rid=int(r["id"]); data.append([str(r.get("posizione") or "-"),str(r.get("numero_sci") or "-")]+[comp_map.get((rid,i),"-") for i in range(1,max_col+1)]+[str(r.get("note") or "-")])
+    tab=Table(data,repeatRows=1); tab.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),colors.HexColor("#eef1f4")),("GRID",(0,0),(-1,-1),0.4,colors.HexColor("#d8dde3")),("FONTSIZE",(0,0),(-1,-1),7),("VALIGN",(0,0),(-1,-1),"MIDDLE"),("ALIGN",(0,0),(-1,-1),"CENTER")]))
+    story.append(tab); doc.build(story); return buf.getvalue()
+
 def render_form_zero_test():
     edit_zero_session_id = st.session_state.get("zero_edit_session_id")
     # 2. DATI SESSIONE ZERO TEST
@@ -9669,9 +10238,161 @@ with st.container(key="sector_page_content"):
     elif pagina == "Test rigature manuali":
         mostra_banner(
             "Test rigature manuali",
-            "Database dei test rigature manuali. Il modulo di inserimento verrà configurato nel prossimo passaggio.",
+            "Database cronologico dei test rigature manuali. Inserimento e storico nello stesso punto.",
         )
-        st.info("La struttura di inserimento dei test rigature manuali verrà definita in un passaggio successivo.")
+        _stile_moduli_test()
+
+        st.markdown('<div class="section-title">Storico test rigature manuali</div>', unsafe_allow_html=True)
+        if st.session_state.get("rig_test_history_notice"):
+            st.success(st.session_state.pop("rig_test_history_notice"))
+        st.write("Archivio dei test rigature manuali. Apri un test per vedere condizioni, combinazioni e classifica.")
+
+        rig_edit_active = st.session_state.get("rig_test_edit_session_id") is not None
+        rig_form_label = "✎ Modifica test rigature manuali" if rig_edit_active else "＋ Nuovo test rigature manuali"
+        with st.expander(rig_form_label, expanded=rig_edit_active):
+            render_form_test_rigature()
+
+        df_rig_storico = leggi_df(
+            """
+            SELECT s.id, s.data, s.ora, s.luogo, s.temperatura_aria, s.temperatura_neve,
+                   s.umidita, s.meteo, s.snow_origine, s.snow_consistenza, s.snow_fondo, s.snow_umidita,
+                   s.snow_forma_grano, s.snow_granulometria, s.snow_caratteristiche,
+                   s.zero_modello_sci, s.tipo_test, s.zero_riferimento_id, s.note, s.creato_il,
+                   COUNT(a.id) AS righe_test
+            FROM sessioni s
+            LEFT JOIN test_rigature_aste a ON a.sessione_id = s.id
+            WHERE COALESCE(s.tipo_test, '') LIKE 'Test rigature manuali%'
+            GROUP BY s.id
+            ORDER BY s.data DESC, COALESCE(s.ora, '') DESC, s.id DESC
+            """
+        )
+
+        if df_rig_storico.empty:
+            st.info("Non ci sono ancora test rigature manuali registrati.")
+        else:
+            st.markdown("#### Filtri")
+            fr1, fr2, fr3 = st.columns(3)
+            with fr1:
+                luoghi = ["Tutti"] + sorted([str(v).strip() for v in df_rig_storico["luogo"].dropna().unique().tolist() if str(v).strip()])
+                filtro_luogo_rig = st.selectbox("Luogo", luoghi, key="rig_test_history_place")
+            with fr2:
+                metodi = ["Tutti"] + sorted([str(v).replace("Test rigature manuali · ", "").strip() for v in df_rig_storico["tipo_test"].dropna().unique().tolist() if str(v).strip()])
+                filtro_metodo_rig = st.selectbox("Metodo", metodi, key="rig_test_history_method")
+            with fr3:
+                filtro_periodo_rig = st.selectbox("Intervallo", ["Tutti", "Ultimi 15 giorni", "Ultimi 30 giorni", "Ultimi 90 giorni"], key="rig_test_history_period")
+
+            df_rig_filtrato = df_rig_storico.copy()
+            if filtro_luogo_rig != "Tutti":
+                df_rig_filtrato = df_rig_filtrato[df_rig_filtrato["luogo"].astype(str).str.strip() == filtro_luogo_rig]
+            if filtro_metodo_rig != "Tutti":
+                df_rig_filtrato = df_rig_filtrato[df_rig_filtrato["tipo_test"].astype(str).str.contains(filtro_metodo_rig, regex=False)]
+            if filtro_periodo_rig != "Tutti":
+                giorni = {"Ultimi 15 giorni":15, "Ultimi 30 giorni":30, "Ultimi 90 giorni":90}[filtro_periodo_rig]
+                dd = pd.to_datetime(df_rig_filtrato["data"], errors="coerce").dt.normalize()
+                oggi = pd.Timestamp.today().normalize()
+                df_rig_filtrato = df_rig_filtrato[(dd >= oggi-pd.Timedelta(days=giorni-1)) & (dd <= oggi)]
+
+            st.write(f"Test visualizzati: **{len(df_rig_filtrato)}**")
+            for _, test in df_rig_filtrato.iterrows():
+                sid = int(test["id"])
+                data_label = _formatta_data_storico(test.get("data")) if '_formatta_data_storico' in globals() else str(test.get("data") or "")
+                luogo = str(test.get("luogo") or "—")
+                metodo = str(test.get("tipo_test") or "Test rigature manuali").replace("Test rigature manuali · ", "")
+                with st.expander(f"{data_label} · {luogo} · {metodo}"):
+                    df_rows, df_comp = _carica_righe_test_rigature(sid)
+                    max_cols = int(df_comp["colonna_numero"].max()) if not df_comp.empty else 0
+                    c1,c2,c3,c4,c5 = st.columns(5)
+                    with c1: st.metric("Metodo test", metodo)
+                    with c2: st.metric("Combinazioni testate", len(df_rows))
+                    with c3: st.metric("Rigature per sci", max_cols if max_cols else "—")
+                    with c4: st.metric("T aria °C", _formatta_temperatura_1d(test.get("temperatura_aria")))
+                    with c5: st.metric("T neve °C", _formatta_temperatura_1d(test.get("temperatura_neve")))
+
+                    st.markdown("##### Sessione")
+                    sc1,sc2,sc3=st.columns(3)
+                    with sc1:
+                        st.write(f"**Data:** {data_label}"); st.write(f"**Luogo:** {luogo}")
+                    with sc2:
+                        st.write(f"**Ora:** {str(test.get('ora') or '—')[:5]}"); st.write(f"**Meteo:** {str(test.get('meteo') or '—')}")
+                    with sc3:
+                        ur=test.get("umidita")
+                        st.write(f"**UR:** {'—' if pd.isna(ur) else str(int(round(float(ur)))) + ' %'}")
+                        st.write(f"**Modello sci:** {str(test.get('zero_modello_sci') or '—')}")
+
+                    st.markdown("##### Tipologia neve")
+                    classif=[("Origine",test.get("snow_origine")),("Consistenza",test.get("snow_consistenza")),("Fondo",test.get("snow_fondo")),("Umidità",test.get("snow_umidita")),("Forma grano",test.get("snow_forma_grano")),("Granulometria",test.get("snow_granulometria")),("Caratteristiche",test.get("snow_caratteristiche"))]
+                    cc=st.columns(4)
+                    for idx,(lab,val) in enumerate(classif):
+                        with cc[idx%4]:
+                            st.caption(lab.upper()); st.write(str(val or "—"))
+
+                    if not df_rows.empty:
+                        st.markdown("##### Podio test")
+                        _render_podio_rigature(df_rows, df_comp)
+                        st.markdown("##### Dettaglio test")
+                        order_key=f"rig_test_history_order_{sid}"
+                        if order_key not in st.session_state: st.session_state[order_key]="sci"
+                        o1,o2,_=st.columns([1.35,1.15,4.5])
+                        with o1:
+                            if st.button("↕ Riordina per classifica",use_container_width=True,key=f"rig_hist_rank_{sid}"):
+                                st.session_state[order_key]="classifica"; st.rerun()
+                        with o2:
+                            if st.button("↺ Ordine sci",use_container_width=True,key=f"rig_hist_ski_{sid}"):
+                                st.session_state[order_key]="sci"; st.rerun()
+                        df_vis=df_rows.copy()
+                        if st.session_state[order_key]=="classifica":
+                            df_vis["_sort"]=pd.to_numeric(df_vis["posizione"],errors="coerce")
+                            df_vis=df_vis.sort_values("_sort",na_position="last",kind="stable").drop(columns=["_sort"]).reset_index(drop=True)
+                        else:
+                            df_vis["_sort"]=df_vis["numero_sci"].apply(_chiave_ordine_numero_sci)
+                            df_vis=df_vis.sort_values("_sort",kind="stable").drop(columns=["_sort"]).reset_index(drop=True)
+                        _render_tabella_rigature(df_vis, df_comp)
+
+                    st.markdown(
+                        """
+                        <style>
+                        div[class*="st-key-download_rig_test_"] button {height:48px!important;background:#eef1f4!important;border:1px solid #c8cfd6!important;border-radius:5px!important;font-weight:600!important;}
+                        div[class*="st-key-edit_rig_history_"] button {height:48px!important;background:#00a7e1!important;border:1px solid #00a7e1!important;border-radius:5px!important;font-weight:600!important;}
+                        div[class*="st-key-edit_rig_history_"] button p, div[class*="st-key-edit_rig_history_"] button svg {color:#fff!important;fill:#fff!important;}
+                        div[class*="st-key-delete_rig_history_"] button {height:48px!important;background:#fff!important;border:1px solid #d9534f!important;border-radius:5px!important;font-weight:600!important;}
+                        div[class*="st-key-delete_rig_history_"] button p, div[class*="st-key-delete_rig_history_"] button svg {color:#d9534f!important;fill:#d9534f!important;}
+                        </style>
+                        """, unsafe_allow_html=True
+                    )
+
+                    try:
+                        pdf_rig=_crea_pdf_test_rigature(test,df_rows,df_comp); pdf_err=None
+                    except Exception as exc:
+                        pdf_rig=b""; pdf_err=str(exc)
+                    st.markdown('<div style="height:0.45rem"></div>',unsafe_allow_html=True)
+                    d1,d2,d3=st.columns(3)
+                    with d1:
+                        st.download_button("Scarica test",data=pdf_rig,file_name=_nome_file_pdf_test_rigature(test),mime="application/pdf",icon=":material/download:",use_container_width=True,disabled=bool(pdf_err),key=f"download_rig_test_{sid}")
+                    with d2:
+                        if st.button("Modifica test",icon=":material/edit:",use_container_width=True,key=f"edit_rig_history_{sid}"):
+                            st.session_state["rig_test_edit_session_id"]=sid
+                            st.session_state.pop("rig_test_edit_loaded_id",None)
+                            for k in ["rig_test_table_data","rig_test_table_n","rig_test_table_cols"]: st.session_state.pop(k,None)
+                            st.rerun()
+                    with d3:
+                        if st.button("Elimina test",icon=":material/delete:",use_container_width=True,key=f"delete_rig_history_{sid}"):
+                            st.session_state[f"confirm_delete_rig_{sid}"]=True; st.rerun()
+                    if pdf_err: st.caption(f"PDF non disponibile: {pdf_err}")
+                    if st.session_state.get(f"confirm_delete_rig_{sid}",False):
+                        st.warning("Confermi l'eliminazione definitiva di questo test rigature manuali?")
+                        q1,q2=st.columns(2)
+                        with q1:
+                            if st.button("Conferma eliminazione",icon=":material/delete_forever:",use_container_width=True,key=f"confirm_rig_yes_{sid}"):
+                                conn=apri_connessione_database()
+                                try:
+                                    ids=[int(x[0]) for x in conn.execute("SELECT id FROM test_rigature_aste WHERE sessione_id=?",(sid,)).fetchall()]
+                                    for rid in ids: conn.execute("DELETE FROM test_rigature_componenti WHERE test_rigatura_asta_id=?",(rid,))
+                                    conn.execute("DELETE FROM test_rigature_aste WHERE sessione_id=?",(sid,)); conn.execute("DELETE FROM sessioni WHERE id=?",(sid,)); conn.commit()
+                                finally: conn.close()
+                                _invalida_cache_dati(); st.session_state.pop(f"confirm_delete_rig_{sid}",None); st.session_state["rig_test_history_notice"]="Test rigature manuali eliminato correttamente."; st.rerun()
+                        with q2:
+                            if st.button("Annulla",icon=":material/close:",use_container_width=True,key=f"confirm_rig_no_{sid}"):
+                                st.session_state.pop(f"confirm_delete_rig_{sid}",None); st.rerun()
 
     elif pagina == "Test scioline di tenuta":
         mostra_banner(
