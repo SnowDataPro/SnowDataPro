@@ -9778,18 +9778,16 @@ st.markdown(
 logo_sidebar_path = os.path.join(BASE_DIR, "snowdatapro_logo_transparent.png")
 
 if os.path.exists(logo_sidebar_path):
-    # Stesse proporzioni e stessa centratura usate nella sidebar di Sector G2 Lab.
-    col_logo_sx, col_logo, col_logo_dx = st.sidebar.columns([1, 4, 1])
+    # Logo SnowDataPro più grande, mantenuto centrato senza la colonna centrale
+    # che in precedenza ne limitava la larghezza effettiva.
+    st.sidebar.image(
+        logo_sidebar_path,
+        width=320,
+    )
 
-    with col_logo:
-        st.image(
-            logo_sidebar_path,
-            width=250,
-        )
-
-    # Stessa distanza tra branding e primo elemento del menu di Sector G2 Lab.
+    # Spaziatura compatta tra branding e primo elemento del menu.
     st.sidebar.markdown(
-        '<div style="height: 28px;"></div>',
+        '<div style="height: 20px;"></div>',
         unsafe_allow_html=True,
     )
 else:
