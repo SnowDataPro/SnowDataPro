@@ -7340,10 +7340,25 @@ def _reset_rig_test_form_state():
         "rig_test_features", "rig_test_technique", "rig_test_num_rods",
         "rig_test_num_columns", "rig_test_table_data", "rig_test_table_n",
         "rig_test_table_cols", "rig_test_table_version", "rig_test_form_keep_open",
+        "rig_test_edit_load_requested",
     }
     for chiave in list(st.session_state.keys()):
         if chiave in chiavi_form or chiave.startswith("rig_test_editor_"):
             st.session_state.pop(chiave, None)
+
+
+def _avvia_modifica_test_rigature(sessione_id):
+    """Apre un test esistente caricandone tutti i dati nel form.
+
+    Il reset serve solo a eliminare eventuali residui di un nuovo test o di una
+    modifica precedente; subito dopo viene impostato esplicitamente il test da
+    caricare. In questo modo il reset del form Nuovo test non può lasciare la
+    schermata Modifica vuota.
+    """
+    _reset_rig_test_form_state()
+    st.session_state["rig_test_edit_session_id"] = int(sessione_id)
+    st.session_state["rig_test_edit_load_requested"] = True
+    st.session_state["rig_test_form_keep_open"] = True
 
 
 def _mantieni_aperto_form_rigature():
@@ -7369,7 +7384,10 @@ def render_form_test_rigature():
         )
         if not df_edit.empty:
             edit_row = df_edit.iloc[0]
-            needs_load = st.session_state.get("rig_test_edit_loaded_id") != int(edit_id)
+            needs_load = (
+                bool(st.session_state.get("rig_test_edit_load_requested", False))
+                or st.session_state.get("rig_test_edit_loaded_id") != int(edit_id)
+            )
         else:
             st.session_state.pop("rig_test_edit_session_id", None)
             st.session_state.pop("rig_test_edit_loaded_id", None)
@@ -7686,6 +7704,7 @@ def render_form_test_rigature():
             st.session_state["rig_test_table_cols"] = n_cols
             st.session_state["rig_test_table_version"] = st.session_state.get("rig_test_table_version", 0) + 1
         st.session_state["rig_test_edit_loaded_id"] = int(edit_id)
+        st.session_state.pop("rig_test_edit_load_requested", None)
 
     def _tabella_vuota(n, nc):
         d = {"_ordine_inserimento": list(range(n)), "Posizione": [None] * n, "Numero sci": [""] * n}
@@ -11042,9 +11061,7 @@ with st.container(key="sector_page_content"):
                         st.download_button("Scarica test",data=pdf_rig,file_name=_nome_file_pdf_test_rigature(test),mime="application/pdf",icon=":material/download:",use_container_width=True,disabled=bool(pdf_err),key=f"download_rig_test_{sid}")
                     with d2:
                         if st.button("Modifica test",icon=":material/edit:",use_container_width=True,key=f"edit_rig_history_{sid}"):
-                            _reset_rig_test_form_state()
-                            st.session_state["rig_test_edit_session_id"] = sid
-                            st.session_state["rig_test_form_keep_open"] = True
+                            _avvia_modifica_test_rigature(sid)
                             st.rerun()
                     with d3:
                         if st.button("Elimina test",icon=":material/delete:",use_container_width=True,key=f"delete_rig_history_{sid}"):
