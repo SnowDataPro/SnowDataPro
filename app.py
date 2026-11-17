@@ -7903,12 +7903,11 @@ def _render_podio_rigature(df_rows, df_comp):
         .rig-tooltip-ski { position:relative; width:100%; min-height:122px; overflow:hidden; border-radius:10px; background:#fff; }
         .rig-tooltip-ski img { display:block; width:100%; min-height:122px; height:auto; object-fit:contain; }
         .rig-tooltip-zone { position:absolute; top:32.4%; height:8.8%; background:rgba(0,174,239,.50); border-top:2px solid #00aeea; border-bottom:2px solid #00aeea; box-shadow:0 0 0 1px rgba(0,174,239,.12); border-radius:4px; }
-        .rig-tooltip-divider { height:1px; background:#e5eaee; margin:.8rem 0 .7rem; }
-        .rig-tooltip-meta-row { display:flex; align-items:center; gap:.75rem; min-height:44px; }
-        .rig-tooltip-wheel { width:74px; height:74px; flex:0 0 74px; object-fit:contain; border-radius:10px; background:#fff; }
-        .rig-tooltip-meta { min-width:0; color:#3f4d57; font-size:.78rem; line-height:1.4; font-weight:650; }
-        .rig-tooltip-handdrive { display:inline-flex; align-items:center; gap:.3rem; margin-bottom:.28rem; padding:.24rem .48rem; border-radius:8px; background:#eaf5ff; color:#1879b5; font-size:.72rem; font-weight:800; }
-        .rig-tooltip-detail { color:#3f4d57; font-size:.78rem; font-weight:650; }
+        .rig-tooltip-divider { display:none; }
+        .rig-tooltip-detail { color:#3f4d57; font-size:.78rem; font-weight:650; margin-top:.55rem; }
+        .rig-tooltip-handdrive-row { display:flex; align-items:center; justify-content:flex-start; gap:.60rem; width:100%; min-height:58px; margin-top:.38rem; padding-left:.10rem; box-sizing:border-box; }
+        .rig-tooltip-wheel { width:58px; height:58px; flex:0 0 58px; object-fit:contain; display:block; border:0; border-radius:0; background:transparent; box-shadow:none; }
+        .rig-tooltip-handdrive-text { color:#1f2a33; font-size:.84rem; line-height:1.15; font-weight:600; letter-spacing:0; }
         .rig-work-name-wrap:hover .rig-work-tooltip { opacity:1; visibility:visible; transform:translateY(0) scale(1); }
         @media (max-width: 980px) { .rig-work-tooltip { right:12px; width:min(520px,76vw); top:120px; } }
         .rig-podium-step { display:flex; align-items:flex-start; justify-content:center; border:1px solid #cfd6dc; border-top-width:4px; border-radius:5px 5px 0 0; background:#eef1f4; margin:.35rem .25rem 0; padding-top:.6rem; }
@@ -7973,22 +7972,25 @@ def _render_podio_rigature(df_rows, df_comp):
             dettagli.append(zona)
         dettaglio_html = " · ".join(html_escape(x) for x in dettagli) if dettagli else "Dettagli non specificati"
 
-        wheel_html = ""
-        handdrive_badge = ""
+        handdrive_html = ""
         if hd:
             wheel_src = _HAND_DRIVE_WHEEL_DATA_URL
-            if wheel_src:
-                wheel_html = f'<img class="rig-tooltip-wheel" src="{wheel_src}" alt="Rotella Hand drive">'
-            handdrive_badge = '<div class="rig-tooltip-handdrive">⚙ Hand drive</div>'
+            wheel_html = (
+                f'<img class="rig-tooltip-wheel" src="{wheel_src}" alt="Rotella Hand drive">'
+                if wheel_src else ""
+            )
+            handdrive_html = (
+                f'<div class="rig-tooltip-handdrive-row">{wheel_html}'
+                f'<div class="rig-tooltip-handdrive-text">Hand drive</div></div>'
+            )
 
         tooltip_html = (
             f'<div class="rig-work-tooltip">'
             f'<div class="rig-tooltip-title">{html_escape(label)}</div>'
             f'{ski_html}'
-            f'<div class="rig-tooltip-divider"></div>'
-            f'<div class="rig-tooltip-meta-row">{wheel_html}'
-            f'<div class="rig-tooltip-meta">{handdrive_badge}<div class="rig-tooltip-detail">{dettaglio_html}</div></div>'
-            f'</div></div>'
+            f'<div class="rig-tooltip-detail">{dettaglio_html}</div>'
+            f'{handdrive_html}'
+            f'</div>'
         )
         return (
             '<div class="rig-work-block">'
