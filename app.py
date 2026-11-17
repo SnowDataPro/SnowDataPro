@@ -332,6 +332,16 @@ def inizializza_database():
                 f"ALTER TABLE test_rigature_componenti ADD COLUMN {nome_colonna} {tipo_colonna}"
             )
 
+    # Normalizza i vecchi riferimenti dello schema Skating alla nuova nomenclatura.
+    # Nel nuovo schema esiste un solo punto "Inizio canalina" e il riferimento
+    # intermedio è correttamente denominato "Inizio attacco".
+    for _colonna_zona in ("zona_da", "zona_a"):
+        conn.execute(
+            f"UPDATE test_rigature_componenti SET {_colonna_zona} = 'Inizio canalina' "
+            f"WHERE TRIM(COALESCE({_colonna_zona}, '')) IN "
+            f"('Inizio canalina (lato coda)', 'Inizio canalina (lato punta)')"
+        )
+
     # Migrazione non distruttiva per database SnowDataPro già esistenti.
     colonne_catalogo = {
         r[1] for r in conn.execute("PRAGMA table_info(catalogo_prodotti)").fetchall()
@@ -7204,13 +7214,11 @@ def _zone_rigatura_per_tecnica(tecnica):
     """Riferimenti longitudinali coerenti con lo schema grafico dell'utente."""
     if str(tecnica or "").strip().lower() == "classico":
         return ["Coda", "Fine ponte", "Inizio ponte", "Inizio canalina", "Punta"]
-    # Nello schema skating ci sono due riferimenti 'inizio canalina':
-    # li distinguiamo solo nel menu per evitare ambiguità, mantenendo la grafica originale.
     return [
         "Coda",
         "Fine attacco",
-        "Inizio canalina (lato coda)",
-        "Inizio canalina (lato punta)",
+        "Inizio attacco",
+        "Inizio canalina",
         "Punta",
     ]
 
@@ -7243,6 +7251,14 @@ def _asset_image_src(path, mime="image/png"):
         return ""
 
 
+def _normalizza_zona_rigatura(zona):
+    """Compatibilità con i vecchi nomi usati nello schema Skating."""
+    valore = str(zona or "").strip()
+    if valore in {"Inizio canalina (lato coda)", "Inizio canalina (lato punta)"}:
+        return "Inizio canalina"
+    return valore
+
+
 def _zona_overlay_rigatura(tecnica, zona_da, zona_a):
     """Restituisce left/width (%) per evidenziare la zona sulla soletta nello schema."""
     tecnica_norm = str(tecnica or "").strip().lower()
@@ -7258,13 +7274,12 @@ def _zona_overlay_rigatura(tecnica, zona_da, zona_a):
         punti = {
             "Coda": 5.7,
             "Fine attacco": 32.6,
-            "Inizio canalina (lato coda)": 52.9,
-            "Inizio canalina (lato punta)": 81.3,
+            "Inizio attacco": 52.9,
             "Inizio canalina": 81.3,
             "Punta": 91.6,
         }
-    da = str(zona_da or "").strip()
-    a = str(zona_a or "").strip()
+    da = _normalizza_zona_rigatura(zona_da)
+    a = _normalizza_zona_rigatura(zona_a)
     if da not in punti or a not in punti:
         return None
     x1, x2 = punti[da], punti[a]
@@ -7274,8 +7289,8 @@ def _zona_overlay_rigatura(tecnica, zona_da, zona_a):
 
 
 def _zona_rigatura_testo(zona_da, zona_a):
-    da = str(zona_da or "").strip()
-    a = str(zona_a or "").strip()
+    da = _normalizza_zona_rigatura(zona_da)
+    a = _normalizza_zona_rigatura(zona_a)
     if not da and not a:
         return "—"
     if da and a:
@@ -7563,8 +7578,8 @@ def render_form_test_rigature():
                 "label": label_comp,
                 "direzione": str(c.get("direzione") or "—").strip() or "—",
                 "hand_drive": bool(int(c.get("hand_drive") or 0)),
-                "zona_da": str(c.get("zona_da") or "—").strip() or "—",
-                "zona_a": str(c.get("zona_a") or "—").strip() or "—",
+                "zona_da": _normalizza_zona_rigatura(c.get("zona_da")) or "—",
+                "zona_a": _normalizza_zona_rigatura(c.get("zona_a")) or "—",
             }
         righe = []
         for idx, r in df_rows.reset_index(drop=True).iterrows():
