@@ -7328,6 +7328,29 @@ def _zona_rigatura_testo(zona_da, zona_a):
     return da or a or "—"
 
 
+def _reset_rig_test_form_state():
+    """Pulisce solo lo stato del form Test rigature, preservando filtri/storico."""
+    chiavi_form = {
+        "rig_test_edit_session_id", "rig_test_edit_loaded_id",
+        "rig_test_method", "rig_test_zero_reference", "rig_test_date", "rig_test_time",
+        "rig_test_place", "rig_test_air", "rig_test_snow", "rig_test_rh",
+        "rig_test_rh_missing", "rig_test_ski_model", "rig_test_weather",
+        "rig_test_climate_notes", "rig_test_origin", "rig_test_consistency",
+        "rig_test_base", "rig_test_humidity", "rig_test_grain", "rig_test_size",
+        "rig_test_features", "rig_test_technique", "rig_test_num_rods",
+        "rig_test_num_columns", "rig_test_table_data", "rig_test_table_n",
+        "rig_test_table_cols", "rig_test_table_version", "rig_test_form_keep_open",
+    }
+    for chiave in list(st.session_state.keys()):
+        if chiave in chiavi_form or chiave.startswith("rig_test_editor_"):
+            st.session_state.pop(chiave, None)
+
+
+def _mantieni_aperto_form_rigature():
+    # Il data_editor provoca un rerun ad ogni modifica: manteniamo il form aperto.
+    st.session_state["rig_test_form_keep_open"] = True
+
+
 def render_form_test_rigature():
     """Inserimento/modifica Test rigature manuali, allineato al Test prodotti scorrimento."""
     snow_options = _snow_option_groups_standard()
@@ -7423,8 +7446,7 @@ def render_form_test_rigature():
             st.info("Modalità modifica attiva: stai aggiornando un test rigature manuali già presente nello storico.")
         with ce2:
             if st.button("Annulla modifica", use_container_width=True, key="cancel_rig_test_edit"):
-                for k in ["rig_test_edit_session_id", "rig_test_edit_loaded_id", "rig_test_table_data", "rig_test_table_n", "rig_test_table_cols"]:
-                    st.session_state.pop(k, None)
+                _reset_rig_test_form_state()
                 st.rerun()
 
     st.markdown("#### Impostazione test")
@@ -7779,6 +7801,14 @@ def render_form_test_rigature():
         else:
             df_tab["Numero sci"] = df_tab["Numero sci"].apply(_numero_asta_rigature)
 
+    # Normalizza la classifica prima del data_editor. Valori residui fuori range
+    # (per esempio dopo aver ridotto il numero di righe) vengono svuotati invece
+    # di lasciare la NumberColumn in uno stato non valido.
+    if "Posizione" in df_tab.columns:
+        pos_num = pd.to_numeric(df_tab["Posizione"], errors="coerce")
+        pos_num = pos_num.where((pos_num >= 1) & (pos_num <= n_aste))
+        df_tab["Posizione"] = pos_num.astype("Int64")
+
     st.session_state[state_key] = df_tab.copy()
 
     config = {
@@ -7819,7 +7849,14 @@ def render_form_test_rigature():
         df_tab[visible_cols], hide_index=True, use_container_width=True,
         height=min(650, 38 + n_aste * 36), column_config=config,
         key=f"rig_test_editor_{n_aste}_{n_cols}_{st.session_state['rig_test_table_version']}",
+        on_change=_mantieni_aperto_form_rigature,
     )
+    # Anche dopo l'editing rendiamo Posizione un intero nullable e scartiamo
+    # eventuali valori fuori range senza forzare un cambio pagina/chiusura form.
+    if "Posizione" in edited.columns:
+        pos_edit = pd.to_numeric(edited["Posizione"], errors="coerce")
+        pos_edit = pos_edit.where((pos_edit >= 1) & (pos_edit <= n_aste))
+        edited["Posizione"] = pos_edit.astype("Int64")
     st.session_state[state_key] = edited.copy()
 
     co1, co2, _ = st.columns([1.4, 1.4, 4])
@@ -7830,12 +7867,14 @@ def render_form_test_rigature():
             tab = tab.sort_values(["_pos_sort", "_ordine_inserimento"], na_position="last", kind="stable").drop(columns=["_pos_sort"]).reset_index(drop=True)
             st.session_state[state_key] = tab
             st.session_state["rig_test_table_version"] += 1
+            st.session_state["rig_test_form_keep_open"] = True
             st.rerun()
     with co2:
         if st.button("↺ Ripristina ordine inserimento", use_container_width=True, key="rig_test_reset_order"):
             tab = st.session_state[state_key].copy().sort_values("_ordine_inserimento", kind="stable").reset_index(drop=True)
             st.session_state[state_key] = tab
             st.session_state["rig_test_table_version"] += 1
+            st.session_state["rig_test_form_keep_open"] = True
             st.rerun()
 
     st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
@@ -7968,8 +8007,7 @@ def render_form_test_rigature():
         if edit_id is not None else
         f"Test rigature manuali salvato correttamente · {len(righe_salva)} righe registrate."
     )
-    for k in ["rig_test_edit_session_id", "rig_test_edit_loaded_id", "rig_test_table_data", "rig_test_table_n", "rig_test_table_cols"]:
-        st.session_state.pop(k, None)
+    _reset_rig_test_form_state()
     st.rerun()
 
 
@@ -10878,8 +10916,9 @@ with st.container(key="sector_page_content"):
         st.write("Archivio dei test rigature manuali. Apri un test per vedere condizioni, combinazioni e classifica.")
 
         rig_edit_active = st.session_state.get("rig_test_edit_session_id") is not None
+        rig_form_keep_open = bool(st.session_state.get("rig_test_form_keep_open", False))
         rig_form_label = "✎ Modifica test rigature manuali" if rig_edit_active else "＋ Nuovo test rigature manuali"
-        with st.expander(rig_form_label, expanded=rig_edit_active):
+        with st.expander(rig_form_label, expanded=(rig_edit_active or rig_form_keep_open)):
             render_form_test_rigature()
 
         df_rig_storico = leggi_df(
@@ -11003,9 +11042,9 @@ with st.container(key="sector_page_content"):
                         st.download_button("Scarica test",data=pdf_rig,file_name=_nome_file_pdf_test_rigature(test),mime="application/pdf",icon=":material/download:",use_container_width=True,disabled=bool(pdf_err),key=f"download_rig_test_{sid}")
                     with d2:
                         if st.button("Modifica test",icon=":material/edit:",use_container_width=True,key=f"edit_rig_history_{sid}"):
-                            st.session_state["rig_test_edit_session_id"]=sid
-                            st.session_state.pop("rig_test_edit_loaded_id",None)
-                            for k in ["rig_test_table_data","rig_test_table_n","rig_test_table_cols"]: st.session_state.pop(k,None)
+                            _reset_rig_test_form_state()
+                            st.session_state["rig_test_edit_session_id"] = sid
+                            st.session_state["rig_test_form_keep_open"] = True
                             st.rerun()
                     with d3:
                         if st.button("Elimina test",icon=":material/delete:",use_container_width=True,key=f"delete_rig_history_{sid}"):
