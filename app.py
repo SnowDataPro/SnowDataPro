@@ -107,6 +107,7 @@ def inizializza_database():
             categoria_test_scorrimento TEXT,
             zero_riferimento_id INTEGER,
             note TEXT,
+            note_clima TEXT,
             creato_il TEXT NOT NULL
         )
     """)
@@ -292,12 +293,22 @@ def inizializza_database():
         "tipo_test": "TEXT",
         "categoria_test_scorrimento": "TEXT",
         "zero_riferimento_id": "INTEGER",
+        "note_clima": "TEXT",
     }
     for nome_colonna, tipo_colonna in nuove_colonne_sessioni.items():
         if nome_colonna not in colonne_sessioni:
             conn.execute(
                 f"ALTER TABLE sessioni ADD COLUMN {nome_colonna} {tipo_colonna}"
             )
+
+    # Nomenclatura aggiornata: i vecchi test restano compatibili e vengono uniformati.
+    conn.execute(
+        "UPDATE sessioni SET meteo = 'Sereno' WHERE TRIM(COALESCE(meteo, '')) = 'Soleggiato'"
+    )
+    conn.execute(
+        "UPDATE sessioni SET tipo_test = 'Test rigature manuali · Aste' "
+        "WHERE TRIM(COALESCE(tipo_test, '')) = 'Test rigature manuali · Asta'"
+    )
 
     colonne_test_materiali = {
         r[1] for r in conn.execute("PRAGMA table_info(test_materiali)").fetchall()
@@ -3780,7 +3791,7 @@ def _parse_temperatura_1d(valore):
 
 
 METEO_OPZIONI = [
-    "Soleggiato",
+    "Sereno",
     "Parzialmente nuvoloso",
     "Coperto",
     "Precipitazioni nevose",
@@ -7329,7 +7340,7 @@ def render_form_test_rigature():
             SELECT id, data, ora, luogo, temperatura_aria, temperatura_neve,
                    umidita, meteo, snow_origine, snow_consistenza, snow_fondo, snow_umidita,
                    snow_forma_grano, snow_granulometria, snow_caratteristiche,
-                   zero_modello_sci, tipo_test, zero_riferimento_id
+                   zero_modello_sci, tipo_test, zero_riferimento_id, note_clima
             FROM sessioni WHERE id = ?
             """, (int(edit_id),)
         )
@@ -7342,8 +7353,10 @@ def render_form_test_rigature():
             edit_id = None
 
     if needs_load and edit_row is not None:
-        metodo = str(edit_row.get("tipo_test") or "Asta").replace("Test rigature manuali · ", "").strip()
-        st.session_state["rig_test_method"] = metodo if metodo in ["Asta", "Parallel", "Fotocellula"] else "Asta"
+        metodo = str(edit_row.get("tipo_test") or "Aste").replace("Test rigature manuali · ", "").strip()
+        if metodo == "Asta":
+            metodo = "Aste"
+        st.session_state["rig_test_method"] = metodo if metodo in ["Aste", "Parallel", "Fotocellula"] else "Aste"
         try:
             st.session_state["rig_test_date"] = pd.to_datetime(edit_row.get("data")).date()
         except Exception:
@@ -7360,7 +7373,10 @@ def render_form_test_rigature():
         st.session_state["rig_test_rh"] = 70 if pd.isna(ur) else int(round(float(ur)))
         st.session_state["rig_test_ski_model"] = str(edit_row.get("zero_modello_sci") or "")
         meteo = str(edit_row.get("meteo") or "").strip()
+        if meteo == "Soleggiato":
+            meteo = "Sereno"
         st.session_state["rig_test_weather"] = meteo if meteo in METEO_OPZIONI else None
+        st.session_state["rig_test_climate_notes"] = str(edit_row.get("note_clima") or "")
         st.session_state["rig_test_origin"] = _valori_sessione_neve(edit_row.get("snow_origine"), snow_options["Origine"])
         st.session_state["rig_test_consistency"] = _valori_sessione_neve(edit_row.get("snow_consistenza"), snow_options["Consistenza"])
         st.session_state["rig_test_base"] = _valori_sessione_neve(edit_row.get("snow_fondo"), snow_options["Fondo sottostante"])
@@ -7414,8 +7430,10 @@ def render_form_test_rigature():
     st.markdown("#### Impostazione test")
     c_metodo, c_zero = st.columns([1, 1.6])
     with c_metodo:
+        if st.session_state.get("rig_test_method") == "Asta":
+            st.session_state["rig_test_method"] = "Aste"
         metodo_test = st.selectbox(
-            "Metodo test", ["Asta", "Parallel", "Fotocellula"],
+            "Metodo test", ["Aste", "Parallel", "Fotocellula"],
             key="rig_test_method",
             help="Seleziona il metodo con cui hai effettuato il test rigature.",
         )
@@ -7476,6 +7494,14 @@ def render_form_test_rigature():
     with c5:
         meteo = st.selectbox("Meteo", METEO_OPZIONI, index=None, placeholder="Seleziona meteo", key="rig_test_weather")
 
+    note_clima = st.text_area(
+        "Note",
+        key="rig_test_climate_notes",
+        placeholder="Considerazioni sul clima del giorno o dei giorni precedenti...",
+        help="Annota condizioni utili a interpretare il test: andamento termico, precipitazioni, rigelo, vento o altri aspetti dei giorni precedenti.",
+        height=90,
+    )
+
     st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
     st.markdown("#### Classificazione neve")
     st.caption("Usa la stessa classificazione indipendente adottata nel catalogo e nei test di scorrimento.")
@@ -7503,7 +7529,7 @@ def render_form_test_rigature():
     if test_a_coppie:
         st.caption(
             "Imposta il numero di coppie testate e quante rigature compongono ciascuna coppia. "
-            "La logica è identica al test Asta; nel campo Numero sci inserisci solo il numero della coppia "
+            "La logica è identica al test Aste; nel campo Numero sci inserisci solo il numero della coppia "
             "(es. 10 per la coppia 10A/10B)."
         )
     else:
@@ -7871,7 +7897,7 @@ def render_form_test_rigature():
             conn.execute(
                 """UPDATE sessioni SET data=?, ora=?, luogo=?, temperatura_aria=?, temperatura_neve=?, umidita=?, meteo=?,
                    snow_origine=?, snow_consistenza=?, snow_fondo=?, snow_umidita=?, snow_forma_grano=?, snow_granulometria=?, snow_caratteristiche=?,
-                   zero_modello_sci=?, tipo_test=?, zero_riferimento_id=? WHERE id=?""",
+                   zero_modello_sci=?, tipo_test=?, zero_riferimento_id=?, note_clima=? WHERE id=?""",
                 (data_test.isoformat(), ora.strftime("%H:%M"), str(luogo).strip(), taria, tneve,
                  None if ur_missing else int(ur), meteo or "",
                  _compatta_neve_sessione(origine, snow_options["Origine"]),
@@ -7882,7 +7908,7 @@ def render_form_test_rigature():
                  _compatta_neve_sessione(granulometria, snow_options["Granulometria"]),
                  _compatta_neve_sessione(caratteristiche, snow_options["Caratteristiche"]),
                  str(modello_sci or "").strip(), f"Test rigature manuali · {metodo_test}",
-                 int(zero_ref_id) if zero_ref_id is not None else None, sid)
+                 int(zero_ref_id) if zero_ref_id is not None else None, str(note_clima or "").strip(), sid)
             )
             ids_old = [int(x[0]) for x in conn.execute("SELECT id FROM test_rigature_aste WHERE sessione_id = ?", (sid,)).fetchall()]
             for rid in ids_old:
@@ -7892,8 +7918,8 @@ def render_form_test_rigature():
             cur = conn.execute(
                 """INSERT INTO sessioni (data, ora, luogo, temperatura_aria, temperatura_neve, umidita, meteo, tipo_neve, condizione_pista,
                    snow_origine, snow_consistenza, snow_fondo, snow_umidita, snow_forma_grano, snow_granulometria, snow_caratteristiche,
-                   zero_modello_sci, tipo_test, zero_riferimento_id, note, creato_il)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, '', '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)""",
+                   zero_modello_sci, tipo_test, zero_riferimento_id, note, note_clima, creato_il)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, '', '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?)""",
                 (data_test.isoformat(), ora.strftime("%H:%M"), str(luogo).strip(), taria, tneve,
                  None if ur_missing else int(ur), meteo or "",
                  _compatta_neve_sessione(origine, snow_options["Origine"]),
@@ -7904,7 +7930,7 @@ def render_form_test_rigature():
                  _compatta_neve_sessione(granulometria, snow_options["Granulometria"]),
                  _compatta_neve_sessione(caratteristiche, snow_options["Caratteristiche"]),
                  str(modello_sci or "").strip(), f"Test rigature manuali · {metodo_test}",
-                 int(zero_ref_id) if zero_ref_id is not None else None, datetime.now().isoformat(timespec="seconds"))
+                 int(zero_ref_id) if zero_ref_id is not None else None, str(note_clima or "").strip(), datetime.now().isoformat(timespec="seconds"))
             )
             sid = int(cur.lastrowid)
         for rr in righe_salva:
@@ -8249,6 +8275,13 @@ def _crea_pdf_test_rigature(test, df_rows, df_comp):
     styles=getSampleStyleSheet(); story=[Paragraph("SnowDataPro - Test rigature manuali",styles["Title"]),Spacer(1,4*mm)]
     metodo=str(test.get("tipo_test") or "").replace("Test rigature manuali · ","")
     story.append(Paragraph(f"{test.get('data','')} · {test.get('luogo','')} · {metodo}",styles["Heading2"]))
+    meteo_pdf = str(test.get("meteo") or "—")
+    modello_pdf = str(test.get("zero_modello_sci") or "—")
+    story.append(Paragraph(f"Meteo: {meteo_pdf} &nbsp;&nbsp;·&nbsp;&nbsp; Modello sci: {modello_pdf}", styles["BodyText"]))
+    note_clima_pdf = str(test.get("note_clima") or "").strip()
+    if note_clima_pdf:
+        story.append(Paragraph(f"Note: {note_clima_pdf}", styles["BodyText"]))
+    story.append(Spacer(1, 3*mm))
     comp_map={}; max_col=0
     for _,c in df_comp.iterrows():
         rid=int(c["test_rigatura_asta_id"]); n=int(c["colonna_numero"]); max_col=max(max_col,n)
@@ -10854,7 +10887,7 @@ with st.container(key="sector_page_content"):
             SELECT s.id, s.data, s.ora, s.luogo, s.temperatura_aria, s.temperatura_neve,
                    s.umidita, s.meteo, s.snow_origine, s.snow_consistenza, s.snow_fondo, s.snow_umidita,
                    s.snow_forma_grano, s.snow_granulometria, s.snow_caratteristiche,
-                   s.zero_modello_sci, s.tipo_test, s.zero_riferimento_id, s.note, s.creato_il,
+                   s.zero_modello_sci, s.tipo_test, s.zero_riferimento_id, s.note, s.note_clima, s.creato_il,
                    COUNT(a.id) AS righe_test
             FROM sessioni s
             LEFT JOIN test_rigature_aste a ON a.sessione_id = s.id
@@ -10915,6 +10948,9 @@ with st.container(key="sector_page_content"):
                         ur=test.get("umidita")
                         st.write(f"**UR:** {'—' if pd.isna(ur) else str(int(round(float(ur)))) + ' %'}")
                         st.write(f"**Modello sci:** {str(test.get('zero_modello_sci') or '—')}")
+                    note_clima_storico = str(test.get("note_clima") or "").strip()
+                    if note_clima_storico:
+                        st.write(f"**Note:** {note_clima_storico}")
 
                     st.markdown("##### Tipologia neve")
                     classif=[("Origine",test.get("snow_origine")),("Consistenza",test.get("snow_consistenza")),("Fondo",test.get("snow_fondo")),("Umidità",test.get("snow_umidita")),("Forma grano",test.get("snow_forma_grano")),("Granulometria",test.get("snow_granulometria")),("Caratteristiche",test.get("snow_caratteristiche"))]
