@@ -7251,6 +7251,21 @@ def _asset_image_src(path, mime="image/png"):
         return ""
 
 
+def _direzione_rigatura_src(direzione):
+    """Restituisce l'immagine esatta scelta dall'utente per la direzione della rigatura."""
+    valore = str(direzione or "").strip().replace(" ", "")
+    mappa = {
+        "Λ": "direzione_lambda.png",
+        "V": "direzione_v.png",
+        "ΛV": "direzione_lambda_v.png",
+        "VΛ": "direzione_lambda_v.png",
+    }
+    nome = mappa.get(valore)
+    if not nome:
+        return ""
+    return _asset_image_src(os.path.join(BASE_DIR, "assets", nome))
+
+
 def _normalizza_zona_rigatura(zona):
     """Compatibilità con i vecchi nomi usati nello schema Skating."""
     valore = str(zona or "").strip()
@@ -7904,8 +7919,9 @@ def _render_podio_rigature(df_rows, df_comp):
         .rig-tooltip-ski img { display:block; width:100%; min-height:122px; height:auto; object-fit:contain; }
         .rig-tooltip-zone { position:absolute; top:32.4%; height:8.8%; background:rgba(0,174,239,.50); border-top:2px solid #00aeea; border-bottom:2px solid #00aeea; box-shadow:0 0 0 1px rgba(0,174,239,.12); border-radius:4px; }
         .rig-tooltip-divider { display:none; }
-        .rig-tooltip-detail { color:#3f4d57; font-size:.78rem; font-weight:650; margin-top:.55rem; }
-        .rig-tooltip-handdrive-row { display:flex; align-items:center; justify-content:flex-start; gap:.60rem; width:100%; min-height:58px; margin-top:.38rem; padding-left:.10rem; box-sizing:border-box; }
+        .rig-tooltip-direction-row { display:flex; align-items:center; justify-content:center; width:100%; min-height:102px; margin-top:.28rem; padding:.10rem 0 .18rem; box-sizing:border-box; }
+        .rig-tooltip-direction-img { display:block; width:auto; max-width:150px; height:96px; object-fit:contain; border:0; background:#fff; box-shadow:none; }
+        .rig-tooltip-handdrive-row { display:flex; align-items:center; justify-content:flex-start; gap:.60rem; width:100%; min-height:58px; margin-top:.20rem; padding-left:.10rem; box-sizing:border-box; }
         .rig-tooltip-wheel { width:58px; height:58px; flex:0 0 58px; object-fit:contain; display:block; border:0; border-radius:0; background:transparent; box-shadow:none; }
         .rig-tooltip-handdrive-text { color:#1f2a33; font-size:.84rem; line-height:1.15; font-weight:600; letter-spacing:0; }
         .rig-work-name-wrap:hover .rig-work-tooltip { opacity:1; visibility:visible; transform:translateY(0) scale(1); }
@@ -7965,12 +7981,14 @@ def _render_podio_rigature(df_rows, df_comp):
             if schema_src else ""
         )
 
-        dettagli = []
-        if direzione != "—":
-            dettagli.append(direzione)
-        if zona != "—":
-            dettagli.append(zona)
-        dettaglio_html = " · ".join(html_escape(x) for x in dettagli) if dettagli else "Dettagli non specificati"
+        direction_html = ""
+        direction_src = _direzione_rigatura_src(direzione)
+        if direction_src:
+            direction_html = (
+                f'<div class="rig-tooltip-direction-row">'
+                f'<img class="rig-tooltip-direction-img" src="{direction_src}" alt="Direzione {html_escape(direzione)}">'
+                f'</div>'
+            )
 
         handdrive_html = ""
         if hd:
@@ -7988,7 +8006,7 @@ def _render_podio_rigature(df_rows, df_comp):
             f'<div class="rig-work-tooltip">'
             f'<div class="rig-tooltip-title">{html_escape(label)}</div>'
             f'{ski_html}'
-            f'<div class="rig-tooltip-detail">{dettaglio_html}</div>'
+            f'{direction_html}'
             f'{handdrive_html}'
             f'</div>'
         )
