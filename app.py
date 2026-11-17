@@ -7499,11 +7499,18 @@ def render_form_test_rigature():
     st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
     st.markdown("#### Rigature testate")
 
-    if metodo_test != "Asta":
-        st.info(f"La struttura di inserimento per il test {metodo_test} segue la stessa logica della pagina prodotti scorrimento e verrà definita quando userai questo metodo.")
-        return
-
-    st.caption("Imposta il numero di aste e quante rigature compongono ciascuno sci. Per ogni rigatura selezioni nome, direzione, Hand drive e zona dello sci su cui è stata applicata.")
+    test_a_coppie = metodo_test in ["Parallel", "Fotocellula"]
+    if test_a_coppie:
+        st.caption(
+            "Imposta il numero di coppie testate e quante rigature compongono ciascuna coppia. "
+            "La logica è identica al test Asta; nel campo Numero sci inserisci solo il numero della coppia "
+            "(es. 10 per la coppia 10A/10B)."
+        )
+    else:
+        st.caption(
+            "Imposta il numero di aste e quante rigature compongono ciascuno sci. Per ogni rigatura "
+            "selezioni nome, direzione, Hand drive e zona dello sci su cui è stata applicata."
+        )
 
     tecnica_sci = st.selectbox(
         "Tecnica sci",
@@ -7522,7 +7529,20 @@ def render_form_test_rigature():
 
     cc1, cc2 = st.columns(2)
     with cc1:
-        numero_aste = st.number_input("Numero di aste", min_value=1, max_value=30, value=10, step=1, format="%d", key="rig_test_num_rods")
+        numero_aste = st.number_input(
+            "Numero di coppie" if test_a_coppie else "Numero di aste",
+            min_value=1,
+            max_value=30,
+            value=10,
+            step=1,
+            format="%d",
+            key="rig_test_num_rods",
+            help=(
+                "Numero di coppie di sci confrontate nel test. Ogni riga rappresenta una coppia completa, ad esempio 10 = 10A/10B."
+                if test_a_coppie
+                else "Numero di aste/sci singoli registrati nel test."
+            ),
+        )
     with cc2:
         numero_colonne = st.number_input(
             "Numero di rigature per sci", min_value=1, max_value=6, value=1, step=1, format="%d", key="rig_test_num_columns",
@@ -7700,12 +7720,60 @@ def render_form_test_rigature():
                 df_tab[col_zona] = df_tab[col_zona].apply(
                     lambda v: str(v).strip() if str(v).strip() in zone_valide else "—"
                 )
+
+    # Parallel e Fotocellula lavorano sulla coppia completa: Numero sci è quindi il numero
+    # della coppia (es. 10 = 10A/10B), non il codice della singola asta.
+    def _numero_coppia_rigature(valore):
+        if valore is None or (isinstance(valore, float) and pd.isna(valore)):
+            return None
+        testo = str(valore).strip()
+        if not testo or testo.lower() in {"nan", "none", "—"}:
+            return None
+        match = re.search(r"\d+", testo)
+        return int(match.group(0)) if match else None
+
+    def _numero_asta_rigature(valore):
+        if valore is None or (isinstance(valore, float) and pd.isna(valore)):
+            return ""
+        testo = str(valore).strip()
+        if not testo or testo.lower() in {"nan", "none", "—"}:
+            return ""
+        # Evita che numeri passati da una NumberColumn diventino 10.0 quando si torna ad Asta.
+        try:
+            numero = float(testo)
+            if numero.is_integer():
+                return str(int(numero))
+        except Exception:
+            pass
+        return testo
+
+    if "Numero sci" in df_tab.columns:
+        if test_a_coppie:
+            df_tab["Numero sci"] = df_tab["Numero sci"].apply(_numero_coppia_rigature)
+        else:
+            df_tab["Numero sci"] = df_tab["Numero sci"].apply(_numero_asta_rigature)
+
     st.session_state[state_key] = df_tab.copy()
 
     config = {
         "_ordine_inserimento": None,
         "Posizione": st.column_config.NumberColumn("Posizione", min_value=1, max_value=n_aste, step=1, format="%d", width="small"),
-        "Numero sci": st.column_config.TextColumn("Numero sci", width="small"),
+        "Numero sci": (
+            st.column_config.NumberColumn(
+                "Numero sci",
+                min_value=1,
+                step=1,
+                format="%d",
+                width="small",
+                help="Numero della coppia completa: es. 10 indica 10A/10B.",
+            )
+            if test_a_coppie
+            else st.column_config.TextColumn(
+                "Numero sci",
+                width="small",
+                help="Codice della singola asta/sci, ad esempio 10A o 10B.",
+            )
+        ),
         "Note": st.column_config.TextColumn("Note", width="large"),
     }
     visible_cols = ["_ordine_inserimento", "Posizione", "Numero sci"]
@@ -7763,7 +7831,12 @@ def render_form_test_rigature():
 
     righe_salva = []
     for _, r in st.session_state[state_key].iterrows():
-        numero_sci = str(r.get("Numero sci") or "").strip()
+        numero_sci_raw = r.get("Numero sci")
+        if test_a_coppie:
+            numero_coppia = _numero_coppia_rigature(numero_sci_raw)
+            numero_sci = "" if numero_coppia is None else str(numero_coppia)
+        else:
+            numero_sci = _numero_asta_rigature(numero_sci_raw)
         note = str(r.get("Note") or "").strip()
         pos_raw = r.get("Posizione")
         pos = None if pos_raw is None or pd.isna(pos_raw) or not str(pos_raw).strip() else int(float(pos_raw))
