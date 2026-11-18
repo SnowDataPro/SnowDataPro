@@ -23,7 +23,7 @@ st.set_page_config(
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "ski_material_lab.db")
-VERSIONE_DATABASE_APP = 18
+VERSIONE_DATABASE_APP = 19
 
 
 # ============================================================
@@ -272,6 +272,65 @@ def inizializza_database():
             larghezza_mm REAL,
             angolo_gradi REAL,
             url_fonte TEXT
+        )
+    """)
+
+    # Archivio gare: preparazione completa dello sci usata in gara.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS gare (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            data TEXT NOT NULL,
+            ora TEXT,
+            luogo TEXT NOT NULL,
+            tecnica TEXT NOT NULL,
+            tipologia_gara TEXT,
+            modello_sci TEXT,
+            temperatura_aria REAL,
+            temperatura_neve REAL,
+            umidita REAL,
+            meteo TEXT,
+            snow_origine TEXT,
+            snow_consistenza TEXT,
+            snow_fondo TEXT,
+            snow_umidita TEXT,
+            snow_forma_grano TEXT,
+            snow_granulometria TEXT,
+            snow_caratteristiche TEXT,
+            note_clima TEXT,
+            note TEXT,
+            creato_il TEXT NOT NULL
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS gara_prodotti (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            gara_id INTEGER NOT NULL,
+            famiglia TEXT NOT NULL,
+            ordine INTEGER NOT NULL,
+            ruolo TEXT,
+            prodotto_id INTEGER,
+            note TEXT,
+            FOREIGN KEY(gara_id) REFERENCES gare(id),
+            FOREIGN KEY(prodotto_id) REFERENCES catalogo_prodotti(id)
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS gara_rigature (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            gara_id INTEGER NOT NULL,
+            ordine INTEGER NOT NULL,
+            rigatura_prodotto_id INTEGER,
+            rigatura_prodotto_id_2 INTEGER,
+            direzione TEXT,
+            hand_drive INTEGER DEFAULT 0,
+            zona_da TEXT,
+            zona_a TEXT,
+            note TEXT,
+            FOREIGN KEY(gara_id) REFERENCES gare(id),
+            FOREIGN KEY(rigatura_prodotto_id) REFERENCES catalogo_prodotti(id),
+            FOREIGN KEY(rigatura_prodotto_id_2) REFERENCES catalogo_prodotti(id)
         )
     """)
 
@@ -6409,6 +6468,405 @@ def pagina_catalogo_prodotti(categoria, titolo, sottotitolo, tipi):
                                 st.rerun()
 
 
+
+# ============================================================
+# PAGINA GARE — PREPARAZIONE COMPLETA DELLO SCI
+# ============================================================
+
+def _gara_catalog_options(categoria):
+    df = leggi_df(
+        "SELECT id, nome, marca, tipo FROM catalogo_prodotti WHERE categoria = ? ORDER BY COALESCE(marca,''), nome",
+        (categoria,),
+    )
+    labels = ["—"]
+    id_by_label = {"—": None}
+    records = {}
+    if not df.empty:
+        for rec in df.to_dict("records"):
+            marca = _testo_pulito(rec.get("marca"))
+            nome = _testo_pulito(rec.get("nome"))
+            label = f"{marca} - {nome}" if marca else nome
+            if label and label not in id_by_label:
+                labels.append(label)
+                id_by_label[label] = int(rec["id"])
+                records[int(rec["id"])] = rec
+    return labels, id_by_label, records
+
+
+def _gara_rigature_options():
+    df = leggi_df(
+        "SELECT id, nome, marca FROM catalogo_prodotti WHERE categoria = 'rigatura' ORDER BY COALESCE(marca,''), nome"
+    )
+    items = []
+    by_label = {"—": (None, None)}
+    if not df.empty:
+        # Il nome breve e' intenzionale, come nei test rigature manuali.
+        count = df["nome"].fillna("").astype(str).str.strip().value_counts().to_dict()
+        for rec in df.to_dict("records"):
+            nome = _testo_pulito(rec.get("nome"))
+            if not nome:
+                continue
+            marca = _testo_pulito(rec.get("marca"))
+            label = nome if count.get(nome, 0) <= 1 else (f"{marca} - {nome}" if marca else nome)
+            items.append((int(rec["id"]), label))
+            by_label[label] = (int(rec["id"]), None)
+    # Come nei test: consente una coppia inseparabile nella stessa cella (es. V301/V302).
+    for i in range(len(items)):
+        for j in range(i + 1, len(items)):
+            ida, la = items[i]
+            idb, lb = items[j]
+            lab = f"{la}/{lb}"
+            by_label[lab] = (ida, idb)
+    labels = ["—"] + [x[1] for x in items] + [k for k in by_label if "/" in k]
+    return labels, by_label
+
+
+def _gara_empty_products(rows=5):
+    return pd.DataFrame({
+        "Strato / ruolo": ["—"] * rows,
+        "Prodotto": ["—"] * rows,
+        "Note": [""] * rows,
+    })
+
+
+def _gara_empty_rigature(rows=3):
+    return pd.DataFrame({
+        "Rigatura": ["—"] * rows,
+        "Direzione": ["—"] * rows,
+        "Hand drive": [False] * rows,
+        "Da": ["—"] * rows,
+        "A": ["—"] * rows,
+        "Note": [""] * rows,
+    })
+
+
+def _reset_gara_form():
+    for key in list(st.session_state.keys()):
+        if str(key).startswith("gara_"):
+            st.session_state.pop(key, None)
+
+
+def pagina_gare():
+    mostra_banner(
+        "Gare",
+        "Archivio delle preparazioni complete utilizzate in gara, con condizioni, prodotti, tenuta e rigature.",
+    )
+    _stile_moduli_test()
+
+    if "gara_notice" in st.session_state:
+        st.success(st.session_state.pop("gara_notice"))
+
+    with st.expander("➕ Nuova gara", expanded=bool(st.session_state.get("gara_keep_open", False))):
+        st.session_state["gara_keep_open"] = True
+        st.markdown('<div class="insert-test-title">Dati gara</div>', unsafe_allow_html=True)
+        st.caption("Registra le condizioni effettive e la preparazione completa usata quel giorno.")
+
+        c1, c2, c3, c4 = st.columns([1, 0.8, 1.1, 1.1])
+        with c1:
+            data_gara = st.date_input("Data", value=date.today(), key="gara_data")
+        with c2:
+            ora_gara = st.time_input("Ora", value=datetime.now().time().replace(second=0, microsecond=0), key="gara_ora")
+        with c3:
+            tecnica = st.selectbox("Tecnica", ["Skating", "Classico"], key="gara_tecnica")
+        with c4:
+            tipologia = st.selectbox(
+                "Tipologia gara",
+                ["Individuale", "Sprint", "Mass start", "Staffetta", "Team sprint", "Skiathlon", "Altro"],
+                key="gara_tipologia",
+            )
+
+        c1, c2, c3 = st.columns([1.2, 1, 1])
+        with c1:
+            luogo = st.text_input("Luogo *", placeholder="es. Davos (SUI)", key="gara_luogo")
+        with c2:
+            modello_sci = st.text_input("Modello sci", placeholder="es. Speedmax 3D", key="gara_modello_sci")
+        with c3:
+            meteo = st.selectbox(
+                "Meteo",
+                ["", "Sereno", "Parzialmente nuvoloso", "Coperto", "Precipitazioni nevose", "Precipitazioni piovose", "Nebbia/foschia"],
+                key="gara_meteo",
+                format_func=lambda x: "Seleziona meteo" if x == "" else x,
+            )
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            temp_aria = st.number_input("Temperatura aria (°C)", value=0.0, step=0.1, format="%.1f", key="gara_temp_aria")
+        with c2:
+            temp_neve = st.number_input("Temperatura neve (°C)", value=0.0, step=0.1, format="%.1f", key="gara_temp_neve")
+        with c3:
+            umidita = st.number_input("Umidità relativa (%)", min_value=0, max_value=100, value=70, step=1, key="gara_umidita")
+
+        note_clima = st.text_area(
+            "Note meteo / clima",
+            placeholder="Considerazioni sul giorno della gara o sui giorni precedenti: rigelo, pioggia, nevicate, vento, andamento termico...",
+            key="gara_note_clima",
+        )
+
+        st.markdown("### Classificazione neve")
+        snow = _snow_option_groups_standard()
+        a, b, c, d = st.columns(4)
+        with a:
+            snow_origine = st.multiselect("Origine", snow["Origine"], key="gara_snow_origine")
+        with b:
+            snow_consistenza = st.multiselect("Consistenza superficiale", snow["Consistenza"], key="gara_snow_consistenza")
+        with c:
+            snow_fondo = st.multiselect("Fondo sottostante", snow["Fondo sottostante"], key="gara_snow_fondo")
+        with d:
+            snow_umidita = st.multiselect("Umidità neve", snow["Umidità neve"], key="gara_snow_umidita")
+        a, b, c = st.columns(3)
+        with a:
+            snow_forma = st.multiselect("Forma grano", snow["Forma grano"], key="gara_snow_forma")
+        with b:
+            snow_gran = st.multiselect("Granulometria", snow["Granulometria"], key="gara_snow_gran")
+        with c:
+            snow_car = st.multiselect("Caratteristiche", snow["Caratteristiche"], key="gara_snow_car")
+
+        # Cataloghi condivisi con le altre pagine.
+        scroll_labels, scroll_ids, _ = _gara_catalog_options("scorrimento")
+        tenuta_labels, tenuta_ids, _ = _gara_catalog_options("tenuta")
+        rig_labels, rig_ids = _gara_rigature_options()
+
+        st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
+        st.markdown("### Prodotti di scorrimento")
+        st.caption("Inserisci gli strati realmente usati. Puoi ripetere lo stesso ruolo se la preparazione prevede più passaggi.")
+        scroll_roles = ["—", "Base", "Paraffina", "Top coating", "Liquido", "Altro"]
+        if "gara_scroll_table" not in st.session_state:
+            st.session_state["gara_scroll_table"] = _gara_empty_products(5)
+        edited_scroll = st.data_editor(
+            st.session_state["gara_scroll_table"],
+            hide_index=True,
+            use_container_width=True,
+            num_rows="dynamic",
+            key="gara_scroll_editor",
+            column_config={
+                "Strato / ruolo": st.column_config.SelectboxColumn("Strato / ruolo", options=scroll_roles, required=True),
+                "Prodotto": st.column_config.SelectboxColumn("Prodotto", options=scroll_labels, required=True),
+                "Note": st.column_config.TextColumn("Note"),
+            },
+        )
+        st.session_state["gara_scroll_table"] = edited_scroll.copy()
+
+        if tecnica == "Classico":
+            st.markdown("### Scioline di tenuta")
+            st.caption("Inserisci base e scioline/klister nell'ordine di applicazione effettivo.")
+            tenuta_roles = ["—", "Base kick wax", "Base klister", "Base spray", "Kick wax", "Klister", "Altro"]
+            if "gara_tenuta_table" not in st.session_state:
+                st.session_state["gara_tenuta_table"] = _gara_empty_products(5)
+            edited_tenuta = st.data_editor(
+                st.session_state["gara_tenuta_table"],
+                hide_index=True,
+                use_container_width=True,
+                num_rows="dynamic",
+                key="gara_tenuta_editor",
+                column_config={
+                    "Strato / ruolo": st.column_config.SelectboxColumn("Strato / ruolo", options=tenuta_roles, required=True),
+                    "Prodotto": st.column_config.SelectboxColumn("Prodotto", options=tenuta_labels, required=True),
+                    "Note": st.column_config.TextColumn("Note"),
+                },
+            )
+            st.session_state["gara_tenuta_table"] = edited_tenuta.copy()
+        else:
+            edited_tenuta = _gara_empty_products(0)
+
+        st.markdown("### Rigatura del giorno")
+        st.caption("Puoi inserire una rigatura singola o una coppia nella stessa cella, come nei test rigature manuali.")
+        zone = (
+            ["—", "Coda", "Fine attacco", "Inizio attacco", "Inizio canalina", "Punta"]
+            if tecnica == "Skating"
+            else ["—", "Coda", "Fine ponte", "Inizio ponte", "Inizio canalina", "Punta"]
+        )
+        if "gara_rig_table" not in st.session_state:
+            st.session_state["gara_rig_table"] = _gara_empty_rigature(2)
+        # Ripulisce eventuali zone incompatibili quando si cambia tecnica.
+        rig_df = st.session_state["gara_rig_table"].copy()
+        for col in ("Da", "A"):
+            if col in rig_df.columns:
+                rig_df[col] = rig_df[col].apply(lambda x: x if _testo_pulito(x) in zone else "—")
+        edited_rig = st.data_editor(
+            rig_df,
+            hide_index=True,
+            use_container_width=True,
+            num_rows="dynamic",
+            key="gara_rig_editor",
+            column_config={
+                "Rigatura": st.column_config.SelectboxColumn("Rigatura", options=rig_labels, required=True),
+                "Direzione": st.column_config.SelectboxColumn("Direzione", options=["—", "Λ", "V", "ΛV"], required=True),
+                "Hand drive": st.column_config.CheckboxColumn("Hand drive"),
+                "Da": st.column_config.SelectboxColumn("Da", options=zone, required=True),
+                "A": st.column_config.SelectboxColumn("A", options=zone, required=True),
+                "Note": st.column_config.TextColumn("Note"),
+            },
+        )
+        st.session_state["gara_rig_table"] = edited_rig.copy()
+
+        note_generali = st.text_area("Note preparazione", placeholder="Eventuali dettagli finali sulla preparazione o sulle modifiche fatte prima della partenza.", key="gara_note")
+
+        if st.button("Salva gara", type="primary", use_container_width=True, key="gara_save"):
+            if not str(luogo or "").strip():
+                st.error("Inserisci il luogo della gara.")
+            else:
+                conn = apri_connessione_database()
+                try:
+                    cur = conn.execute(
+                        """INSERT INTO gare (
+                            data, ora, luogo, tecnica, tipologia_gara, modello_sci,
+                            temperatura_aria, temperatura_neve, umidita, meteo,
+                            snow_origine, snow_consistenza, snow_fondo, snow_umidita,
+                            snow_forma_grano, snow_granulometria, snow_caratteristiche,
+                            note_clima, note, creato_il
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (
+                            data_gara.isoformat(), ora_gara.strftime("%H:%M"), str(luogo).strip(), tecnica, tipologia,
+                            str(modello_sci or "").strip(), float(temp_aria), float(temp_neve), int(umidita), str(meteo or ""),
+                            _compatta_neve_sessione(snow_origine, snow["Origine"]),
+                            _compatta_neve_sessione(snow_consistenza, snow["Consistenza"]),
+                            _compatta_neve_sessione(snow_fondo, snow["Fondo sottostante"]),
+                            _compatta_neve_sessione(snow_umidita, snow["Umidità neve"]),
+                            _compatta_neve_sessione(snow_forma, snow["Forma grano"]),
+                            _compatta_neve_sessione(snow_gran, snow["Granulometria"]),
+                            _compatta_neve_sessione(snow_car, snow["Caratteristiche"]),
+                            str(note_clima or "").strip(), str(note_generali or "").strip(), datetime.now().isoformat(timespec="seconds"),
+                        ),
+                    )
+                    gara_id = int(cur.lastrowid)
+                    for famiglia, table, id_map in [
+                        ("scorrimento", st.session_state.get("gara_scroll_table", pd.DataFrame()), scroll_ids),
+                        ("tenuta", st.session_state.get("gara_tenuta_table", pd.DataFrame()) if tecnica == "Classico" else pd.DataFrame(), tenuta_ids),
+                    ]:
+                        if table is None or table.empty:
+                            continue
+                        ordine = 0
+                        for rec in table.to_dict("records"):
+                            label = _testo_pulito(rec.get("Prodotto"))
+                            pid = id_map.get(label)
+                            if pid is None:
+                                continue
+                            ordine += 1
+                            conn.execute(
+                                "INSERT INTO gara_prodotti (gara_id, famiglia, ordine, ruolo, prodotto_id, note) VALUES (?, ?, ?, ?, ?, ?)",
+                                (gara_id, famiglia, ordine, _testo_pulito(rec.get("Strato / ruolo")), int(pid), _testo_pulito(rec.get("Note"))),
+                            )
+                    rig_table = st.session_state.get("gara_rig_table", pd.DataFrame())
+                    if rig_table is not None and not rig_table.empty:
+                        ordine = 0
+                        for rec in rig_table.to_dict("records"):
+                            lab = _testo_pulito(rec.get("Rigatura"))
+                            p1, p2 = rig_ids.get(lab, (None, None))
+                            if p1 is None:
+                                continue
+                            ordine += 1
+                            conn.execute(
+                                """INSERT INTO gara_rigature
+                                   (gara_id, ordine, rigatura_prodotto_id, rigatura_prodotto_id_2, direzione, hand_drive, zona_da, zona_a, note)
+                                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                                (gara_id, ordine, int(p1), int(p2) if p2 is not None else None,
+                                 _testo_pulito(rec.get("Direzione")) or "—", 1 if bool(rec.get("Hand drive")) else 0,
+                                 _testo_pulito(rec.get("Da")) or "—", _testo_pulito(rec.get("A")) or "—", _testo_pulito(rec.get("Note"))),
+                            )
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+                    raise
+                finally:
+                    conn.close()
+                _invalida_cache_dati()
+                _reset_gara_form()
+                st.session_state["gara_notice"] = "Gara salvata correttamente."
+                st.rerun()
+
+    st.markdown("### Archivio gare")
+    gare = leggi_df("SELECT * FROM gare ORDER BY data DESC, COALESCE(ora,'') DESC, id DESC")
+    if gare.empty:
+        st.info("Non hai ancora registrato gare.")
+        return
+
+    st.caption(f"Gare registrate: {len(gare)}")
+    for gara in gare.to_dict("records"):
+        gid = int(gara["id"])
+        title = f"{gara.get('data','')} · {gara.get('luogo','')} · {gara.get('tecnica','')} · {gara.get('tipologia_gara','')}"
+        with st.expander(title):
+            a, b, c, d = st.columns(4)
+            a.metric("T aria", f"{float(gara.get('temperatura_aria') or 0):.1f} °C")
+            b.metric("T neve", f"{float(gara.get('temperatura_neve') or 0):.1f} °C")
+            c.metric("UR", f"{int(gara.get('umidita') or 0)} %")
+            d.metric("Meteo", _testo_pulito(gara.get("meteo")) or "—")
+            st.markdown(f"**Modello sci:** {_testo_pulito(gara.get('modello_sci')) or '—'}")
+            snow_parts = []
+            for label, field in [
+                ("Origine", "snow_origine"), ("Consistenza", "snow_consistenza"), ("Fondo", "snow_fondo"),
+                ("Umidità", "snow_umidita"), ("Forma grano", "snow_forma_grano"),
+                ("Granulometria", "snow_granulometria"), ("Caratteristiche", "snow_caratteristiche")
+            ]:
+                val = _testo_pulito(gara.get(field))
+                if val:
+                    snow_parts.append(f"**{label}:** {val}")
+            if snow_parts:
+                st.markdown("  \n".join(snow_parts))
+            if _testo_pulito(gara.get("note_clima")):
+                st.info(f"Note meteo/clima: {gara.get('note_clima')}")
+
+            prod = leggi_df(
+                """SELECT gp.famiglia, gp.ordine, gp.ruolo, gp.note, p.marca, p.nome, p.tipo
+                   FROM gara_prodotti gp LEFT JOIN catalogo_prodotti p ON p.id = gp.prodotto_id
+                   WHERE gp.gara_id = ? ORDER BY gp.famiglia, gp.ordine""", (gid,)
+            )
+            if not prod.empty:
+                pshow = prod.copy()
+                pshow["Prodotto"] = pshow.apply(lambda r: f"{_testo_pulito(r.get('marca'))} - {_testo_pulito(r.get('nome'))}".strip(" -"), axis=1)
+                for famiglia, titolo in [("scorrimento", "Prodotti di scorrimento"), ("tenuta", "Scioline di tenuta")]:
+                    sub = pshow[pshow["famiglia"] == famiglia]
+                    if not sub.empty:
+                        st.markdown(f"#### {titolo}")
+                        st.dataframe(sub[["ruolo", "Prodotto", "note"]].rename(columns={"ruolo":"Strato / ruolo", "note":"Note"}), hide_index=True, use_container_width=True)
+
+            rig = leggi_df(
+                """SELECT gr.ordine, gr.direzione, gr.hand_drive, gr.zona_da, gr.zona_a, gr.note,
+                          p1.nome AS nome1, p2.nome AS nome2
+                   FROM gara_rigature gr
+                   LEFT JOIN catalogo_prodotti p1 ON p1.id = gr.rigatura_prodotto_id
+                   LEFT JOIN catalogo_prodotti p2 ON p2.id = gr.rigatura_prodotto_id_2
+                   WHERE gr.gara_id = ? ORDER BY gr.ordine""", (gid,)
+            )
+            if not rig.empty:
+                st.markdown("#### Rigature")
+                rigshow = []
+                for rr in rig.to_dict("records"):
+                    n1, n2 = _testo_pulito(rr.get("nome1")), _testo_pulito(rr.get("nome2"))
+                    rigshow.append({
+                        "Rigatura": f"{n1}/{n2}" if n2 else n1,
+                        "Direzione": _testo_pulito(rr.get("direzione")) or "—",
+                        "Hand drive": "Sì" if rr.get("hand_drive") else "—",
+                        "Zona": f"{_testo_pulito(rr.get('zona_da'))} → {_testo_pulito(rr.get('zona_a'))}",
+                        "Note": _testo_pulito(rr.get("note")),
+                    })
+                st.dataframe(pd.DataFrame(rigshow), hide_index=True, use_container_width=True)
+            if _testo_pulito(gara.get("note")):
+                st.caption(f"Note preparazione: {gara.get('note')}")
+
+            if st.button("Elimina gara", key=f"delete_gara_{gid}", type="secondary"):
+                st.session_state[f"confirm_delete_gara_{gid}"] = True
+                st.rerun()
+            if st.session_state.get(f"confirm_delete_gara_{gid}"):
+                st.warning("Confermi l'eliminazione definitiva di questa gara?")
+                x, y = st.columns(2)
+                if x.button("Sì, elimina", key=f"confirm_yes_gara_{gid}", type="primary", use_container_width=True):
+                    conn = apri_connessione_database()
+                    try:
+                        conn.execute("DELETE FROM gara_prodotti WHERE gara_id = ?", (gid,))
+                        conn.execute("DELETE FROM gara_rigature WHERE gara_id = ?", (gid,))
+                        conn.execute("DELETE FROM gare WHERE id = ?", (gid,))
+                        conn.commit()
+                    finally:
+                        conn.close()
+                    _invalida_cache_dati()
+                    st.session_state.pop(f"confirm_delete_gara_{gid}", None)
+                    st.session_state["gara_notice"] = "Gara eliminata correttamente."
+                    st.rerun()
+                if y.button("Annulla", key=f"confirm_no_gara_{gid}", use_container_width=True):
+                    st.session_state.pop(f"confirm_delete_gara_{gid}", None)
+                    st.rerun()
+
+
 # ============================================================
 # MENU LATERALE - SNOWDATAPRO / STILE SECTOR G2 LAB
 # ============================================================
@@ -9849,6 +10307,14 @@ if st.sidebar.button(
 ):
     cambia_pagina("Dashboard")
 
+if st.sidebar.button(
+    "Gare",
+    icon=":material/emoji_events:",
+    key="menu_gare",
+    use_container_width=True,
+    type="primary" if pagina == "Gare" else "secondary",
+):
+    cambia_pagina("Gare")
 
 
 with st.sidebar.expander(
@@ -9971,6 +10437,9 @@ with st.container(key="sector_page_content"):
         )
         st.markdown("### Dashboard")
         st.caption("Area lasciata volutamente libera. La costruiremo quando avremo abbastanza test e dati storici da riassumere in modo utile.")
+
+    elif pagina == "Gare":
+        pagina_gare()
 
     elif pagina == "Nuova sessione":
         mostra_banner(
