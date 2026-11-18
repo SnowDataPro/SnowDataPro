@@ -4028,6 +4028,16 @@ def pagina_trova_prodotto_migliore():
         ORDER BY marca COLLATE NOCASE, nome COLLATE NOCASE
     """, (categoria,))
 
+    # Nel motore "Trova prodotto migliore", per le scioline di tenuta
+    # proponiamo solo i prodotti finali da gara/test. Le basi servono alla
+    # preparazione dello sci ma non devono competere nel ranking con Kick wax
+    # e Klister.
+    if categoria == "tenuta" and not prodotti.empty:
+        tipi_tenuta_consigliabili = {"kick wax", "klister"}
+        prodotti = prodotti[
+            prodotti["tipo"].fillna("").astype(str).str.strip().str.lower().isin(tipi_tenuta_consigliabili)
+        ].reset_index(drop=True)
+
     def _lista_valori(valore, nome_gruppo=None):
         valori = [
             voce.strip()
