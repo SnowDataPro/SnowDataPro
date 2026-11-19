@@ -7896,6 +7896,8 @@ def _reset_tenuta_test_form_state():
         "tenuta_test_weather", "tenuta_test_climate_notes", "tenuta_test_origin",
         "tenuta_test_consistency", "tenuta_test_base", "tenuta_test_humidity",
         "tenuta_test_grain", "tenuta_test_size", "tenuta_test_features",
+        "tenuta_test_num_rows", "tenuta_test_product_columns",
+        "tenuta_test_table_data", "tenuta_test_table_n", "tenuta_test_table_version",
         "tenuta_test_form_keep_open",
     }
     for chiave in list(st.session_state.keys()):
@@ -8009,9 +8011,197 @@ def render_form_test_tenuta():
 
     st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
     st.markdown("#### Scioline testate")
+
+    test_a_coppie = metodo_test in ["Parallel", "Fotocellula"]
     st.caption(
-        "La parte superiore del test è pronta. La tabella delle scioline verrà costruita qui mantenendo la stessa logica professionale delle altre pagine test."
+        "Scegli quante preparazioni sono state testate e quali strati compongono ciascuna preparazione. "
+        "Le colonne prodotto vengono mostrate solo quando selezionate."
     )
+
+    c_righe, c_colonne = st.columns([1, 1.6])
+    with c_righe:
+        numero_righe = st.number_input(
+            "Numero di preparazioni testate",
+            min_value=1,
+            max_value=30,
+            value=6,
+            step=1,
+            format="%d",
+            key="tenuta_test_num_rows",
+            help=(
+                "Ogni riga rappresenta una coppia completa di sci nel test Parallel/Fotocellula."
+                if test_a_coppie
+                else "Ogni riga rappresenta uno sci/preparazione nel test ad Aste."
+            ),
+        )
+
+    colonne_disponibili = ["Base", "Sciolina", "Copertura"]
+    if "tenuta_test_product_columns" not in st.session_state:
+        st.session_state["tenuta_test_product_columns"] = ["Sciolina"]
+    with c_colonne:
+        colonne_selezionate = st.multiselect(
+            "Colonne della preparazione da inserire",
+            colonne_disponibili,
+            key="tenuta_test_product_columns",
+            help=(
+                "Seleziona gli strati realmente usati nel test. Esempio: Base + Sciolina + Copertura, "
+                "oppure soltanto Sciolina."
+            ),
+        )
+
+    colonne_attive = [c for c in colonne_disponibili if c in colonne_selezionate]
+    st.caption(
+        "Colonne visualizzate: "
+        + (" · ".join(colonne_attive) if colonne_attive else "nessuna colonna prodotto selezionata")
+    )
+
+    # Catalogo tenuta: Base usa soltanto i prodotti base; Sciolina e Copertura
+    # usano Kick wax e Klister. La colonna indica il ruolo nello sci, mentre il
+    # prodotto resta quello reale del catalogo SnowDataPro.
+    df_catalogo_tenuta = leggi_df(
+        """
+        SELECT id, nome, marca, tipo
+        FROM catalogo_prodotti
+        WHERE categoria = 'tenuta'
+        ORDER BY COALESCE(marca, ''), nome
+        """
+    )
+
+    def _label_tenuta(prod):
+        marca = str(prod.get("marca") or "").strip()
+        nome = str(prod.get("nome") or "").strip()
+        return f"{marca} - {nome}" if marca else nome
+
+    opzioni_base = ["—"]
+    opzioni_sciolina = ["—"]
+    if not df_catalogo_tenuta.empty:
+        for _, prod in df_catalogo_tenuta.iterrows():
+            label = _label_tenuta(prod)
+            if not label:
+                continue
+            tipo = str(prod.get("tipo") or "").strip()
+            if tipo in {"Base kick wax", "Base klister", "Base spray"} and label not in opzioni_base:
+                opzioni_base.append(label)
+            if tipo in {"Kick wax", "Klister"} and label not in opzioni_sciolina:
+                opzioni_sciolina.append(label)
+
+    n_righe = int(numero_righe)
+
+    def _tabella_tenuta_vuota(n):
+        return pd.DataFrame({
+            "_ordine_inserimento": list(range(n)),
+            "Posizione": [None] * n,
+            "Numero sci": [""] * n,
+            "Base": ["—"] * n,
+            "Sciolina": ["—"] * n,
+            "Copertura": ["—"] * n,
+            "Note": [""] * n,
+        })
+
+    stato_tabella_key = "tenuta_test_table_data"
+    stato_n_key = "tenuta_test_table_n"
+    versione_key = "tenuta_test_table_version"
+    if versione_key not in st.session_state:
+        st.session_state[versione_key] = 0
+
+    # Cambiare il numero di righe non cancella quanto già compilato.
+    if stato_tabella_key not in st.session_state or st.session_state.get(stato_n_key) != n_righe:
+        nuova = _tabella_tenuta_vuota(n_righe)
+        precedente = st.session_state.get(stato_tabella_key)
+        if isinstance(precedente, pd.DataFrame) and not precedente.empty:
+            precedente = precedente.copy().reset_index(drop=True)
+            if "_ordine_inserimento" in precedente.columns:
+                precedente = precedente.sort_values("_ordine_inserimento", kind="stable").reset_index(drop=True)
+            for idx in range(min(len(precedente), n_righe)):
+                for col in ["Posizione", "Numero sci", "Base", "Sciolina", "Copertura", "Note"]:
+                    if col in precedente.columns:
+                        nuova.at[idx, col] = precedente.at[idx, col]
+        st.session_state[stato_tabella_key] = nuova
+        st.session_state[stato_n_key] = n_righe
+        st.session_state[versione_key] += 1
+
+    df_tenuta = st.session_state[stato_tabella_key].copy()
+
+    # Le colonne non selezionate vengono realmente svuotate, così non rimangono
+    # prodotti nascosti se l'utente cambia struttura della preparazione.
+    for col in colonne_disponibili:
+        if col not in colonne_attive:
+            df_tenuta[col] = "—"
+
+    colonne_editor = ["_ordine_inserimento", "Posizione", "Numero sci", *colonne_attive, "Note"]
+    df_visibile = df_tenuta[colonne_editor].copy()
+
+    config_editor = {
+        "_ordine_inserimento": None,
+        "Posizione": st.column_config.NumberColumn(
+            "Posizione",
+            min_value=1,
+            max_value=n_righe,
+            step=1,
+            format="%d",
+            width="small",
+            help="Posizione finale della preparazione nel test.",
+        ),
+        "Numero sci": st.column_config.TextColumn(
+            "Numero coppia" if test_a_coppie else "Numero sci",
+            width="small",
+            help=(
+                "Inserisci solo il numero della coppia, ad esempio 10 = 10A/10B."
+                if test_a_coppie
+                else "Inserisci il codice dello sci, ad esempio 10A o 10B."
+            ),
+        ),
+        "Note": st.column_config.TextColumn("Note", width="large"),
+    }
+    if "Base" in colonne_attive:
+        config_editor["Base"] = st.column_config.SelectboxColumn(
+            "Base", options=opzioni_base, width="medium", required=False,
+        )
+    if "Sciolina" in colonne_attive:
+        config_editor["Sciolina"] = st.column_config.SelectboxColumn(
+            "Sciolina", options=opzioni_sciolina, width="medium", required=False,
+        )
+    if "Copertura" in colonne_attive:
+        config_editor["Copertura"] = st.column_config.SelectboxColumn(
+            "Copertura", options=opzioni_sciolina, width="medium", required=False,
+        )
+
+    firma_colonne = "_".join(c.lower() for c in colonne_attive) or "nessuna"
+    edited = st.data_editor(
+        df_visibile,
+        key=f"tenuta_test_editor_{n_righe}_{firma_colonne}_{st.session_state[versione_key]}",
+        hide_index=True,
+        use_container_width=True,
+        height=min(650, 38 + n_righe * 36),
+        column_config=config_editor,
+    )
+
+    completo = df_tenuta.copy()
+    for col in edited.columns:
+        completo[col] = edited[col].values
+    for col in colonne_disponibili:
+        if col not in colonne_attive:
+            completo[col] = "—"
+    st.session_state[stato_tabella_key] = completo.copy()
+
+    c_ordina, c_reset, _ = st.columns([1.4, 1.4, 4])
+    with c_ordina:
+        if st.button("↕ Riordina per classifica", use_container_width=True, key="tenuta_test_sort_by_rank"):
+            tab = st.session_state[stato_tabella_key].copy()
+            tab["_pos_sort"] = pd.to_numeric(tab["Posizione"], errors="coerce")
+            tab = tab.sort_values(
+                ["_pos_sort", "_ordine_inserimento"], na_position="last", kind="stable"
+            ).drop(columns=["_pos_sort"]).reset_index(drop=True)
+            st.session_state[stato_tabella_key] = tab
+            st.session_state[versione_key] += 1
+            st.rerun()
+    with c_reset:
+        if st.button("↺ Ripristina ordine inserimento", use_container_width=True, key="tenuta_test_reset_order"):
+            tab = st.session_state[stato_tabella_key].copy()
+            tab = tab.sort_values("_ordine_inserimento", kind="stable").reset_index(drop=True)
+            st.session_state[stato_tabella_key] = tab
+            st.session_state[versione_key] += 1
+            st.rerun()
 
 
 def _reset_rig_test_form_state():
