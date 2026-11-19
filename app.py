@@ -7887,6 +7887,133 @@ def _zona_rigatura_testo(zona_da, zona_a):
     return da or a or "—"
 
 
+def _reset_tenuta_test_form_state():
+    """Pulisce solo lo stato del form Test scioline di tenuta."""
+    chiavi_form = {
+        "tenuta_test_method", "tenuta_test_zero_reference", "tenuta_test_date",
+        "tenuta_test_time", "tenuta_test_place", "tenuta_test_air", "tenuta_test_snow",
+        "tenuta_test_rh", "tenuta_test_rh_missing", "tenuta_test_ski_model",
+        "tenuta_test_weather", "tenuta_test_climate_notes", "tenuta_test_origin",
+        "tenuta_test_consistency", "tenuta_test_base", "tenuta_test_humidity",
+        "tenuta_test_grain", "tenuta_test_size", "tenuta_test_features",
+        "tenuta_test_form_keep_open",
+    }
+    for chiave in list(st.session_state.keys()):
+        if chiave in chiavi_form or chiave.startswith("tenuta_test_editor_"):
+            st.session_state.pop(chiave, None)
+
+
+@st.fragment
+def render_form_test_tenuta():
+    """Prima parte del Test scioline di tenuta, identica al Test rigature fino alla tabella."""
+    snow_options = _snow_option_groups_standard()
+
+    st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="insert-test-title">Test scioline di tenuta</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="insert-test-caption">Registra metodo, condizioni ambientali, classificazione neve e Zero Test di riferimento prima di inserire le scioline testate.</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("#### Impostazione test")
+    c_metodo, c_zero = st.columns([1, 1.6])
+    with c_metodo:
+        metodo_test = st.selectbox(
+            "Metodo test", ["Aste", "Parallel", "Fotocellula"],
+            key="tenuta_test_method",
+            help="Seleziona il metodo con cui hai effettuato il test scioline di tenuta.",
+        )
+
+    df_zero = leggi_df(
+        """
+        SELECT s.id, s.data, s.ora, s.luogo, s.zero_batteria, s.zero_modello_sci
+        FROM sessioni s JOIN zero_test z ON z.sessione_id = s.id
+        WHERE COALESCE(s.zero_batteria, '') = 'Batteria scioline di tenuta'
+        GROUP BY s.id
+        ORDER BY s.data DESC, COALESCE(s.ora, '') DESC, s.id DESC
+        """
+    )
+    labels = ["Nessuno"]
+    ref_map = {"Nessuno": None}
+    for _, ref in df_zero.iterrows():
+        lab = f"{str(ref.get('data') or '')} · {str(ref.get('luogo') or '—')}"
+        mod = str(ref.get("zero_modello_sci") or "").strip()
+        if mod:
+            lab += f" · {mod}"
+        labels.append(lab)
+        ref_map[lab] = int(ref["id"])
+    with c_zero:
+        zero_label = st.selectbox(
+            "Zero Test di riferimento", labels, key="tenuta_test_zero_reference",
+            help="Solo riferimento informativo; non modifica i risultati del test.",
+        )
+    zero_ref_id = ref_map.get(zero_label)
+
+    st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
+    st.markdown("#### Dati sessione")
+    st.caption("Inserisci le condizioni effettive rilevate durante il test scioline di tenuta.")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        data_test = st.date_input("Data", value=date.today(), key="tenuta_test_date")
+        luogo = st.text_input("Luogo *", key="tenuta_test_place", placeholder="es. Davos (SUI)")
+    with c2:
+        ora = st.time_input("Ora", value=datetime.now().time().replace(second=0, microsecond=0), key="tenuta_test_time")
+        taria_txt = st.text_input("Temperatura aria (°C)", value="0.0", key="tenuta_test_air")
+    with c3:
+        tneve_txt = st.text_input("Temperatura neve (°C)", value="0.0", key="tenuta_test_snow")
+        if "tenuta_test_rh_missing" not in st.session_state:
+            st.session_state["tenuta_test_rh_missing"] = False
+        ur = st.number_input(
+            "Umidità relativa (%)", 0, 100, 70, 1,
+            disabled=bool(st.session_state.get("tenuta_test_rh_missing", False)),
+            key="tenuta_test_rh",
+        )
+        ur_missing = st.checkbox("Umidità non disponibile", key="tenuta_test_rh_missing")
+
+    c4, c5 = st.columns(2)
+    with c4:
+        modello_sci = st.text_input("Modello sci", key="tenuta_test_ski_model", placeholder="es. Speedmax 3D")
+    with c5:
+        meteo = st.selectbox(
+            "Meteo", METEO_OPZIONI, index=None,
+            placeholder="Seleziona meteo", key="tenuta_test_weather",
+        )
+
+    note_clima = st.text_area(
+        "Note",
+        key="tenuta_test_climate_notes",
+        placeholder="Considerazioni sul clima del giorno o dei giorni precedenti...",
+        help="Annota condizioni utili a interpretare il test: andamento termico, precipitazioni, rigelo, vento o altri aspetti dei giorni precedenti.",
+        height=90,
+    )
+
+    st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
+    st.markdown("#### Classificazione neve")
+    st.caption("Usa la stessa classificazione indipendente adottata nel catalogo e negli altri test SnowDataPro.")
+    s1, s2, s3, s4 = st.columns(4)
+    with s1:
+        origine = st.multiselect("Origine", snow_options["Origine"], key="tenuta_test_origin")
+    with s2:
+        consistenza = st.multiselect("Consistenza superficiale", snow_options["Consistenza"], key="tenuta_test_consistency")
+    with s3:
+        fondo = st.multiselect("Fondo sottostante", snow_options["Fondo sottostante"], key="tenuta_test_base")
+    with s4:
+        umidita_neve = st.multiselect("Umidità neve", snow_options["Umidità neve"], key="tenuta_test_humidity")
+    s5, s6, s7 = st.columns(3)
+    with s5:
+        forma = st.multiselect("Forma grano", snow_options["Forma grano"], key="tenuta_test_grain")
+    with s6:
+        granulometria = st.multiselect("Granulometria", snow_options["Granulometria"], key="tenuta_test_size")
+    with s7:
+        caratteristiche = st.multiselect("Caratteristiche", snow_options["Caratteristiche"], key="tenuta_test_features")
+
+    st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
+    st.markdown("#### Scioline testate")
+    st.caption(
+        "La parte superiore del test è pronta. La tabella delle scioline verrà costruita qui mantenendo la stessa logica professionale delle altre pagine test."
+    )
+
+
 def _reset_rig_test_form_state():
     """Pulisce solo lo stato del form Test rigature, preservando filtri/storico."""
     chiavi_form = {
@@ -9036,6 +9163,7 @@ def render_form_zero_test():
     batteria_opzioni = [
         "Batteria prodotti scorrimento",
         "Batteria rigature manuali",
+        "Batteria scioline di tenuta",
     ]
     batteria_db = (
         str(riga_sessione.get("zero_batteria") or "").strip()
@@ -11713,10 +11841,15 @@ with st.container(key="sector_page_content"):
     elif pagina == "Test scioline di tenuta":
         mostra_banner(
             "Test scioline di tenuta",
-            "Database cronologico dei test di tenuta. Il nuovo modulo di inserimento verrà costruito direttamente in questa pagina.",
+            "Database cronologico dei test scioline di tenuta. Inserimento e storico nello stesso punto.",
         )
+        _stile_moduli_test()
+
         st.markdown('<div class="section-title">Storico test scioline di tenuta</div>', unsafe_allow_html=True)
-        st.caption("Questa pagina è ora solo archivio. Quando definiamo il nuovo inserimento, comparirà in una tendina in alto come per Zero test e prodotti scorrimento.")
+        st.write("Archivio dei test scioline di tenuta. Apri un test per vedere condizioni e risultati.")
+
+        with st.expander("＋ Nuovo test scioline di tenuta", expanded=False):
+            render_form_test_tenuta()
 
         df_tenuta_storico = leggi_df(
             """
