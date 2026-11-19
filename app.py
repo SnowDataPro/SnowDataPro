@@ -9163,24 +9163,53 @@ def render_form_zero_test():
         ]]
 
     editor_key = f"insert_zero_matrix_{suffix_zero}"
-    df_base_zero = _applica_modifiche_editor_zero(
-        pd.DataFrame(righe_input),
-        st.session_state.get(editor_key),
+
+    # L'editor contiene SOLO i campi realmente modificabili. In precedenza nello
+    # stesso st.data_editor venivano reinserite anche Media / SD / Paio simile,
+    # che cambiano ad ogni battitura: questo poteva ricreare il DataFrame durante
+    # il rerun di Streamlit e rendere instabile l'inserimento dei tempi.
+    df_zero_input = pd.DataFrame(righe_input)[[
+        "Paio", "P1 (s)", "P2 (s)", "P3 (s)", "P4 (s)", "Note"
+    ]].copy()
+    for colonna in ["P1 (s)", "P2 (s)", "P3 (s)", "P4 (s)"]:
+        df_zero_input[colonna] = pd.to_numeric(df_zero_input[colonna], errors="coerce")
+    df_zero_input["Note"] = df_zero_input["Note"].fillna("").astype(str)
+
+    st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="insert-test-title">Zero test · 10 paia × 4 passaggi</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="insert-test-caption">Inserisci i quattro tempi nelle celle P1–P4. Media, deviazione standard e paio più simile vengono calcolati automaticamente sotto la tabella.</div>',
+        unsafe_allow_html=True,
     )
-    df_zero_completo = _aggiungi_metriche_zero(df_base_zero)
+
+    editor_zero = st.data_editor(
+        df_zero_input,
+        key=editor_key,
+        use_container_width=True,
+        hide_index=True,
+        num_rows="fixed",
+        height=455,
+        column_order=["Paio", "P1 (s)", "P2 (s)", "P3 (s)", "P4 (s)", "Note"],
+        column_config={
+            "Paio": st.column_config.NumberColumn("Paio", width="small", format="%d"),
+            "P1 (s)": st.column_config.NumberColumn("P1", min_value=0.0, step=0.01, format="%.2f", width="small", required=False),
+            "P2 (s)": st.column_config.NumberColumn("P2", min_value=0.0, step=0.01, format="%.2f", width="small", required=False),
+            "P3 (s)": st.column_config.NumberColumn("P3", min_value=0.0, step=0.01, format="%.2f", width="small", required=False),
+            "P4 (s)": st.column_config.NumberColumn("P4", min_value=0.0, step=0.01, format="%.2f", width="small", required=False),
+            "Note": st.column_config.TextColumn("Note", width="medium"),
+        },
+        disabled=["Paio"],
+    )
+
+    # Calcoli separati dall'editor: non modificano mai il DataFrame che l'utente
+    # sta compilando e quindi non interferiscono con focus o digitazione.
+    df_zero_completo = _aggiungi_metriche_zero(editor_zero)
     coppia_top = coppia_zero_test_piu_vicina(df_zero_completo)
     if coppia_top:
         paio_a, paio_b, delta_top = coppia_top
         coppia_label = f"{paio_a} ↔ {paio_b} · Δ {delta_top:.2f} s"
     else:
         coppia_label = "—"
-
-    st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
-    st.markdown('<div class="insert-test-title">Zero test · 10 paia × 4 passaggi</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="insert-test-caption">Inserisci i quattro tempi. Media, deviazione standard e paio più simile sono calcolati automaticamente.</div>',
-        unsafe_allow_html=True,
-    )
 
     st.markdown(
         f'<div class="zero-test-header-row">'
@@ -9191,26 +9220,21 @@ def render_form_zero_test():
         unsafe_allow_html=True,
     )
 
-    editor_zero = st.data_editor(
-        df_zero_completo,
-        key=editor_key,
+    st.caption("Risultati calcolati")
+    df_zero_riepilogo = df_zero_completo[[
+        "Paio", "Media (s)", "SD (s)", "Paio più simile", "Δ dal più simile (s)"
+    ]].copy()
+    st.dataframe(
+        df_zero_riepilogo,
         use_container_width=True,
         hide_index=True,
-        num_rows="fixed",
-        height=455,
         column_config={
-            "Paio": st.column_config.NumberColumn("Paio", width="small", format="%d"),
-            "P1 (s)": st.column_config.NumberColumn("P1", min_value=0.0, step=0.01, format="%.2f", width="small"),
-            "P2 (s)": st.column_config.NumberColumn("P2", min_value=0.0, step=0.01, format="%.2f", width="small"),
-            "P3 (s)": st.column_config.NumberColumn("P3", min_value=0.0, step=0.01, format="%.2f", width="small"),
-            "P4 (s)": st.column_config.NumberColumn("P4", min_value=0.0, step=0.01, format="%.2f", width="small"),
+            "Paio": st.column_config.NumberColumn("Paio", format="%d", width="small"),
             "Media (s)": st.column_config.NumberColumn("Media", format="%.2f", width="small"),
             "SD (s)": st.column_config.NumberColumn("Dev. std.", format="%.2f", width="small"),
             "Paio più simile": st.column_config.NumberColumn("Paio simile", format="%d", width="medium"),
             "Δ dal più simile (s)": st.column_config.NumberColumn("Δ simile", format="%.2f", width="medium"),
-            "Note": st.column_config.TextColumn("Note", width="small"),
         },
-        disabled=["Paio", "Media (s)", "SD (s)", "Paio più simile", "Δ dal più simile (s)"],
     )
 
     # ------------------------------------------------------------
