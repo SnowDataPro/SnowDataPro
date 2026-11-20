@@ -23,7 +23,7 @@ st.set_page_config(
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "ski_material_lab.db")
-VERSIONE_DATABASE_APP = 19
+VERSIONE_DATABASE_APP = 20
 
 
 # ============================================================
@@ -529,6 +529,56 @@ def inizializza_database():
           AND LOWER(TRIM(COALESCE(tipo_temperatura, ''))) NOT IN ('aria', 'aria / ambiente', 'ambiente', 'neve')
           AND (temp_min IS NOT NULL OR temp_max IS NOT NULL)
     """)
+
+    # Normalizzazione della classificazione dell'umidita' neve.
+    # Nuova nomenclatura operativa: Asciutta / Umida / Bagnata.
+    # La migrazione e' idempotente e aggiorna catalogo, test e gare gia' salvati.
+    for _tabella_umidita in ("catalogo_prodotti", "sessioni", "gare"):
+        conn.execute(
+            f"UPDATE {_tabella_umidita} SET snow_umidita = "
+            f"REPLACE(COALESCE(snow_umidita, ''), 'Molto bagnata', 'Bagnata') "
+            f"WHERE INSTR(COALESCE(snow_umidita, ''), 'Molto bagnata') > 0"
+        )
+        conn.execute(
+            f"UPDATE {_tabella_umidita} SET snow_umidita = "
+            f"REPLACE(COALESCE(snow_umidita, ''), 'Secca', 'Asciutta') "
+            f"WHERE INSTR(COALESCE(snow_umidita, ''), 'Secca') > 0"
+        )
+        # Se un record conteneva sia Bagnata sia Molto bagnata, dopo la
+        # conversione evitiamo duplicati nel campo multivalore.
+        for _duplicato_umidita in (
+            'Bagnata, Bagnata', 'Bagnata,Bagnata',
+            'Bagnata,  Bagnata', 'Bagnata; Bagnata', 'Bagnata;Bagnata',
+        ):
+            conn.execute(
+                f"UPDATE {_tabella_umidita} SET snow_umidita = "
+                f"REPLACE(COALESCE(snow_umidita, ''), ?, 'Bagnata') "
+                f"WHERE INSTR(COALESCE(snow_umidita, ''), ?) > 0",
+                (_duplicato_umidita, _duplicato_umidita),
+            )
+
+    # Aggiorna anche il riepilogo legacy del catalogo, ancora usato come
+    # fallback da alcuni filtri/storici di prodotti esistenti.
+    conn.execute(
+        "UPDATE catalogo_prodotti SET tipo_neve = "
+        "REPLACE(COALESCE(tipo_neve, ''), 'Molto bagnata', 'Bagnata') "
+        "WHERE INSTR(COALESCE(tipo_neve, ''), 'Molto bagnata') > 0"
+    )
+    conn.execute(
+        "UPDATE catalogo_prodotti SET tipo_neve = "
+        "REPLACE(COALESCE(tipo_neve, ''), 'Secca', 'Asciutta') "
+        "WHERE INSTR(COALESCE(tipo_neve, ''), 'Secca') > 0"
+    )
+    for _duplicato_tipo_neve in (
+        'Bagnata, Bagnata', 'Bagnata,Bagnata',
+        'Bagnata,  Bagnata', 'Bagnata; Bagnata', 'Bagnata;Bagnata',
+    ):
+        conn.execute(
+            "UPDATE catalogo_prodotti SET tipo_neve = "
+            "REPLACE(COALESCE(tipo_neve, ''), ?, 'Bagnata') "
+            "WHERE INSTR(COALESCE(tipo_neve, ''), ?) > 0",
+            (_duplicato_tipo_neve, _duplicato_tipo_neve),
+        )
 
     # Normalizzazione non distruttiva delle categorie storiche.
     conn.execute("""
@@ -3879,10 +3929,15 @@ SNOW_OPTION_GROUPS_STANDARD = {
         "Molle",
     ],
     "Fondo sottostante": ["Omogeneo / n.d.", "Compatto", "Ghiacciato"],
-    "Umidità neve": ["Secca", "Umida", "Bagnata", "Molto bagnata"],
+    "Umidità neve": ["Asciutta", "Umida", "Bagnata"],
     "Forma grano": ["Nuova", "In trasformazione", "Trasformata"],
     "Granulometria": ["Fine", "Media", "Grossa"],
     "Caratteristiche": ["Sporca", "Salata", "Ventata", "Lucida", "Cadente", "Vecchia", "Pioggia", "Variabile", "Aggressiva"],
+}
+
+SNOW_HUMIDITY_LEGACY_MAP = {
+    "Secca": "Asciutta",
+    "Molto bagnata": "Bagnata",
 }
 
 SNOW_GRAIN_LEGACY_MAP = {
@@ -3896,6 +3951,20 @@ SNOW_GRAIN_LEGACY_MAP = {
 
 def _snow_option_groups_standard():
     return {nome: list(valori) for nome, valori in SNOW_OPTION_GROUPS_STANDARD.items()}
+
+def _normalizza_umidita_neve_voce(voce):
+    testo = str(voce or "").strip()
+    return SNOW_HUMIDITY_LEGACY_MAP.get(testo, testo)
+
+
+def _normalizza_umidita_neve_valori(valori):
+    risultato = []
+    for voce in valori or []:
+        nuova = _normalizza_umidita_neve_voce(voce)
+        if nuova and nuova not in risultato:
+            risultato.append(nuova)
+    return risultato
+
 
 def _normalizza_forma_grano_voce(voce):
     testo = str(voce or "").strip()
