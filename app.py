@@ -8510,6 +8510,200 @@ def render_form_test_tenuta():
         st.rerun()
 
 
+
+def _render_test_tenuta_podium(df_righe, colonne_attive=None):
+    """Podio dei primi tre test tenuta con immagini dei prodotti della preparazione."""
+    if df_righe is None or df_righe.empty:
+        return
+
+    colonne_attive = [c for c in (colonne_attive or []) if c in ["Base", "Sciolina", "Copertura"]]
+    if not colonne_attive:
+        for c in ["Base", "Sciolina", "Copertura"]:
+            if c in df_righe.columns and df_righe[c].fillna("—").astype(str).str.strip().ne("—").any():
+                colonne_attive.append(c)
+
+    df_podio = df_righe.copy()
+    df_podio["_pos_num"] = pd.to_numeric(df_podio.get("Posizione"), errors="coerce")
+    df_podio = df_podio[df_podio["_pos_num"].isin([1, 2, 3])]
+    if df_podio.empty:
+        return
+    df_podio = df_podio.sort_values("_pos_num", kind="stable").drop_duplicates("_pos_num", keep="first")
+    records_by_pos = {int(r["_pos_num"]): r for r in df_podio.to_dict("records") if not pd.isna(r.get("_pos_num"))}
+
+    def _foto_src(foto_data, foto_mime):
+        valore = str(foto_data or "").strip()
+        if not valore or valore.lower() in {"none", "nan", "<na>"}:
+            return ""
+        mime = str(foto_mime or "image/png").strip() or "image/png"
+        return f"data:{html_escape(mime)};base64,{valore}"
+
+    config = {
+        "Base": ("Base", "base_foto", "base_mime"),
+        "Sciolina": ("Sciolina", "sciolina_foto", "sciolina_mime"),
+        "Copertura": ("Copertura", "copertura_foto", "copertura_mime"),
+    }
+
+    def _prodotti_record(record):
+        prodotti = []
+        for categoria in colonne_attive:
+            nome_key, foto_key, mime_key = config[categoria]
+            nome = str(record.get(nome_key) or "").strip()
+            if not nome or nome in {"—", "None", "nan", "<NA>"}:
+                continue
+            prodotti.append({
+                "categoria": categoria,
+                "nome": nome,
+                "src": _foto_src(record.get(foto_key), record.get(mime_key)),
+            })
+        return prodotti
+
+    def _tile(prodotto, singolo=False):
+        nome = html_escape(prodotto["nome"])
+        categoria = html_escape(prodotto["categoria"])
+        src = prodotto["src"]
+        img_cls = " tenuta-podium-single" if singolo else ""
+        if src:
+            visual = f'<img class="tenuta-podium-img{img_cls}" src="{src}" alt="{nome}">'
+        else:
+            visual = f'<div class="tenuta-podium-placeholder{img_cls}"><span>IMG</span></div>'
+        return (
+            '<div class="tenuta-podium-product">'
+            f'{visual}'
+            f'<div class="tenuta-podium-cat">{categoria}</div>'
+            f'<div class="tenuta-podium-name" title="{nome}">{nome}</div>'
+            '</div>'
+        )
+
+    def _entry(pos):
+        rec = records_by_pos.get(pos)
+        if not rec:
+            return '<div class="tenuta-podium-entry tenuta-podium-empty"></div>'
+        prodotti = _prodotti_record(rec)
+        singolo = len(prodotti) == 1
+        prodotti_html = ''.join(_tile(x, singolo=singolo) for x in prodotti)
+        if not prodotti_html:
+            prodotti_html = '<div class="tenuta-podium-name">—</div>'
+        cls = {1: "first", 2: "second", 3: "third"}[pos]
+        return (
+            f'<div class="tenuta-podium-entry tenuta-podium-{cls}">'
+            '<div class="tenuta-podium-card">'
+            f'<div class="tenuta-podium-grid count-{min(max(len(prodotti),1),3)}">{prodotti_html}</div>'
+            '</div>'
+            f'<div class="tenuta-podium-step tenuta-podium-step-{cls}"><span>{pos}°</span></div>'
+            '</div>'
+        )
+
+    st.markdown(
+        """
+        <style>
+        .tenuta-podium-wrap{margin:.35rem 0 1.15rem;padding:1rem 1rem .15rem;border:1px solid #d8dde3;border-radius:14px;background:linear-gradient(180deg,#fff 0%,#f7f9fa 100%);overflow-x:auto}
+        .tenuta-podium{min-width:760px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.8rem;align-items:end}
+        .tenuta-podium-entry{display:flex;flex-direction:column;justify-content:flex-end;min-width:0}
+        .tenuta-podium-card{background:#fff;border:1px solid #d8dde3;border-radius:12px 12px 8px 8px;padding:1rem .8rem .8rem;box-shadow:0 7px 18px rgba(31,41,51,.07);min-height:245px;display:flex;align-items:center;justify-content:center}
+        .tenuta-podium-first .tenuta-podium-card{border-color:#d8b54c;box-shadow:0 9px 24px rgba(31,41,51,.10)}
+        .tenuta-podium-grid{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.72rem;align-items:start}
+        .tenuta-podium-grid.count-1{grid-template-columns:1fr}
+        .tenuta-podium-grid.count-3{grid-template-columns:repeat(3,minmax(0,1fr));gap:.42rem}
+        .tenuta-podium-product{text-align:center;min-width:0}
+        .tenuta-podium-img,.tenuta-podium-placeholder{width:100%;height:108px;object-fit:contain;display:flex;align-items:center;justify-content:center;background:transparent;border:0;box-shadow:none;margin:0 auto .42rem;padding:0}
+        .tenuta-podium-img.tenuta-podium-single,.tenuta-podium-placeholder.tenuta-podium-single{width:154px;height:154px;max-width:94%}
+        .tenuta-podium-placeholder span{color:#a5b0b8;font-size:.62rem;font-weight:800;letter-spacing:.08em}
+        .tenuta-podium-cat{color:#8a98a3;font-size:.63rem;line-height:1.08;font-weight:800;text-transform:uppercase;letter-spacing:.04em;margin-bottom:.18rem}
+        .tenuta-podium-name{color:#263238;font-size:.84rem;line-height:1.16;font-weight:700;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+        .tenuta-podium-step{display:flex;align-items:flex-start;justify-content:center;border:1px solid #cfd6dc;border-top-width:4px;border-radius:5px 5px 0 0;background:#eef1f4;margin:.35rem .25rem 0;padding-top:.6rem;color:#263238;font-size:1.05rem;line-height:1;font-weight:850}
+        .tenuta-podium-step-first{height:108px;border-top-color:#d4af37;background:linear-gradient(180deg,#fffaf0 0%,#eef1f4 100%)}
+        .tenuta-podium-step-second{height:78px;border-top-color:#aeb7bf}
+        .tenuta-podium-step-third{height:58px;border-top-color:#b97a45}
+        .tenuta-podium-empty{min-height:1px}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="tenuta-podium-wrap"><div class="tenuta-podium">' + _entry(2) + _entry(1) + _entry(3) + '</div></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def _render_test_tenuta_detail_table(df_righe, colonne_attive=None):
+    """Tabella storico tenuta con hover immagine prodotto, coerente con i test scorrimento."""
+    if df_righe is None or df_righe.empty:
+        return
+
+    colonne_attive = [c for c in (colonne_attive or []) if c in ["Base", "Sciolina", "Copertura"]]
+    if not colonne_attive:
+        for c in ["Base", "Sciolina", "Copertura"]:
+            if c in df_righe.columns and df_righe[c].fillna("—").astype(str).str.strip().ne("—").any():
+                colonne_attive.append(c)
+
+    campi = {
+        "Base": ("Base", "base_foto", "base_mime"),
+        "Sciolina": ("Sciolina", "sciolina_foto", "sciolina_mime"),
+        "Copertura": ("Copertura", "copertura_foto", "copertura_mime"),
+    }
+    larghezza_minima = 330 + 168 * len(colonne_attive)
+
+    st.markdown(
+        f"""
+        <style>
+        .tenuta-test-table-wrap{{overflow-x:auto;overflow-y:visible;border:1px solid #dbe1e6;border-radius:14px;background:#fff;margin-top:.45rem;position:relative;z-index:1;box-shadow:0 8px 24px rgba(31,41,51,.05)}}
+        table.tenuta-test-table{{width:100%;min-width:{larghezza_minima}px;border-collapse:separate;border-spacing:0;table-layout:fixed;color:#263238;font-size:.76rem;font-weight:500}}
+        .tenuta-test-table th{{background:#f3f6f8;color:#51606b;font-size:.73rem;font-weight:700;text-align:center;padding:.58rem .42rem;border-bottom:1px solid #dbe1e6;white-space:nowrap}}
+        .tenuta-test-table td{{padding:.56rem .42rem;border-bottom:1px solid #e7ebef;vertical-align:middle;overflow:visible;position:relative;text-align:center;color:#263238}}
+        .tenuta-test-table tr:last-child td{{border-bottom:0}}
+        .tenuta-test-table th.col-pos,.tenuta-test-table td.col-pos{{width:70px}}
+        .tenuta-test-table th.col-sci,.tenuta-test-table td.col-sci{{width:95px}}
+        .tenuta-test-table th.col-prod,.tenuta-test-table td.col-prod{{width:168px}}
+        .tenuta-test-table th.col-note,.tenuta-test-table td.col-note{{width:175px}}
+        .tenuta-test-table tbody tr:nth-child(even) td{{background:#fbfcfd}}
+        .tenuta-test-table tbody tr.tenuta-winner td{{font-weight:750;background:#fdfefe}}
+        .tenuta-test-table .test-product-cell{{min-height:24px;display:flex;align-items:center;justify-content:center;position:relative}}
+        .tenuta-test-table .test-product-hover-target{{position:relative;display:inline-block;max-width:100%;cursor:zoom-in}}
+        .tenuta-test-table .test-product-hover-preview{{position:fixed;top:138px;right:32px;left:auto;bottom:auto;transform:translateY(8px) scale(.97);opacity:0;visibility:hidden;width:min(410px,30vw);height:min(410px,52vh);padding:14px;background:#fff;border:1px solid #c8d0d7;border-radius:15px;box-shadow:0 24px 64px rgba(31,41,51,.34);pointer-events:none;z-index:2147483647!important;transition:opacity .12s ease,transform .12s ease,visibility .12s ease}}
+        .tenuta-test-table .test-product-hover-preview img{{width:100%;height:100%;object-fit:contain;display:block}}
+        .tenuta-test-table .test-product-hover-target:hover .test-product-hover-preview{{opacity:1;visibility:visible;transform:translateY(0) scale(1)}}
+        .tenuta-test-table .test-product-name{{line-height:1.18;font-weight:500;font-size:.75rem;color:#263238;white-space:normal;overflow-wrap:anywhere;text-align:center;transition:color .12s ease}}
+        .tenuta-test-table .test-product-hover-target:hover .test-product-name{{color:#007ea8}}
+        .tenuta-test-table .test-product-empty{{color:#9aa7b2;text-align:center}}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    headers = '<th class="col-pos">Posizione</th><th class="col-sci">Numero sci</th>'
+    for c in colonne_attive:
+        headers += f'<th class="col-prod">{html_escape(c)}</th>'
+    headers += '<th class="col-note">Note</th>'
+
+    rows = []
+    for record in df_righe.to_dict("records"):
+        pos = record.get("Posizione")
+        try:
+            pos_txt = str(int(float(pos))) if pos is not None and not pd.isna(pos) else "—"
+        except Exception:
+            pos_txt = str(pos or "—")
+        try:
+            winner = int(float(pos)) == 1
+        except Exception:
+            winner = str(pos or "").strip() == "1"
+        row_cls = ' class="tenuta-winner"' if winner else ""
+        sci = html_escape(str(record.get("Numero sci") or "—"))
+        note = html_escape(str(record.get("Note") or "—"))
+        cells = []
+        for c in colonne_attive:
+            nome_key, foto_key, mime_key = campi[c]
+            cells.append(f'<td class="col-prod">{_product_cell_html(record.get(nome_key), record.get(foto_key), record.get(mime_key))}</td>')
+        rows.append(
+            f'<tr{row_cls}><td class="col-pos">{html_escape(pos_txt)}</td><td class="col-sci">{sci}</td>'
+            + ''.join(cells) + f'<td class="col-note">{note}</td></tr>'
+        )
+
+    st.markdown(
+        '<div class="tenuta-test-table-wrap"><table class="tenuta-test-table"><thead><tr>'
+        + headers + '</tr></thead><tbody>' + ''.join(rows) + '</tbody></table></div>',
+        unsafe_allow_html=True,
+    )
+
 def _reset_rig_test_form_state():
     """Pulisce solo lo stato del form Test rigature, preservando filtri/storico."""
     chiavi_form = {
@@ -12489,8 +12683,11 @@ with st.container(key="sector_page_content"):
                         """
                         SELECT t.posizione AS "Posizione", t.numero_sci AS "Numero sci",
                                CASE WHEN b.id IS NULL THEN '—' ELSE TRIM(COALESCE(b.marca,'') || CASE WHEN TRIM(COALESCE(b.marca,''))<>'' THEN ' - ' ELSE '' END || COALESCE(b.nome,'')) END AS "Base",
+                               b.foto_data AS base_foto, b.foto_mime AS base_mime,
                                CASE WHEN sw.id IS NULL THEN '—' ELSE TRIM(COALESCE(sw.marca,'') || CASE WHEN TRIM(COALESCE(sw.marca,''))<>'' THEN ' - ' ELSE '' END || COALESCE(sw.nome,'')) END AS "Sciolina",
+                               sw.foto_data AS sciolina_foto, sw.foto_mime AS sciolina_mime,
                                CASE WHEN c.id IS NULL THEN '—' ELSE TRIM(COALESCE(c.marca,'') || CASE WHEN TRIM(COALESCE(c.marca,''))<>'' THEN ' - ' ELSE '' END || COALESCE(c.nome,'')) END AS "Copertura",
+                               c.foto_data AS copertura_foto, c.foto_mime AS copertura_mime,
                                COALESCE(t.note,'') AS "Note"
                         FROM test_tenuta_preparazioni t
                         LEFT JOIN catalogo_prodotti b ON b.id=t.base_prodotto_id
@@ -12507,8 +12704,12 @@ with st.container(key="sector_page_content"):
                         except Exception: cols_attive=[]
                     visible=["Posizione","Numero sci"]+[c for c in ["Base","Sciolina","Copertura"] if c in cols_attive]+["Note"]
                     visible=[c for c in visible if c in df_det.columns]
+                    if not df_det.empty:
+                        st.markdown("##### Podio test")
+                        _render_test_tenuta_podium(df_det, cols_attive)
+
                     st.markdown("##### Dettaglio test")
-                    st.dataframe(df_det[visible], use_container_width=True, hide_index=True)
+                    _render_test_tenuta_detail_table(df_det, cols_attive)
 
                     try:
                         pdf_tenuta=_crea_pdf_test_tenuta(test, df_det[visible])
