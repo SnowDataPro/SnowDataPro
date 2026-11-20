@@ -692,7 +692,7 @@ def inizializza_database():
         ('In trasformazione (basso gradiente)', 'In trasformazione'),
         ('Trasformata (cristalli angolari)', 'Trasformata'),
         ('Trasformata (grani arrotondati)', 'Trasformata'),
-        ('Mista nuova e trasformata', 'In trasformazione'),
+        ('Mista nuova e trasformata', 'Mista'),
     ]
     for _vecchio_grano, _nuovo_grano in _grain_replacements:
         conn.execute(
@@ -3930,8 +3930,8 @@ SNOW_OPTION_GROUPS_STANDARD = {
     ],
     "Fondo sottostante": ["Omogeneo / n.d.", "Compatto", "Ghiacciato"],
     "Umidità neve": ["Asciutta", "Umida", "Bagnata"],
-    "Forma grano": ["Nuova", "In trasformazione", "Trasformata"],
-    "Granulometria": ["Fine", "Media", "Grossa"],
+    "Forma grano": ["Nuova", "In trasformazione", "Trasformata", "Mista"],
+    "Granulometria": ["Fine", "Media", "Grossa", "Mista"],
     "Caratteristiche": ["Sporca", "Salata", "Ventata", "Lucida", "Cadente", "Vecchia", "Pioggia", "Variabile", "Aggressiva"],
 }
 
@@ -3946,7 +3946,7 @@ SNOW_GRAIN_LEGACY_MAP = {
     "In trasformazione (basso gradiente)": "In trasformazione",
     "Trasformata (cristalli angolari)": "Trasformata",
     "Trasformata (grani arrotondati)": "Trasformata",
-    "Mista nuova e trasformata": "In trasformazione",
+    "Mista nuova e trasformata": "Mista",
 }
 
 def _snow_option_groups_standard():
