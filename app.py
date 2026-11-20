@@ -241,6 +241,33 @@ def inizializza_database():
         )
     """)
 
+    # Nuova struttura dei test scioline di tenuta, coerente con i test scorrimento/rigature.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS test_tenuta_preparazioni (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sessione_id INTEGER NOT NULL,
+            posizione INTEGER,
+            numero_sci TEXT,
+            base_prodotto_id INTEGER,
+            sciolina_prodotto_id INTEGER,
+            copertura_prodotto_id INTEGER,
+            note TEXT,
+            creato_il TEXT NOT NULL,
+            FOREIGN KEY(sessione_id) REFERENCES sessioni(id),
+            FOREIGN KEY(base_prodotto_id) REFERENCES catalogo_prodotti(id),
+            FOREIGN KEY(sciolina_prodotto_id) REFERENCES catalogo_prodotti(id),
+            FOREIGN KEY(copertura_prodotto_id) REFERENCES catalogo_prodotti(id)
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS test_tenuta_config (
+            sessione_id INTEGER PRIMARY KEY,
+            colonne_attive TEXT,
+            FOREIGN KEY(sessione_id) REFERENCES sessioni(id)
+        )
+    """)
+
     conn.execute("""
         CREATE TABLE IF NOT EXISTS catalogo_prodotti (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -7899,16 +7926,109 @@ def _reset_tenuta_test_form_state():
         "tenuta_test_num_rows", "tenuta_test_product_columns",
         "tenuta_test_table_data", "tenuta_test_table_n", "tenuta_test_table_version",
         "tenuta_test_form_keep_open",
+        "tenuta_test_edit_session_id", "tenuta_test_edit_loaded_id",
+        "tenuta_test_edit_load_requested",
     }
     for chiave in list(st.session_state.keys()):
         if chiave in chiavi_form or chiave.startswith("tenuta_test_editor_"):
             st.session_state.pop(chiave, None)
 
 
+def _avvia_modifica_test_tenuta(sessione_id):
+    """Apre un test tenuta esistente caricando tutti i campi nel form."""
+    _reset_tenuta_test_form_state()
+    st.session_state["tenuta_test_edit_session_id"] = int(sessione_id)
+    st.session_state["tenuta_test_edit_load_requested"] = True
+    st.session_state["tenuta_test_form_keep_open"] = True
+
+
+def _mantieni_aperto_form_tenuta():
+    st.session_state["tenuta_test_form_keep_open"] = True
+
+
 @st.fragment
 def render_form_test_tenuta():
-    """Prima parte del Test scioline di tenuta, identica al Test rigature fino alla tabella."""
+    """Inserimento/modifica Test scioline di tenuta, coerente con le altre pagine test."""
     snow_options = _snow_option_groups_standard()
+    edit_id = st.session_state.get("tenuta_test_edit_session_id")
+    edit_row = None
+    needs_load = False
+    edit_prep = pd.DataFrame()
+
+    if edit_id is not None:
+        df_edit = leggi_df(
+            """
+            SELECT id, data, ora, luogo, temperatura_aria, temperatura_neve,
+                   umidita, meteo, snow_origine, snow_consistenza, snow_fondo, snow_umidita,
+                   snow_forma_grano, snow_granulometria, snow_caratteristiche,
+                   zero_modello_sci, tipo_test, zero_riferimento_id, note_clima
+            FROM sessioni WHERE id = ?
+            """, (int(edit_id),)
+        )
+        if not df_edit.empty:
+            edit_row = df_edit.iloc[0]
+            needs_load = (
+                bool(st.session_state.get("tenuta_test_edit_load_requested", False))
+                or st.session_state.get("tenuta_test_edit_loaded_id") != int(edit_id)
+            )
+        else:
+            st.session_state.pop("tenuta_test_edit_session_id", None)
+            st.session_state.pop("tenuta_test_edit_loaded_id", None)
+            edit_id = None
+
+    if needs_load and edit_row is not None:
+        metodo = str(edit_row.get("tipo_test") or "Aste").replace("Test scioline di tenuta · ", "").strip()
+        if metodo == "Asta":
+            metodo = "Aste"
+        st.session_state["tenuta_test_method"] = metodo if metodo in ["Aste", "Parallel", "Fotocellula"] else "Aste"
+        try:
+            st.session_state["tenuta_test_date"] = pd.to_datetime(edit_row.get("data")).date()
+        except Exception:
+            st.session_state["tenuta_test_date"] = date.today()
+        try:
+            st.session_state["tenuta_test_time"] = datetime.strptime(str(edit_row.get("ora") or "00:00")[:5], "%H:%M").time()
+        except Exception:
+            st.session_state["tenuta_test_time"] = datetime.now().time().replace(second=0, microsecond=0)
+        st.session_state["tenuta_test_place"] = str(edit_row.get("luogo") or "")
+        st.session_state["tenuta_test_air"] = _formatta_temperatura_1d(edit_row.get("temperatura_aria"))
+        st.session_state["tenuta_test_snow"] = _formatta_temperatura_1d(edit_row.get("temperatura_neve"))
+        ur_edit = edit_row.get("umidita")
+        st.session_state["tenuta_test_rh_missing"] = bool(pd.isna(ur_edit))
+        st.session_state["tenuta_test_rh"] = 70 if pd.isna(ur_edit) else int(round(float(ur_edit)))
+        st.session_state["tenuta_test_ski_model"] = str(edit_row.get("zero_modello_sci") or "")
+        meteo_edit = str(edit_row.get("meteo") or "").strip()
+        if meteo_edit == "Soleggiato":
+            meteo_edit = "Sereno"
+        st.session_state["tenuta_test_weather"] = meteo_edit if meteo_edit in METEO_OPZIONI else None
+        st.session_state["tenuta_test_climate_notes"] = str(edit_row.get("note_clima") or "")
+        st.session_state["tenuta_test_origin"] = _valori_sessione_neve(edit_row.get("snow_origine"), snow_options["Origine"])
+        st.session_state["tenuta_test_consistency"] = _valori_sessione_neve(edit_row.get("snow_consistenza"), snow_options["Consistenza"])
+        st.session_state["tenuta_test_base"] = _valori_sessione_neve(edit_row.get("snow_fondo"), snow_options["Fondo sottostante"])
+        st.session_state["tenuta_test_humidity"] = _valori_sessione_neve(edit_row.get("snow_umidita"), snow_options["Umidità neve"])
+        st.session_state["tenuta_test_grain"] = _valori_sessione_neve(edit_row.get("snow_forma_grano"), snow_options["Forma grano"])
+        st.session_state["tenuta_test_size"] = _valori_sessione_neve(edit_row.get("snow_granulometria"), snow_options["Granulometria"])
+        st.session_state["tenuta_test_features"] = _valori_sessione_neve(edit_row.get("snow_caratteristiche"), snow_options["Caratteristiche"])
+
+        edit_prep = leggi_df(
+            """SELECT id, posizione, numero_sci, base_prodotto_id, sciolina_prodotto_id,
+                      copertura_prodotto_id, note
+               FROM test_tenuta_preparazioni
+               WHERE sessione_id = ? ORDER BY id""",
+            (int(edit_id),),
+        )
+        st.session_state["tenuta_test_num_rows"] = max(1, len(edit_prep))
+        df_cfg = leggi_df("SELECT colonne_attive FROM test_tenuta_config WHERE sessione_id = ?", (int(edit_id),))
+        cols_edit = []
+        if not df_cfg.empty:
+            try:
+                cols_edit = [x for x in json.loads(str(df_cfg.iloc[0].get("colonne_attive") or "[]")) if x in ["Base", "Sciolina", "Copertura"]]
+            except Exception:
+                cols_edit = []
+        if not cols_edit and not edit_prep.empty:
+            if edit_prep["base_prodotto_id"].notna().any(): cols_edit.append("Base")
+            if edit_prep["sciolina_prodotto_id"].notna().any(): cols_edit.append("Sciolina")
+            if edit_prep["copertura_prodotto_id"].notna().any(): cols_edit.append("Copertura")
+        st.session_state["tenuta_test_product_columns"] = cols_edit or ["Sciolina"]
 
     st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
     st.markdown('<div class="insert-test-title">Test scioline di tenuta</div>', unsafe_allow_html=True)
@@ -7916,6 +8036,15 @@ def render_form_test_tenuta():
         '<div class="insert-test-caption">Registra metodo, condizioni ambientali, classificazione neve e Zero Test di riferimento prima di inserire le scioline testate.</div>',
         unsafe_allow_html=True,
     )
+
+    if edit_id is not None:
+        ce1, ce2 = st.columns([4, 1.25])
+        with ce1:
+            st.info("Modalità modifica attiva: stai aggiornando un test scioline di tenuta già presente nello storico.")
+        with ce2:
+            if st.button("Annulla modifica", use_container_width=True, key="cancel_tenuta_test_edit"):
+                _reset_tenuta_test_form_state()
+                st.rerun()
 
     st.markdown("#### Impostazione test")
     c_metodo, c_zero = st.columns([1, 1.6])
@@ -7944,6 +8073,15 @@ def render_form_test_tenuta():
             lab += f" · {mod}"
         labels.append(lab)
         ref_map[lab] = int(ref["id"])
+    if needs_load and edit_row is not None:
+        rid = edit_row.get("zero_riferimento_id")
+        ref_label = "Nessuno"
+        if rid is not None and not pd.isna(rid):
+            for lab, val in ref_map.items():
+                if val == int(rid):
+                    ref_label = lab
+                    break
+        st.session_state["tenuta_test_zero_reference"] = ref_label
     with c_zero:
         zero_label = st.selectbox(
             "Zero Test di riferimento", labels, key="tenuta_test_zero_reference",
@@ -8074,16 +8212,43 @@ def render_form_test_tenuta():
 
     opzioni_base = ["—"]
     opzioni_sciolina = ["—"]
+    prodotto_id_da_label = {"—": None}
+    prodotto_label_da_id = {}
     if not df_catalogo_tenuta.empty:
         for _, prod in df_catalogo_tenuta.iterrows():
             label = _label_tenuta(prod)
             if not label:
                 continue
+            pid = int(prod["id"])
+            prodotto_id_da_label[label] = pid
+            prodotto_label_da_id[pid] = label
             tipo = str(prod.get("tipo") or "").strip()
             if tipo in {"Base kick wax", "Base klister", "Base spray"} and label not in opzioni_base:
                 opzioni_base.append(label)
             if tipo in {"Kick wax", "Klister"} and label not in opzioni_sciolina:
                 opzioni_sciolina.append(label)
+
+    # Completa il caricamento della tabella in modalità modifica dopo aver creato
+    # la mappa ID -> nome prodotto del catalogo.
+    if needs_load and edit_id is not None:
+        righe_edit = []
+        for idx, r in edit_prep.reset_index(drop=True).iterrows():
+            pos = r.get("posizione")
+            righe_edit.append({
+                "_ordine_inserimento": idx,
+                "Posizione": None if pd.isna(pos) else int(pos),
+                "Numero sci": str(r.get("numero_sci") or ""),
+                "Base": prodotto_label_da_id.get(int(r["base_prodotto_id"])) if pd.notna(r.get("base_prodotto_id")) else "—",
+                "Sciolina": prodotto_label_da_id.get(int(r["sciolina_prodotto_id"])) if pd.notna(r.get("sciolina_prodotto_id")) else "—",
+                "Copertura": prodotto_label_da_id.get(int(r["copertura_prodotto_id"])) if pd.notna(r.get("copertura_prodotto_id")) else "—",
+                "Note": str(r.get("note") or ""),
+            })
+        if righe_edit:
+            st.session_state["tenuta_test_table_data"] = pd.DataFrame(righe_edit)
+            st.session_state["tenuta_test_table_n"] = len(righe_edit)
+        st.session_state["tenuta_test_table_version"] = int(st.session_state.get("tenuta_test_table_version", 0)) + 1
+        st.session_state["tenuta_test_edit_loaded_id"] = int(edit_id)
+        st.session_state["tenuta_test_edit_load_requested"] = False
 
     n_righe = int(numero_righe)
 
@@ -8174,6 +8339,7 @@ def render_form_test_tenuta():
         use_container_width=True,
         height=min(650, 38 + n_righe * 36),
         column_config=config_editor,
+        on_change=_mantieni_aperto_form_tenuta,
     )
 
     completo = df_tenuta.copy()
@@ -8202,6 +8368,146 @@ def render_form_test_tenuta():
             st.session_state[stato_tabella_key] = tab
             st.session_state[versione_key] += 1
             st.rerun()
+
+    st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
+    salva_tenuta = st.button(
+        "Salva modifiche test" if edit_id is not None else "Salva test scioline di tenuta",
+        type="primary",
+        use_container_width=True,
+        key="save_tenuta_test",
+    )
+
+    if salva_tenuta:
+        if not colonne_attive:
+            st.error("Seleziona almeno una colonna tra Base, Sciolina e Copertura.")
+            return
+        if not str(luogo or "").strip():
+            st.error("Inserisci il luogo del test.")
+            return
+        try:
+            temp_aria_val = _parse_temperatura_1d(taria_txt)
+            temp_neve_val = _parse_temperatura_1d(tneve_txt)
+        except Exception:
+            st.error("Controlla temperatura aria e temperatura neve. Usa valori come -3.0 o 0.0.")
+            return
+
+        tab_da_salvare = st.session_state[stato_tabella_key].copy()
+        preparazioni = []
+        for _, riga in tab_da_salvare.iterrows():
+            numero_sci = str(riga.get("Numero sci") or "").strip()
+            base_label = str(riga.get("Base") or "—").strip()
+            sciolina_label = str(riga.get("Sciolina") or "—").strip()
+            copertura_label = str(riga.get("Copertura") or "—").strip()
+            note_riga = str(riga.get("Note") or "").strip()
+            posizione_raw = riga.get("Posizione")
+            posizione = None
+            if posizione_raw is not None and not pd.isna(posizione_raw) and str(posizione_raw).strip():
+                posizione = int(float(posizione_raw))
+            if (
+                not numero_sci
+                and base_label in ("", "—", "None")
+                and sciolina_label in ("", "—", "None")
+                and copertura_label in ("", "—", "None")
+                and not note_riga
+            ):
+                continue
+            preparazioni.append({
+                "posizione": posizione,
+                "numero_sci": numero_sci,
+                "base_id": prodotto_id_da_label.get(base_label),
+                "sciolina_id": prodotto_id_da_label.get(sciolina_label),
+                "copertura_id": prodotto_id_da_label.get(copertura_label),
+                "note": note_riga,
+            })
+
+        if not preparazioni:
+            st.error("Compila almeno una riga della tabella prima di salvare il test.")
+            return
+
+        conn = apri_connessione_database()
+        try:
+            if edit_id is not None:
+                sessione_id = int(edit_id)
+                conn.execute(
+                    """UPDATE sessioni
+                       SET data=?, ora=?, luogo=?, temperatura_aria=?, temperatura_neve=?,
+                           umidita=?, meteo=?, snow_origine=?, snow_consistenza=?, snow_fondo=?,
+                           snow_umidita=?, snow_forma_grano=?, snow_granulometria=?, snow_caratteristiche=?,
+                           zero_modello_sci=?, tipo_test=?, zero_riferimento_id=?, note_clima=?
+                       WHERE id=?""",
+                    (
+                        data_test.isoformat(), ora.strftime("%H:%M"), str(luogo).strip(),
+                        temp_aria_val, temp_neve_val, None if ur_missing else int(ur), meteo or "",
+                        _compatta_neve_sessione(origine, snow_options["Origine"]),
+                        _compatta_neve_sessione(consistenza, snow_options["Consistenza"]),
+                        _compatta_neve_sessione(fondo, snow_options["Fondo sottostante"]),
+                        _compatta_neve_sessione(umidita_neve, snow_options["Umidità neve"]),
+                        _compatta_neve_sessione(forma, snow_options["Forma grano"]),
+                        _compatta_neve_sessione(granulometria, snow_options["Granulometria"]),
+                        _compatta_neve_sessione(caratteristiche, snow_options["Caratteristiche"]),
+                        str(modello_sci or "").strip(),
+                        f"Test scioline di tenuta · {metodo_test}",
+                        int(zero_ref_id) if zero_ref_id is not None else None,
+                        str(note_clima or "").strip(),
+                        sessione_id,
+                    ),
+                )
+                conn.execute("DELETE FROM test_tenuta_preparazioni WHERE sessione_id=?", (sessione_id,))
+                conn.execute("DELETE FROM test_tenuta_config WHERE sessione_id=?", (sessione_id,))
+            else:
+                cur = conn.execute(
+                    """INSERT INTO sessioni (
+                           data, ora, luogo, temperatura_aria, temperatura_neve, umidita, meteo,
+                           tipo_neve, condizione_pista, snow_origine, snow_consistenza, snow_fondo,
+                           snow_umidita, snow_forma_grano, snow_granulometria, snow_caratteristiche,
+                           zero_modello_sci, tipo_test, zero_riferimento_id, note, note_clima, creato_il
+                       ) VALUES (?, ?, ?, ?, ?, ?, ?, '', '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?)""",
+                    (
+                        data_test.isoformat(), ora.strftime("%H:%M"), str(luogo).strip(),
+                        temp_aria_val, temp_neve_val, None if ur_missing else int(ur), meteo or "",
+                        _compatta_neve_sessione(origine, snow_options["Origine"]),
+                        _compatta_neve_sessione(consistenza, snow_options["Consistenza"]),
+                        _compatta_neve_sessione(fondo, snow_options["Fondo sottostante"]),
+                        _compatta_neve_sessione(umidita_neve, snow_options["Umidità neve"]),
+                        _compatta_neve_sessione(forma, snow_options["Forma grano"]),
+                        _compatta_neve_sessione(granulometria, snow_options["Granulometria"]),
+                        _compatta_neve_sessione(caratteristiche, snow_options["Caratteristiche"]),
+                        str(modello_sci or "").strip(),
+                        f"Test scioline di tenuta · {metodo_test}",
+                        int(zero_ref_id) if zero_ref_id is not None else None,
+                        str(note_clima or "").strip(),
+                        datetime.now().isoformat(timespec="seconds"),
+                    ),
+                )
+                sessione_id = int(cur.lastrowid)
+
+            conn.execute(
+                "INSERT INTO test_tenuta_config (sessione_id, colonne_attive) VALUES (?, ?)",
+                (sessione_id, json.dumps(colonne_attive, ensure_ascii=False)),
+            )
+            for prep in preparazioni:
+                conn.execute(
+                    """INSERT INTO test_tenuta_preparazioni (
+                           sessione_id, posizione, numero_sci, base_prodotto_id,
+                           sciolina_prodotto_id, copertura_prodotto_id, note, creato_il
+                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        sessione_id, prep["posizione"], prep["numero_sci"], prep["base_id"],
+                        prep["sciolina_id"], prep["copertura_id"], prep["note"],
+                        datetime.now().isoformat(timespec="seconds"),
+                    ),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+        _invalida_cache_dati()
+        st.session_state["tenuta_test_history_notice"] = (
+            "Test scioline di tenuta modificato correttamente." if edit_id is not None
+            else "Test scioline di tenuta salvato correttamente."
+        )
+        _reset_tenuta_test_form_state()
+        st.rerun()
 
 
 def _reset_rig_test_form_state():
@@ -9190,6 +9496,82 @@ def _render_tabella_rigature(df_rows, df_comp):
         """,
         unsafe_allow_html=True,
     )
+
+
+def _nome_file_pdf_test_tenuta(test):
+    data = str(test.get("data") or "test").strip().replace("/", "-")
+    luogo = re.sub(r"[^A-Za-z0-9_-]+", "_", str(test.get("luogo") or "").strip()).strip("_")
+    metodo = str(test.get("tipo_test") or "").replace("Test scioline di tenuta · ", "").strip()
+    metodo = re.sub(r"[^A-Za-z0-9_-]+", "_", metodo).strip("_")
+    parti = ["SnowDataPro", "test_tenuta", data]
+    if luogo: parti.append(luogo)
+    if metodo: parti.append(metodo)
+    return "_".join(parti) + ".pdf"
+
+
+def _crea_pdf_test_tenuta(test, df_righe):
+    """PDF compatto e professionale del Test scioline di tenuta."""
+    from io import BytesIO
+    from xml.sax.saxutils import escape as xml_escape
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_LEFT, TA_CENTER
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+
+    def pv(v, default="-"):
+        if v is None: return default
+        try:
+            if pd.isna(v): return default
+        except Exception:
+            pass
+        t = str(v).strip()
+        return t if t else default
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=12*mm, leftMargin=12*mm, topMargin=12*mm, bottomMargin=12*mm, title="SnowDataPro - Test scioline di tenuta", author="SnowDataPro")
+    styles = getSampleStyleSheet()
+    title = ParagraphStyle("TTitle", parent=styles["Title"], fontName="Helvetica-Bold", fontSize=18, leading=21, textColor=colors.HexColor("#1f2933"), spaceAfter=5*mm, alignment=TA_LEFT)
+    section = ParagraphStyle("TSection", parent=styles["Heading2"], fontName="Helvetica-Bold", fontSize=11, leading=14, textColor=colors.HexColor("#1f2933"), spaceBefore=3*mm, spaceAfter=2*mm)
+    label = ParagraphStyle("TLabel", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=7.5, leading=9, textColor=colors.HexColor("#52616b"))
+    value = ParagraphStyle("TValue", parent=styles["Normal"], fontName="Helvetica", fontSize=8.2, leading=10, textColor=colors.HexColor("#263238"))
+    head = ParagraphStyle("THead", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=7.4, leading=9, textColor=colors.HexColor("#37474f"), alignment=TA_CENTER)
+    para=lambda v,sty=value: Paragraph(xml_escape(pv(v)),sty)
+
+    metodo = str(test.get("tipo_test") or "").replace("Test scioline di tenuta · ", "").strip()
+    ur=test.get("umidita")
+    ur_txt="Non disponibile" if ur is None or (isinstance(ur,float) and pd.isna(ur)) else f"{int(round(float(ur)))} %"
+    story=[Paragraph("SnowDataPro - Test scioline di tenuta", title)]
+    summary=[[Paragraph("METODO TEST",label),Paragraph("PREPARAZIONI TESTATE",label),Paragraph("T ARIA",label),Paragraph("T NEVE",label)],
+             [para(metodo),para(len(df_righe)),para(f"{_formatta_temperatura_1d(test.get('temperatura_aria'))} °C"),para(f"{_formatta_temperatura_1d(test.get('temperatura_neve'))} °C")]]
+    t=Table(summary,colWidths=[55*mm,65*mm,45*mm,45*mm],hAlign="LEFT")
+    t.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),colors.HexColor("#eef1f4")),("BOX",(0,0),(-1,-1),0.6,colors.HexColor("#d8dde3")),("INNERGRID",(0,0),(-1,-1),0.4,colors.HexColor("#d8dde3")),("VALIGN",(0,0),(-1,-1),"MIDDLE"),("LEFTPADDING",(0,0),(-1,-1),7),("RIGHTPADDING",(0,0),(-1,-1),7),("TOPPADDING",(0,0),(-1,-1),6),("BOTTOMPADDING",(0,0),(-1,-1),6)]))
+    story += [t, Spacer(1,4*mm), Paragraph("Sessione",section)]
+    sess=[[Paragraph("Data",label),para(test.get("data")),Paragraph("Ora",label),para(str(test.get("ora") or "-")[:5]),Paragraph("Luogo",label),para(test.get("luogo"))],
+          [Paragraph("Meteo",label),para(test.get("meteo")),Paragraph("Umidità relativa",label),para(ur_txt),Paragraph("Modello sci",label),para(test.get("zero_modello_sci"))]]
+    ts=Table(sess,colWidths=[25*mm,45*mm,25*mm,35*mm,25*mm,55*mm],hAlign="LEFT")
+    ts.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),colors.HexColor("#f7f9fa")),("BOX",(0,0),(-1,-1),0.5,colors.HexColor("#d8dde3")),("INNERGRID",(0,0),(-1,-1),0.35,colors.HexColor("#e3e7eb")),("VALIGN",(0,0),(-1,-1),"MIDDLE"),("LEFTPADDING",(0,0),(-1,-1),6),("RIGHTPADDING",(0,0),(-1,-1),6),("TOPPADDING",(0,0),(-1,-1),5),("BOTTOMPADDING",(0,0),(-1,-1),5)]))
+    story += [ts, Spacer(1,3*mm), Paragraph("Classificazione neve",section)]
+    snow=[[Paragraph("Origine",label),para(test.get("snow_origine")),Paragraph("Consistenza",label),para(test.get("snow_consistenza")),Paragraph("Fondo",label),para(test.get("snow_fondo"))],
+          [Paragraph("Umidità neve",label),para(test.get("snow_umidita")),Paragraph("Forma grano",label),para(_normalizza_forma_grano_testo(test.get("snow_forma_grano"))),Paragraph("Granulometria",label),para(test.get("snow_granulometria"))],
+          [Paragraph("Caratteristiche",label),para(test.get("snow_caratteristiche")),Paragraph("Note clima",label),para(test.get("note_clima")),"",""]]
+    tn=Table(snow,colWidths=[25*mm,45*mm,25*mm,45*mm,25*mm,55*mm],hAlign="LEFT")
+    tn.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),colors.white),("BOX",(0,0),(-1,-1),0.5,colors.HexColor("#d8dde3")),("INNERGRID",(0,0),(-1,-1),0.35,colors.HexColor("#e3e7eb")),("VALIGN",(0,0),(-1,-1),"MIDDLE"),("LEFTPADDING",(0,0),(-1,-1),6),("RIGHTPADDING",(0,0),(-1,-1),6),("TOPPADDING",(0,0),(-1,-1),5),("BOTTOMPADDING",(0,0),(-1,-1),5)]))
+    story += [tn, Spacer(1,3*mm), Paragraph("Scioline testate",section)]
+
+    cols=[c for c in ["Posizione","Numero sci","Base","Sciolina","Copertura","Note"] if c in df_righe.columns and (c in ["Posizione","Numero sci","Note"] or df_righe[c].astype(str).str.strip().replace("—","").ne("").any())]
+    data=[[Paragraph(xml_escape(c),head) for c in cols]]
+    for _,r in df_righe.iterrows():
+        data.append([para(r.get(c)) for c in cols])
+    widths=[]
+    for c in cols:
+        widths.append(18*mm if c=="Posizione" else 25*mm if c=="Numero sci" else 52*mm if c in ["Base","Sciolina","Copertura"] else 50*mm)
+    tt=Table(data,colWidths=widths,repeatRows=1,hAlign="LEFT")
+    tt.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),colors.HexColor("#eef1f4")),("BOX",(0,0),(-1,-1),0.55,colors.HexColor("#cfd6dc")),("INNERGRID",(0,0),(-1,-1),0.35,colors.HexColor("#dfe4e8")),("VALIGN",(0,0),(-1,-1),"MIDDLE"),("ALIGN",(0,0),(-1,0),"CENTER"),("LEFTPADDING",(0,0),(-1,-1),5),("RIGHTPADDING",(0,0),(-1,-1),5),("TOPPADDING",(0,0),(-1,-1),5),("BOTTOMPADDING",(0,0),(-1,-1),5)]))
+    story.append(tt)
+    doc.build(story)
+    return buffer.getvalue()
 
 
 def _nome_file_pdf_test_rigature(test):
@@ -12035,18 +12417,27 @@ with st.container(key="sector_page_content"):
         )
         _stile_moduli_test()
 
-        st.markdown('<div class="section-title">Storico test scioline di tenuta</div>', unsafe_allow_html=True)
-        st.write("Archivio dei test scioline di tenuta. Apri un test per vedere condizioni e risultati.")
+        notice = st.session_state.pop("tenuta_test_history_notice", None)
+        if notice:
+            st.success(notice)
 
-        with st.expander("＋ Nuovo test scioline di tenuta", expanded=False):
+        st.markdown('<div class="section-title">Storico test scioline di tenuta</div>', unsafe_allow_html=True)
+        st.write("Archivio dei test scioline di tenuta. Apri un test per vedere condizioni, preparazioni e classifica.")
+
+        tenuta_edit_active = st.session_state.get("tenuta_test_edit_session_id") is not None
+        tenuta_form_label = "✎ Modifica test scioline di tenuta" if tenuta_edit_active else "＋ Nuovo test scioline di tenuta"
+        with st.expander(tenuta_form_label, expanded=bool(tenuta_edit_active or st.session_state.get("tenuta_test_form_keep_open", False))):
             render_form_test_tenuta()
 
         df_tenuta_storico = leggi_df(
             """
             SELECT s.id, s.data, s.ora, s.luogo, s.temperatura_aria, s.temperatura_neve,
-                   s.umidita, s.meteo, COUNT(t.id) AS n_test
+                   s.umidita, s.meteo, s.snow_origine, s.snow_consistenza, s.snow_fondo,
+                   s.snow_umidita, s.snow_forma_grano, s.snow_granulometria, s.snow_caratteristiche,
+                   s.zero_modello_sci, s.tipo_test, s.zero_riferimento_id, s.note_clima,
+                   COUNT(t.id) AS n_test
             FROM sessioni s
-            JOIN test_tenuta t ON t.sessione_id = s.id
+            JOIN test_tenuta_preparazioni t ON t.sessione_id = s.id
             GROUP BY s.id
             ORDER BY s.data DESC, COALESCE(s.ora, '') DESC, s.id DESC
             """
@@ -12056,20 +12447,116 @@ with st.container(key="sector_page_content"):
         else:
             for _, sess in df_tenuta_storico.iterrows():
                 sid = int(sess["id"])
-                data_label = str(sess.get("data") or "—")
-                luogo = str(sess.get("luogo") or "—")
-                with st.expander(f"{data_label} · {luogo} · {int(sess.get('n_test') or 0)} prove"):
+                test = sess.to_dict()
+                metodo_label = str(test.get("tipo_test") or "").replace("Test scioline di tenuta · ", "").strip() or "—"
+                titolo = f"{str(test.get('data') or '—')} · {str(test.get('luogo') or '—')} · {metodo_label}"
+                with st.expander(titolo, expanded=False):
+                    a1,a2,a3,a4 = st.columns(4)
+                    with a1: st.metric("Metodo test", metodo_label)
+                    with a2: st.metric("Preparazioni testate", int(test.get("n_test") or 0))
+                    with a3: st.metric("T aria °C", _formatta_temperatura_1d(test.get("temperatura_aria")))
+                    with a4: st.metric("T neve °C", _formatta_temperatura_1d(test.get("temperatura_neve")))
+
+                    st.markdown("##### Sessione")
+                    i1,i2,i3=st.columns(3)
+                    with i1:
+                        st.markdown(f"**Data:** {str(test.get('data') or '—')}")
+                        st.markdown(f"**Ora:** {str(test.get('ora') or '—')[:5]}")
+                        st.markdown(f"**Luogo:** {str(test.get('luogo') or '—')}")
+                    with i2:
+                        st.markdown(f"**Meteo:** {str(test.get('meteo') or '—')}")
+                        urv=test.get("umidita")
+                        urtxt="Non disponibile" if urv is None or pd.isna(urv) else f"{int(round(float(urv)))} %"
+                        st.markdown(f"**UR:** {urtxt}")
+                        st.markdown(f"**Modello sci:** {str(test.get('zero_modello_sci') or '—')}")
+                    with i3:
+                        st.markdown(f"**Note:** {str(test.get('note_clima') or '—')}")
+
+                    st.markdown("##### Classificazione neve")
+                    st.write(
+                        f"Origine: **{str(test.get('snow_origine') or '—')}** · "
+                        f"Consistenza: **{str(test.get('snow_consistenza') or '—')}** · "
+                        f"Fondo: **{str(test.get('snow_fondo') or '—')}** · "
+                        f"Umidità: **{str(test.get('snow_umidita') or '—')}**"
+                    )
+                    st.write(
+                        f"Forma grano: **{_normalizza_forma_grano_testo(test.get('snow_forma_grano')) or '—'}** · "
+                        f"Granulometria: **{str(test.get('snow_granulometria') or '—')}** · "
+                        f"Caratteristiche: **{str(test.get('snow_caratteristiche') or '—')}**"
+                    )
+
                     df_det = leggi_df(
                         """
-                        SELECT t.id, COALESCE(sc.codice, '—') AS sci, t.preparazione,
-                               t.tenuta, t.scorrevolezza, t.facilita_calcio, t.durata, t.note
-                        FROM test_tenuta t
-                        LEFT JOIN sci sc ON sc.id = t.sci_id
-                        WHERE t.sessione_id = ?
-                        ORDER BY t.id DESC
+                        SELECT t.posizione AS "Posizione", t.numero_sci AS "Numero sci",
+                               CASE WHEN b.id IS NULL THEN '—' ELSE TRIM(COALESCE(b.marca,'') || CASE WHEN TRIM(COALESCE(b.marca,''))<>'' THEN ' - ' ELSE '' END || COALESCE(b.nome,'')) END AS "Base",
+                               CASE WHEN sw.id IS NULL THEN '—' ELSE TRIM(COALESCE(sw.marca,'') || CASE WHEN TRIM(COALESCE(sw.marca,''))<>'' THEN ' - ' ELSE '' END || COALESCE(sw.nome,'')) END AS "Sciolina",
+                               CASE WHEN c.id IS NULL THEN '—' ELSE TRIM(COALESCE(c.marca,'') || CASE WHEN TRIM(COALESCE(c.marca,''))<>'' THEN ' - ' ELSE '' END || COALESCE(c.nome,'')) END AS "Copertura",
+                               COALESCE(t.note,'') AS "Note"
+                        FROM test_tenuta_preparazioni t
+                        LEFT JOIN catalogo_prodotti b ON b.id=t.base_prodotto_id
+                        LEFT JOIN catalogo_prodotti sw ON sw.id=t.sciolina_prodotto_id
+                        LEFT JOIN catalogo_prodotti c ON c.id=t.copertura_prodotto_id
+                        WHERE t.sessione_id=?
+                        ORDER BY CASE WHEN t.posizione IS NULL THEN 999999 ELSE t.posizione END, t.id
                         """, (sid,)
                     )
-                    st.dataframe(df_det, use_container_width=True, hide_index=True)
+                    df_cfg = leggi_df("SELECT colonne_attive FROM test_tenuta_config WHERE sessione_id=?", (sid,))
+                    cols_attive=[]
+                    if not df_cfg.empty:
+                        try: cols_attive=json.loads(str(df_cfg.iloc[0].get("colonne_attive") or "[]"))
+                        except Exception: cols_attive=[]
+                    visible=["Posizione","Numero sci"]+[c for c in ["Base","Sciolina","Copertura"] if c in cols_attive]+["Note"]
+                    visible=[c for c in visible if c in df_det.columns]
+                    st.markdown("##### Dettaglio test")
+                    st.dataframe(df_det[visible], use_container_width=True, hide_index=True)
+
+                    try:
+                        pdf_tenuta=_crea_pdf_test_tenuta(test, df_det[visible])
+                        pdf_err=None
+                    except Exception as exc:
+                        pdf_tenuta=b""
+                        pdf_err=str(exc)
+
+                    az1,az2,az3=st.columns(3)
+                    with az1:
+                        st.download_button(
+                            "Scarica test", data=pdf_tenuta, file_name=_nome_file_pdf_test_tenuta(test),
+                            mime="application/pdf", icon=":material/download:", use_container_width=True,
+                            disabled=bool(pdf_err), key=f"download_tenuta_test_{sid}"
+                        )
+                    with az2:
+                        if st.button("Modifica test", icon=":material/edit:", use_container_width=True, key=f"edit_tenuta_history_{sid}"):
+                            _avvia_modifica_test_tenuta(sid)
+                            st.rerun()
+                    with az3:
+                        if st.button("Elimina test", icon=":material/delete:", use_container_width=True, key=f"delete_tenuta_history_{sid}"):
+                            st.session_state[f"confirm_delete_tenuta_{sid}"]=True
+                            st.rerun()
+
+                    if pdf_err:
+                        st.caption(f"PDF non disponibile: {pdf_err}")
+
+                    if st.session_state.get(f"confirm_delete_tenuta_{sid}",False):
+                        st.warning("Confermi l'eliminazione di questo test scioline di tenuta?")
+                        q1,q2=st.columns(2)
+                        with q1:
+                            if st.button("Conferma eliminazione", type="primary", icon=":material/delete:", use_container_width=True, key=f"confirm_tenuta_yes_{sid}"):
+                                conn=apri_connessione_database()
+                                try:
+                                    conn.execute("DELETE FROM test_tenuta_preparazioni WHERE sessione_id=?",(sid,))
+                                    conn.execute("DELETE FROM test_tenuta_config WHERE sessione_id=?",(sid,))
+                                    conn.execute("DELETE FROM sessioni WHERE id=?",(sid,))
+                                    conn.commit()
+                                finally:
+                                    conn.close()
+                                _invalida_cache_dati()
+                                st.session_state.pop(f"confirm_delete_tenuta_{sid}",None)
+                                st.session_state["tenuta_test_history_notice"]="Test scioline di tenuta eliminato correttamente."
+                                st.rerun()
+                        with q2:
+                            if st.button("Annulla",icon=":material/close:",use_container_width=True,key=f"confirm_tenuta_no_{sid}"):
+                                st.session_state.pop(f"confirm_delete_tenuta_{sid}",None)
+                                st.rerun()
 
     elif pagina == "Prodotti di scorrimento":
         pagina_catalogo_prodotti(
