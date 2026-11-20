@@ -4117,8 +4117,8 @@ def pagina_trova_prodotto_migliore():
 
     st.markdown("### Condizioni attuali")
     st.caption(
-        "Prima versione del motore di suggerimento: la temperatura viene considerata come criterio principale, "
-        "mentre la classificazione neve aumenta o riduce il punteggio di compatibilità."
+        "Il motore usa automaticamente T aria o T neve in base al riferimento dichiarato per ciascun prodotto; "
+        "la classificazione neve aumenta o riduce il punteggio di compatibilità."
     )
 
     snow_option_groups = _snow_option_groups_standard()
@@ -4132,35 +4132,32 @@ def pagina_trova_prodotto_migliore():
         "Caratteristiche": "snow_caratteristiche",
     }
 
-    c_tipo, c_temp, c_rif = st.columns([1.1, 1, 1])
+    c_tipo, c_taria, c_tneve = st.columns([1.1, 1, 1])
     with c_tipo:
         famiglia = st.selectbox(
             "Famiglia prodotto",
             ["Prodotti di scorrimento", "Scioline di tenuta"],
             key="best_product_family",
         )
-    with c_temp:
-        temperatura = st.number_input(
-            "Temperatura (°C)",
+    with c_taria:
+        temperatura_aria = st.number_input(
+            "T aria (°C)",
             min_value=-40.0,
             max_value=20.0,
             value=-5.0,
             step=0.5,
             format="%.1f",
-            key="best_product_temperature",
+            key="best_product_temperature_air",
         )
-    with c_rif:
-        opzioni_riferimento_best = (
-            ["Aria", "Neve"]
-            if famiglia == "Scioline di tenuta"
-            else ["Aria", "Neve", "Range produttore", "Non specificato"]
-        )
-        if st.session_state.get("best_product_temperature_ref") not in opzioni_riferimento_best:
-            st.session_state["best_product_temperature_ref"] = opzioni_riferimento_best[0]
-        riferimento = st.selectbox(
-            "Temperatura riferita a",
-            opzioni_riferimento_best,
-            key="best_product_temperature_ref",
+    with c_tneve:
+        temperatura_neve = st.number_input(
+            "T neve (°C)",
+            min_value=-40.0,
+            max_value=10.0,
+            value=-5.0,
+            step=0.5,
+            format="%.1f",
+            key="best_product_temperature_snow",
         )
 
     st.markdown("#### Classificazione neve")
@@ -4222,11 +4219,48 @@ def pagina_trova_prodotto_migliore():
         return set(valori)
 
     def _intervallo_riga(riga):
-        tipo_ref = str(riga.get("tipo_temperatura") or "").strip().lower()
-        ref_richiesto = riferimento.strip().lower()
+        """Trova l'intervallo compatibile usando automaticamente T aria o T neve.
 
-        if ref_richiesto != "non specificato" and tipo_ref not in {ref_richiesto, "non specificato", ""}:
-            return None
+        Per i range dichiarati come non specificati / range produttore vengono
+        provate entrambe le temperature, scegliendo la corrispondenza più centrale.
+        Restituisce: (min, max, etichetta, temperatura_usata).
+        """
+        tipo_ref = str(riga.get("tipo_temperatura") or "").strip().lower()
+
+        if tipo_ref in {"aria", "aria / ambiente", "ambiente"}:
+            temperature_candidate = [("T aria", float(temperatura_aria))]
+        elif tipo_ref == "neve":
+            temperature_candidate = [("T neve", float(temperatura_neve))]
+        else:
+            # Range produttore / Non specificato / dati legacy: non inventiamo
+            # il riferimento; il prodotto resta candidato se almeno una delle
+            # due temperature rientra nel range.
+            temperature_candidate = [
+                ("T aria", float(temperatura_aria)),
+                ("T neve", float(temperatura_neve)),
+            ]
+
+        def _match_intervallo(minimo, massimo, extra_label=""):
+            if pd.isna(minimo) and pd.isna(massimo):
+                return None
+            min_eff = float("-inf") if pd.isna(minimo) else float(minimo)
+            max_eff = float("inf") if pd.isna(massimo) else float(massimo)
+            centro = None
+            if not pd.isna(minimo) and not pd.isna(massimo):
+                centro = (float(minimo) + float(massimo)) / 2.0
+
+            compatibili = []
+            for nome_temp, valore_temp in temperature_candidate:
+                if min_eff <= valore_temp <= max_eff:
+                    distanza = abs(valore_temp - centro) if centro is not None else 0.0
+                    compatibili.append((distanza, nome_temp, valore_temp))
+            if not compatibili:
+                return None
+
+            compatibili.sort(key=lambda x: x[0])
+            _, nome_temp, valore_temp = compatibili[0]
+            etichetta = nome_temp if not extra_label else f"{nome_temp} · {extra_label}"
+            return (minimo, massimo, etichetta, valore_temp)
 
         if categoria == "tenuta":
             forma = set(selezioni.get("Forma grano", []))
@@ -4245,44 +4279,34 @@ def pagina_trova_prodotto_migliore():
                 intervalli.append((
                     riga.get("temp_nuova_min"),
                     riga.get("temp_nuova_max"),
-                    "Neve nuova",
+                    "Neve nuova/fine",
                 ))
             if trasformata_richiesta or not nuova_richiesta:
                 intervalli.append((
                     riga.get("temp_trasformata_min"),
                     riga.get("temp_trasformata_max"),
-                    "Neve trasformata",
+                    "Neve vecchia/trasformata",
                 ))
 
-            validi = []
-            for minimo, massimo, etichetta in intervalli:
-                if pd.isna(minimo) and pd.isna(massimo):
-                    continue
-                min_eff = float("-inf") if pd.isna(minimo) else float(minimo)
-                max_eff = float("inf") if pd.isna(massimo) else float(massimo)
-                if min_eff <= float(temperatura) <= max_eff:
-                    validi.append((minimo, massimo, etichetta))
-            if validi:
-                return validi[0]
+            match_validi = []
+            for minimo, massimo, etichetta_neve in intervalli:
+                match = _match_intervallo(minimo, massimo, etichetta_neve)
+                if match is not None:
+                    match_validi.append(match)
+            if match_validi:
+                # Se più intervalli sono validi, preferisce quello in cui la
+                # temperatura cade più vicino al centro del range.
+                def _dist_centro(match):
+                    minimo, massimo, _, valore_temp = match
+                    if pd.isna(minimo) or pd.isna(massimo):
+                        return float("inf")
+                    return abs(valore_temp - ((float(minimo) + float(massimo)) / 2.0))
+                return min(match_validi, key=_dist_centro)
 
             # Compatibilità retroattiva con scioline vecchie a intervallo unico.
-            minimo, massimo = riga.get("temp_min"), riga.get("temp_max")
-            if not (pd.isna(minimo) and pd.isna(massimo)):
-                min_eff = float("-inf") if pd.isna(minimo) else float(minimo)
-                max_eff = float("inf") if pd.isna(massimo) else float(massimo)
-                if min_eff <= float(temperatura) <= max_eff:
-                    return (minimo, massimo, "Range produttore")
-            return None
+            return _match_intervallo(riga.get("temp_min"), riga.get("temp_max"), "Range produttore")
 
-        minimo, massimo = riga.get("temp_min"), riga.get("temp_max")
-        if pd.isna(minimo) and pd.isna(massimo):
-            return None
-        min_eff = float("-inf") if pd.isna(minimo) else float(minimo)
-        max_eff = float("inf") if pd.isna(massimo) else float(massimo)
-        if min_eff <= float(temperatura) <= max_eff:
-            etichetta = "Range produttore" if ref_richiesto == "range produttore" else riferimento
-            return (minimo, massimo, etichetta)
-        return None
+        return _match_intervallo(riga.get("temp_min"), riga.get("temp_max"))
 
     risultati = []
     parametri_compilati = [nome for nome, valori in selezioni.items() if valori]
@@ -4317,11 +4341,11 @@ def pagina_trova_prodotto_migliore():
             else:
                 compat_neve = 1.0
 
-            minimo, massimo, etichetta_intervallo = intervallo
+            minimo, massimo, etichetta_intervallo, temperatura_usata = intervallo
             if not pd.isna(minimo) and not pd.isna(massimo):
                 centro = (float(minimo) + float(massimo)) / 2.0
                 ampiezza = max(1.0, abs(float(massimo) - float(minimo)))
-                centralita = max(0.0, 1.0 - abs(float(temperatura) - centro) / ampiezza)
+                centralita = max(0.0, 1.0 - abs(float(temperatura_usata) - centro) / ampiezza)
             else:
                 centralita = 0.5
 
@@ -4333,6 +4357,7 @@ def pagina_trova_prodotto_migliore():
                 "compat_neve": compat_neve,
                 "intervallo_usato": _testo_range(minimo, massimo, "°C"),
                 "tipo_intervallo": etichetta_intervallo,
+                "temperatura_usata": temperatura_usata,
                 "match": dettagli_match,
             })
 
@@ -4364,7 +4389,7 @@ def pagina_trova_prodotto_migliore():
                     st.markdown(f"#### {titolo}")
                     st.markdown(f"**Compatibilità stimata: {prodotto['score']:.0f}%**")
                     st.caption(
-                        f"Temperatura: {prodotto['intervallo_usato']} · {prodotto['tipo_intervallo']}"
+                        f"Range: {prodotto['intervallo_usato']} · {prodotto['tipo_intervallo']}"
                     )
                     if prodotto["match"]:
                         st.caption("Match neve: " + " · ".join(prodotto["match"]))
