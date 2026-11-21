@@ -4834,6 +4834,223 @@ def pagina_trova_prodotto_migliore():
             valori = _normalizza_forma_grano_valori(valori)
         return set(valori)
 
+
+    # ------------------------------------------------------------
+    # Evidenza reale: vittorie nei test + utilizzi in gara
+    # ------------------------------------------------------------
+    # Il punteggio teorico resta la base. Lo storico aggiunge solo un bonus
+    # limitato e proporzionale alla somiglianza delle condizioni, così una
+    # vittoria lontana dalle condizioni attuali non domina il ranking.
+    SOGLIA_SIMILARITA_STORICO = 0.58
+    BONUS_TEST_MAX = 12.0
+    BONUS_GARA_MAX = 10.0
+
+    def _float_or_none(valore):
+        try:
+            if valore is None or pd.isna(valore):
+                return None
+            return float(valore)
+        except Exception:
+            return None
+
+    def _similarita_temperatura(record):
+        """Similarità 0..1 fra temperature correnti e quelle dello storico."""
+        contributi = []
+        t_air_hist = _float_or_none(record.get("temperatura_aria"))
+        t_snow_hist = _float_or_none(record.get("temperatura_neve"))
+        if t_air_hist is not None:
+            # 8 °C di differenza azzerano il contributo aria.
+            contributi.append(max(0.0, 1.0 - abs(float(temperatura_aria) - t_air_hist) / 8.0))
+        if t_snow_hist is not None:
+            # La T neve è più discriminante: 6 °C azzerano il contributo.
+            contributi.append(max(0.0, 1.0 - abs(float(temperatura_neve) - t_snow_hist) / 6.0))
+        if not contributi:
+            return 0.35
+        media = sum(contributi) / len(contributi)
+        # Se nello storico manca una delle due temperature riduce leggermente
+        # la fiducia, senza scartare test vecchi ben documentati sul resto.
+        if len(contributi) == 1:
+            media *= 0.90
+        return max(0.0, min(1.0, media))
+
+    def _similarita_neve_storico(record):
+        """Similarità 0..1 sulle sole caratteristiche neve compilate dall'utente."""
+        if not parametri_compilati:
+            return 1.0
+        quote = []
+        for nome_gruppo in parametri_compilati:
+            richiesti = set(selezioni.get(nome_gruppo) or [])
+            storico = _lista_valori(record.get(snow_field_map[nome_gruppo]), nome_gruppo)
+            if not storico:
+                # Campo storico assente: informazione incompleta, non incompatibilità.
+                quote.append(0.40)
+                continue
+            if "Tutte" in storico:
+                quote.append(1.0)
+                continue
+            quota = len(richiesti & storico) / max(1, len(richiesti))
+            quote.append(quota)
+        return sum(quote) / len(quote) if quote else 1.0
+
+    def _similarita_evento(record):
+        temp_sim = _similarita_temperatura(record)
+        if not parametri_compilati:
+            return temp_sim
+        neve_sim = _similarita_neve_storico(record)
+        # La temperatura resta il discriminante principale; la neve rende
+        # specifico il confronto quando l'utente la compila.
+        return max(0.0, min(1.0, 0.58 * temp_sim + 0.42 * neve_sim))
+
+    # Carichiamo lo storico una sola volta per renderlo veloce anche con un
+    # catalogo ampio. Ogni evento viene indicizzato per ID prodotto.
+    evidenze_test = {}
+    evidenze_gara = {}
+
+    if categoria == "scorrimento":
+        storico_test_df = leggi_df("""
+            SELECT
+                a.sessione_id,
+                s.temperatura_aria, s.temperatura_neve,
+                s.snow_origine, s.snow_consistenza, s.snow_fondo, s.snow_umidita,
+                s.snow_forma_grano, s.snow_granulometria, s.snow_caratteristiche,
+                s.categoria_test_scorrimento,
+                a.base_prodotto_id, a.paraffina_prodotto_id,
+                a.top_coating_prodotto_id, a.liquido_prodotto_id
+            FROM test_scorrimento_aste a
+            JOIN sessioni s ON s.id = a.sessione_id
+            WHERE a.posizione = 1
+        """)
+        focus_map = {
+            "Test basi": "base_prodotto_id",
+            "Test paraffine": "paraffina_prodotto_id",
+            "Test top coating": "top_coating_prodotto_id",
+            "Test liquidi": "liquido_prodotto_id",
+        }
+        campi_prodotti_test = [
+            "base_prodotto_id", "paraffina_prodotto_id",
+            "top_coating_prodotto_id", "liquido_prodotto_id",
+        ]
+        for rec in storico_test_df.to_dict("records"):
+            categoria_test = str(rec.get("categoria_test_scorrimento") or "").strip()
+            campo_focus = focus_map.get(categoria_test)
+            # Deduplica per sessione/prodotto: se lo stesso prodotto compare in
+            # più strati della medesima preparazione vincente, conta una sola volta
+            # usando il ruolo più significativo.
+            fattori_evento = {}
+            for campo_pid in campi_prodotti_test:
+                pid = rec.get(campo_pid)
+                try:
+                    if pid is None or pd.isna(pid):
+                        continue
+                    pid = int(pid)
+                except Exception:
+                    continue
+                if categoria_test == "Test combinazioni":
+                    fattore_ruolo = 0.85
+                elif campo_focus:
+                    fattore_ruolo = 1.00 if campo_pid == campo_focus else 0.35
+                else:
+                    # Storico legacy senza categoria: consideriamo comunque
+                    # la preparazione vincente ma con prudenza.
+                    fattore_ruolo = 0.65
+                fattori_evento[pid] = max(fattori_evento.get(pid, 0.0), fattore_ruolo)
+            for pid, fattore_ruolo in fattori_evento.items():
+                evidenze_test.setdefault(pid, []).append((rec, fattore_ruolo))
+    else:
+        storico_test_df = leggi_df("""
+            SELECT
+                p.sessione_id,
+                s.temperatura_aria, s.temperatura_neve,
+                s.snow_origine, s.snow_consistenza, s.snow_fondo, s.snow_umidita,
+                s.snow_forma_grano, s.snow_granulometria, s.snow_caratteristiche,
+                p.base_prodotto_id, p.sciolina_prodotto_id, p.copertura_prodotto_id
+            FROM test_tenuta_preparazioni p
+            JOIN sessioni s ON s.id = p.sessione_id
+            WHERE p.posizione = 1
+        """)
+        for rec in storico_test_df.to_dict("records"):
+            fattori_evento = {}
+            for campo_pid, fattore_ruolo in [
+                ("sciolina_prodotto_id", 1.00),
+                ("copertura_prodotto_id", 0.75),
+                ("base_prodotto_id", 0.35),
+            ]:
+                pid = rec.get(campo_pid)
+                try:
+                    if pid is None or pd.isna(pid):
+                        continue
+                    pid = int(pid)
+                except Exception:
+                    continue
+                fattori_evento[pid] = max(fattori_evento.get(pid, 0.0), fattore_ruolo)
+            for pid, fattore_ruolo in fattori_evento.items():
+                evidenze_test.setdefault(pid, []).append((rec, fattore_ruolo))
+
+    storico_gare_df = leggi_df("""
+        SELECT
+            g.id AS gara_id,
+            g.temperatura_aria, g.temperatura_neve,
+            g.snow_origine, g.snow_consistenza, g.snow_fondo, g.snow_umidita,
+            g.snow_forma_grano, g.snow_granulometria, g.snow_caratteristiche,
+            gp.prodotto_id
+        FROM gara_prodotti gp
+        JOIN gare g ON g.id = gp.gara_id
+        WHERE gp.famiglia = ? AND gp.prodotto_id IS NOT NULL
+    """, (categoria,))
+
+    # Un prodotto può comparire più volte nella stessa gara: conta una sola volta.
+    gare_gia_indicizzate = set()
+    for rec in storico_gare_df.to_dict("records"):
+        try:
+            pid = int(rec.get("prodotto_id"))
+            gid = int(rec.get("gara_id"))
+        except Exception:
+            continue
+        chiave = (gid, pid)
+        if chiave in gare_gia_indicizzate:
+            continue
+        gare_gia_indicizzate.add(chiave)
+        evidenze_gara.setdefault(pid, []).append(rec)
+
+    def _bonus_storico_prodotto(prodotto_id):
+        """Restituisce bonus test/gara e conteggi delle evidenze realmente simili."""
+        try:
+            pid = int(prodotto_id)
+        except Exception:
+            return 0.0, 0.0, 0, 0, 0.0, 0.0
+
+        contributi_test = []
+        for rec, fattore_ruolo in evidenze_test.get(pid, []):
+            sim = _similarita_evento(rec)
+            if sim < SOGLIA_SIMILARITA_STORICO:
+                continue
+            # Una vittoria perfettamente sovrapponibile vale 4 punti se il
+            # prodotto era la variabile principale. Più vittorie hanno ritorni
+            # crescenti solo fino al tetto massimo.
+            contributi_test.append(4.0 * sim * float(fattore_ruolo))
+
+        contributi_gara = []
+        for rec in evidenze_gara.get(pid, []):
+            sim = _similarita_evento(rec)
+            if sim < SOGLIA_SIMILARITA_STORICO:
+                continue
+            # L'impiego reale in gara è un segnale forte ma non equivale da solo
+            # a una vittoria comparativa: 3.5 punti per una gara identica.
+            contributi_gara.append(3.5 * sim)
+
+        bonus_test = min(BONUS_TEST_MAX, sum(contributi_test))
+        bonus_gara = min(BONUS_GARA_MAX, sum(contributi_gara))
+        sim_test_max = max([x / 4.0 for x in contributi_test], default=0.0)
+        sim_gara_max = max([x / 3.5 for x in contributi_gara], default=0.0)
+        return (
+            bonus_test,
+            bonus_gara,
+            len(contributi_test),
+            len(contributi_gara),
+            sim_test_max,
+            sim_gara_max,
+        )
+
     def _intervallo_riga(riga):
         """Trova l'intervallo compatibile usando automaticamente T aria o T neve.
 
@@ -5014,11 +5231,30 @@ def pagina_trova_prodotto_migliore():
                 intervallo_testo = _testo_range(minimo, massimo, "°C")
                 tipo_intervallo_risultato = etichetta_intervallo
 
-            # 70% temperatura / 30% neve. È volutamente semplice per la prima versione.
-            score_totale = 70.0 + 20.0 * compat_neve + 10.0 * centralita
+            # Compatibilità teorica: temperatura + classificazione neve.
+            score_teorico = 70.0 + 20.0 * compat_neve + 10.0 * centralita
+            (
+                bonus_test,
+                bonus_gara,
+                n_test_simili,
+                n_gare_simili,
+                sim_test_max,
+                sim_gara_max,
+            ) = _bonus_storico_prodotto(riga.get("id"))
+
+            # Il bonus storico influenza l'ordine ma non modifica la percentuale
+            # di compatibilità teorica mostrata all'utente.
+            score_ranking = score_teorico + bonus_test + bonus_gara
             risultati.append({
                 **riga,
-                "score": round(score_totale, 1),
+                "score": round(score_teorico, 1),
+                "score_ranking": round(score_ranking, 2),
+                "bonus_test": round(bonus_test, 2),
+                "bonus_gara": round(bonus_gara, 2),
+                "n_test_simili": int(n_test_simili),
+                "n_gare_simili": int(n_gare_simili),
+                "sim_test_max": round(sim_test_max, 3),
+                "sim_gara_max": round(sim_gara_max, 3),
                 "compat_neve": compat_neve,
                 "intervallo_usato": intervallo_testo,
                 "tipo_intervallo": tipo_intervallo_risultato,
@@ -5026,7 +5262,7 @@ def pagina_trova_prodotto_migliore():
                 "match": dettagli_match,
             })
 
-    risultati.sort(key=lambda x: (-x["score"], str(x.get("marca") or ""), str(x.get("nome") or "")))
+    risultati.sort(key=lambda x: (-x["score_ranking"], -x["score"], str(x.get("marca") or ""), str(x.get("nome") or "")))
 
     st.markdown("### Prodotti consigliati")
     if not risultati:
@@ -5052,7 +5288,23 @@ def pagina_trova_prodotto_migliore():
                     nome = str(prodotto.get("nome") or "Prodotto").strip()
                     titolo = f"{marca} - {nome}" if marca else nome
                     st.markdown(f"#### {titolo}")
-                    st.markdown(f"**Compatibilità stimata: {prodotto['score']:.0f}%**")
+                    st.markdown(f"**Punteggio ranking: {prodotto['score_ranking']:.1f}**")
+                    st.caption(f"Compatibilità teorica: {prodotto['score']:.0f}%")
+
+                    storico_parts = []
+                    if float(prodotto.get("bonus_test") or 0) > 0:
+                        storico_parts.append(
+                            f"🏆 Test +{prodotto['bonus_test']:.1f} · {prodotto['n_test_simili']} test vincent{'e' if prodotto['n_test_simili'] == 1 else 'i'} simili"
+                        )
+                    if float(prodotto.get("bonus_gara") or 0) > 0:
+                        storico_parts.append(
+                            f"🏁 Gare +{prodotto['bonus_gara']:.1f} · usato in {prodotto['n_gare_simili']} gar{'a' if prodotto['n_gare_simili'] == 1 else 'e'} simili"
+                        )
+                    if storico_parts:
+                        st.caption(" · ".join(storico_parts))
+                    else:
+                        st.caption("Storico: nessuna evidenza sufficientemente simile")
+
                     tipo_intervallo_testo = str(prodotto.get("tipo_intervallo") or "").strip()
                     range_caption = f"Range: {prodotto['intervallo_usato']}"
                     if tipo_intervallo_testo:
@@ -5062,7 +5314,9 @@ def pagina_trova_prodotto_migliore():
                         st.caption("Match neve: " + " · ".join(prodotto["match"]))
 
     st.caption(
-        "Ranking provvisorio: lo useremo come base per definire successivamente pesi, priorità e logica specifica per gara/test."
+        "Il ranking combina compatibilità teorica e storico reale. Le vittorie nei test e gli utilizzi in gara "
+        "incidono solo quando temperatura e condizioni neve sono sufficientemente simili a quelle cercate; "
+        "il bonus storico è limitato per non promuovere prodotti fuori contesto."
     )
 
 
