@@ -4083,12 +4083,40 @@ def _parse_temperatura_1d(valore):
 
 METEO_OPZIONI = [
     "Sereno",
+    "Velature",
     "Parzialmente nuvoloso",
     "Coperto",
     "Precipitazioni nevose",
     "Precipitazioni piovose",
     "Nebbia/foschia",
 ]
+
+
+def _meteo_lista(valore):
+    """Converte il meteo salvato (anche vecchio a valore singolo) in lista per il multiselect."""
+    if valore is None:
+        return []
+    if isinstance(valore, (list, tuple, set)):
+        candidati = list(valore)
+    else:
+        testo = str(valore or "").strip()
+        if not testo:
+            return []
+        # Formato nuovo: valori separati da punto mediano. Mantiene compatibilità con eventuali separatori storici.
+        candidati = re.split(r"\s*(?:·|\||;)\s*", testo)
+    risultato = []
+    for voce in candidati:
+        voce = str(voce or "").strip()
+        if voce == "Soleggiato":
+            voce = "Sereno"
+        if voce in METEO_OPZIONI and voce not in risultato:
+            risultato.append(voce)
+    return risultato
+
+
+def _meteo_storage(valori):
+    """Serializza una o più condizioni meteo senza cambiare lo schema DB esistente."""
+    return " · ".join(_meteo_lista(valori))
 
 
 def _formatta_dataframe_temperature_ambientali(df):
@@ -6985,11 +7013,11 @@ def pagina_gare():
         with c2:
             modello_sci = st.text_input("Modello sci", placeholder="es. Speedmax 3D", key="gara_modello_sci")
         with c3:
-            meteo = st.selectbox(
+            meteo = st.multiselect(
                 "Meteo",
-                ["", "Sereno", "Parzialmente nuvoloso", "Coperto", "Precipitazioni nevose", "Precipitazioni piovose", "Nebbia/foschia"],
+                METEO_OPZIONI,
                 key="gara_meteo",
-                format_func=lambda x: "Seleziona meteo" if x == "" else x,
+                placeholder="Seleziona una o più condizioni",
             )
 
         c1, c2, c3 = st.columns(3)
@@ -7121,7 +7149,7 @@ def pagina_gare():
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                         (
                             data_gara.isoformat(), ora_gara.strftime("%H:%M"), str(luogo).strip(), tecnica, tipologia,
-                            str(modello_sci or "").strip(), float(temp_aria), float(temp_neve), int(umidita), str(meteo or ""),
+                            str(modello_sci or "").strip(), float(temp_aria), float(temp_neve), int(umidita), _meteo_storage(meteo),
                             _compatta_neve_sessione(snow_origine, snow["Origine"]),
                             _compatta_neve_sessione(snow_consistenza, snow["Consistenza"]),
                             _compatta_neve_sessione(snow_fondo, snow["Fondo sottostante"]),
@@ -7365,7 +7393,7 @@ def render_form_test_scorrimento():
         st.session_state["scroll_rh"] = 70 if pd.isna(ur_edit) else int(round(float(ur_edit)))
         st.session_state["scroll_ski_model"] = str(edit_scroll_row.get("zero_modello_sci") or "")
         meteo_edit = str(edit_scroll_row.get("meteo") or "").strip()
-        st.session_state["scroll_weather"] = meteo_edit if meteo_edit in METEO_OPZIONI else None
+        st.session_state["scroll_weather"] = _meteo_lista(meteo_edit)
         st.session_state["scroll_origin"] = _valori_sessione_neve(edit_scroll_row.get("snow_origine"), snow_options_scroll["Origine"])
         st.session_state["scroll_consistency"] = _valori_sessione_neve(edit_scroll_row.get("snow_consistenza"), snow_options_scroll["Consistenza"])
         st.session_state["scroll_base_condition"] = _valori_sessione_neve(edit_scroll_row.get("snow_fondo"), snow_options_scroll["Fondo sottostante"])
@@ -7522,11 +7550,10 @@ def render_form_test_scorrimento():
             placeholder="es. Speedmax 3D",
         )
     with c5:
-        scroll_meteo = st.selectbox(
+        scroll_meteo = st.multiselect(
             "Meteo",
             METEO_OPZIONI,
-            index=None,
-            placeholder="Seleziona meteo",
+            placeholder="Seleziona una o più condizioni",
             key="scroll_weather",
         )
 
@@ -7949,7 +7976,7 @@ def render_form_test_scorrimento():
                                     temp_aria_val,
                                     temp_neve_val,
                                     None if scroll_ur_missing else int(scroll_ur),
-                                    scroll_meteo or "",
+                                    _meteo_storage(scroll_meteo),
                                     _compatta_neve_sessione(scroll_origine, snow_options_scroll["Origine"]),
                                     _compatta_neve_sessione(scroll_consistenza, snow_options_scroll["Consistenza"]),
                                     _compatta_neve_sessione(scroll_fondo, snow_options_scroll["Fondo sottostante"]),
@@ -7983,7 +8010,7 @@ def render_form_test_scorrimento():
                                     temp_aria_val,
                                     temp_neve_val,
                                     None if scroll_ur_missing else int(scroll_ur),
-                                    scroll_meteo or "",
+                                    _meteo_storage(scroll_meteo),
                                     _compatta_neve_sessione(scroll_origine, snow_options_scroll["Origine"]),
                                     _compatta_neve_sessione(scroll_consistenza, snow_options_scroll["Consistenza"]),
                                     _compatta_neve_sessione(scroll_fondo, snow_options_scroll["Fondo sottostante"]),
@@ -8286,7 +8313,7 @@ def render_form_test_tenuta():
         meteo_edit = str(edit_row.get("meteo") or "").strip()
         if meteo_edit == "Soleggiato":
             meteo_edit = "Sereno"
-        st.session_state["tenuta_test_weather"] = meteo_edit if meteo_edit in METEO_OPZIONI else None
+        st.session_state["tenuta_test_weather"] = _meteo_lista(meteo_edit)
         st.session_state["tenuta_test_climate_notes"] = str(edit_row.get("note_clima") or "")
         st.session_state["tenuta_test_origin"] = _valori_sessione_neve(edit_row.get("snow_origine"), snow_options["Origine"])
         st.session_state["tenuta_test_consistency"] = _valori_sessione_neve(edit_row.get("snow_consistenza"), snow_options["Consistenza"])
@@ -8404,9 +8431,9 @@ def render_form_test_tenuta():
     with c4:
         modello_sci = st.text_input("Modello sci", key="tenuta_test_ski_model", placeholder="es. Speedmax 3D")
     with c5:
-        meteo = st.selectbox(
-            "Meteo", METEO_OPZIONI, index=None,
-            placeholder="Seleziona meteo", key="tenuta_test_weather",
+        meteo = st.multiselect(
+            "Meteo", METEO_OPZIONI,
+            placeholder="Seleziona una o più condizioni", key="tenuta_test_weather",
         )
 
     note_clima = st.text_area(
@@ -8827,7 +8854,7 @@ def render_form_test_tenuta():
                        WHERE id=?""",
                     (
                         data_test.isoformat(), ora.strftime("%H:%M"), str(luogo).strip(),
-                        temp_aria_val, temp_neve_val, None if ur_missing else int(ur), meteo or "",
+                        temp_aria_val, temp_neve_val, None if ur_missing else int(ur), _meteo_storage(meteo),
                         _compatta_neve_sessione(origine, snow_options["Origine"]),
                         _compatta_neve_sessione(consistenza, snow_options["Consistenza"]),
                         _compatta_neve_sessione(fondo, snow_options["Fondo sottostante"]),
@@ -8854,7 +8881,7 @@ def render_form_test_tenuta():
                        ) VALUES (?, ?, ?, ?, ?, ?, ?, '', '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?)""",
                     (
                         data_test.isoformat(), ora.strftime("%H:%M"), str(luogo).strip(),
-                        temp_aria_val, temp_neve_val, None if ur_missing else int(ur), meteo or "",
+                        temp_aria_val, temp_neve_val, None if ur_missing else int(ur), _meteo_storage(meteo),
                         _compatta_neve_sessione(origine, snow_options["Origine"]),
                         _compatta_neve_sessione(consistenza, snow_options["Consistenza"]),
                         _compatta_neve_sessione(fondo, snow_options["Fondo sottostante"]),
@@ -9347,7 +9374,7 @@ def render_form_test_rigature():
         meteo = str(edit_row.get("meteo") or "").strip()
         if meteo == "Soleggiato":
             meteo = "Sereno"
-        st.session_state["rig_test_weather"] = meteo if meteo in METEO_OPZIONI else None
+        st.session_state["rig_test_weather"] = _meteo_lista(meteo)
         st.session_state["rig_test_climate_notes"] = str(edit_row.get("note_clima") or "")
         st.session_state["rig_test_origin"] = _valori_sessione_neve(edit_row.get("snow_origine"), snow_options["Origine"])
         st.session_state["rig_test_consistency"] = _valori_sessione_neve(edit_row.get("snow_consistenza"), snow_options["Consistenza"])
@@ -9463,7 +9490,7 @@ def render_form_test_rigature():
     with c4:
         modello_sci = st.text_input("Modello sci", key="rig_test_ski_model", placeholder="es. Speedmax 3D")
     with c5:
-        meteo = st.selectbox("Meteo", METEO_OPZIONI, index=None, placeholder="Seleziona meteo", key="rig_test_weather")
+        meteo = st.multiselect("Meteo", METEO_OPZIONI, placeholder="Seleziona una o più condizioni", key="rig_test_weather")
 
     note_clima = st.text_area(
         "Note",
@@ -9888,7 +9915,7 @@ def render_form_test_rigature():
                    snow_origine=?, snow_consistenza=?, snow_fondo=?, snow_umidita=?, snow_forma_grano=?, snow_granulometria=?, snow_caratteristiche=?,
                    zero_modello_sci=?, tipo_test=?, zero_riferimento_id=?, note_clima=? WHERE id=?""",
                 (data_test.isoformat(), ora.strftime("%H:%M"), str(luogo).strip(), taria, tneve,
-                 None if ur_missing else int(ur), meteo or "",
+                 None if ur_missing else int(ur), _meteo_storage(meteo),
                  _compatta_neve_sessione(origine, snow_options["Origine"]),
                  _compatta_neve_sessione(consistenza, snow_options["Consistenza"]),
                  _compatta_neve_sessione(fondo, snow_options["Fondo sottostante"]),
@@ -9910,7 +9937,7 @@ def render_form_test_rigature():
                    zero_modello_sci, tipo_test, zero_riferimento_id, note, note_clima, creato_il)
                    VALUES (?, ?, ?, ?, ?, ?, ?, '', '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?)""",
                 (data_test.isoformat(), ora.strftime("%H:%M"), str(luogo).strip(), taria, tneve,
-                 None if ur_missing else int(ur), meteo or "",
+                 None if ur_missing else int(ur), _meteo_storage(meteo),
                  _compatta_neve_sessione(origine, snow_options["Origine"]),
                  _compatta_neve_sessione(consistenza, snow_options["Consistenza"]),
                  _compatta_neve_sessione(fondo, snow_options["Fondo sottostante"]),
@@ -10553,12 +10580,11 @@ def render_form_zero_test():
             if riga_sessione is not None and "meteo" in riga_sessione.index
             else ""
         )
-        meteo_index = METEO_OPZIONI.index(meteo_db) if meteo_db in METEO_OPZIONI else None
-        zero_meteo = st.selectbox(
+        zero_meteo = st.multiselect(
             "Meteo",
             METEO_OPZIONI,
-            index=meteo_index,
-            placeholder="Seleziona meteo",
+            default=_meteo_lista(meteo_db),
+            placeholder="Seleziona una o più condizioni",
             key=f"insert_zero_weather_{suffix_zero}",
         )
 
@@ -10880,7 +10906,7 @@ def render_form_zero_test():
                             _parse_temperatura_1d(zero_t_aria_txt),
                             _parse_temperatura_1d(zero_t_neve_txt),
                             None if zero_ur_non_disponibile else int(zero_ur),
-                            zero_meteo or "",
+                            _meteo_storage(zero_meteo),
                             zero_note.strip(),
                             zero_batteria,
                             zero_modello_sci.strip(),
@@ -10905,7 +10931,7 @@ def render_form_zero_test():
                             _parse_temperatura_1d(zero_t_aria_txt),
                             _parse_temperatura_1d(zero_t_neve_txt),
                             None if zero_ur_non_disponibile else int(zero_ur),
-                            zero_meteo or "",
+                            _meteo_storage(zero_meteo),
                             zero_note.strip(),
                             zero_batteria,
                             zero_modello_sci.strip(),
@@ -12080,11 +12106,10 @@ with st.container(key="sector_page_content"):
                         "Lucida", "Sporca", "Variabile", "Altro"
                     ],
                 )
-                meteo = st.selectbox(
+                meteo = st.multiselect(
                     "Meteo",
                     METEO_OPZIONI,
-                    index=None,
-                    placeholder="Seleziona meteo",
+                    placeholder="Seleziona una o più condizioni",
                 )
 
             note = st.text_area("Note")
@@ -12109,7 +12134,7 @@ with st.container(key="sector_page_content"):
                         _parse_temperatura_1d(temperatura_aria_txt),
                         _parse_temperatura_1d(temperatura_neve_txt),
                         float(umidita),
-                        meteo or "",
+                        _meteo_storage(meteo),
                         tipo_neve,
                         condizione_pista,
                         note.strip(),
