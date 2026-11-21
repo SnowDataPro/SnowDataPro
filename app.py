@@ -8333,6 +8333,33 @@ def render_form_test_scorrimento():
                 required=False,
             )
 
+            # I tre campi tecnici sono veri menu a tendina editabili riga per riga.
+            campo_app, campo_lav, campo_luc = campi_tecnici_scorrimento[colonna_prodotto]
+            config_editor[campo_app] = st.column_config.SelectboxColumn(
+                campo_app,
+                options=opzioni_metodo_app_scorrimento,
+                default="—",
+                width="small",
+                required=False,
+                help="Metodo di applicazione: Ferro, Lana, Tampone o Spray.",
+            )
+            config_editor[campo_lav] = st.column_config.SelectboxColumn(
+                campo_lav,
+                options=opzioni_lavorazione_scorrimento,
+                default="—",
+                width="small",
+                required=False,
+                help="Lavorazione: Cork o Fleece.",
+            )
+            config_editor[campo_luc] = st.column_config.SelectboxColumn(
+                campo_luc,
+                options=opzioni_lucidatura_scorrimento,
+                default="—",
+                width="small",
+                required=False,
+                help="Lucidatura: Acciaio, Crine, Nylon o Lana.",
+            )
+
         firma_colonne = "_".join(
             col.lower().replace(" ", "_") for col in colonne_prodotto_attive
         ) or "nessuna"
