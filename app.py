@@ -12400,24 +12400,23 @@ st.markdown(
 
 logo_sidebar_path = os.path.join(BASE_DIR, "snowdatapro_logo_transparent.png")
 
+# Logo incorporato direttamente come data URI: non usa il media server di Streamlit
+# e resta stabile anche durante rerun/reconnect della sidebar.
 if os.path.exists(logo_sidebar_path):
-    # Logo SnowDataPro più grande, mantenuto centrato senza la colonna centrale
-    # che in precedenza ne limitava la larghezza effettiva.
-    st.sidebar.image(
-        logo_sidebar_path,
-        width=320,
-    )
-
-    # Spaziatura compatta tra branding e primo elemento del menu.
-    st.sidebar.markdown(
-        '<div style="height: 20px;"></div>',
-        unsafe_allow_html=True,
-    )
+    try:
+        with open(logo_sidebar_path, "rb") as _logo_file:
+            _logo_b64 = base64.b64encode(_logo_file.read()).decode("ascii")
+        _logo_html = (
+            '<div class="sdp-sidebar-logo" style="width:100%;display:flex;justify-content:center;align-items:center;">'
+            f'<img src="data:image/png;base64,{_logo_b64}" alt="SnowDataPro" '
+            'style="display:block;width:320px;max-width:100%;height:auto;object-fit:contain;margin:0 auto;" />'
+            '</div><div style="height:20px;"></div>'
+        )
+        st.sidebar.markdown(_logo_html, unsafe_allow_html=True)
+    except Exception:
+        st.sidebar.markdown('<div style="height:28px;"></div>', unsafe_allow_html=True)
 else:
-    st.sidebar.markdown(
-        '<div style="height: 28px;"></div>',
-        unsafe_allow_html=True,
-    )
+    st.sidebar.markdown('<div style="height:28px;"></div>', unsafe_allow_html=True)
 
 if st.sidebar.button(
     "Dashboard",
