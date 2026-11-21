@@ -4909,7 +4909,8 @@ def pagina_trova_prodotto_migliore():
     if categoria == "scorrimento":
         storico_test_df = leggi_df("""
             SELECT
-                a.sessione_id,
+                a.sessione_id, a.posizione,
+                cnt.n_preparazioni,
                 s.temperatura_aria, s.temperatura_neve,
                 s.snow_origine, s.snow_consistenza, s.snow_fondo, s.snow_umidita,
                 s.snow_forma_grano, s.snow_granulometria, s.snow_caratteristiche,
@@ -4918,7 +4919,12 @@ def pagina_trova_prodotto_migliore():
                 a.top_coating_prodotto_id, a.liquido_prodotto_id
             FROM test_scorrimento_aste a
             JOIN sessioni s ON s.id = a.sessione_id
-            WHERE a.posizione = 1
+            JOIN (
+                SELECT sessione_id, COUNT(*) AS n_preparazioni
+                FROM test_scorrimento_aste
+                GROUP BY sessione_id
+            ) cnt ON cnt.sessione_id = a.sessione_id
+            WHERE a.posizione IN (1, 2)
         """)
         focus_map = {
             "Test basi": "base_prodotto_id",
@@ -4931,10 +4937,25 @@ def pagina_trova_prodotto_migliore():
             "top_coating_prodotto_id", "liquido_prodotto_id",
         ]
         for rec in storico_test_df.to_dict("records"):
+            try:
+                posizione_evento = int(float(rec.get("posizione")))
+            except Exception:
+                continue
+            try:
+                n_preparazioni_evento = int(float(rec.get("n_preparazioni") or 0))
+            except Exception:
+                n_preparazioni_evento = 0
+
+            # Un secondo posto è informativo soltanto se il confronto aveva almeno
+            # tre preparazioni: in un test a due sarebbe semplicemente l'ultimo.
+            if posizione_evento == 2 and n_preparazioni_evento < 3:
+                continue
+            fattore_piazzamento = 1.00 if posizione_evento == 1 else 0.40
+
             categoria_test = str(rec.get("categoria_test_scorrimento") or "").strip()
             campo_focus = focus_map.get(categoria_test)
             # Deduplica per sessione/prodotto: se lo stesso prodotto compare in
-            # più strati della medesima preparazione vincente, conta una sola volta
+            # più strati della medesima preparazione classificata, conta una sola volta
             # usando il ruolo più significativo.
             fattori_evento = {}
             for campo_pid in campi_prodotti_test:
@@ -4955,20 +4976,40 @@ def pagina_trova_prodotto_migliore():
                     fattore_ruolo = 0.65
                 fattori_evento[pid] = max(fattori_evento.get(pid, 0.0), fattore_ruolo)
             for pid, fattore_ruolo in fattori_evento.items():
-                evidenze_test.setdefault(pid, []).append((rec, fattore_ruolo))
+                evidenze_test.setdefault(pid, []).append(
+                    (rec, fattore_ruolo, fattore_piazzamento, posizione_evento)
+                )
     else:
         storico_test_df = leggi_df("""
             SELECT
-                p.sessione_id,
+                p.sessione_id, p.posizione,
+                cnt.n_preparazioni,
                 s.temperatura_aria, s.temperatura_neve,
                 s.snow_origine, s.snow_consistenza, s.snow_fondo, s.snow_umidita,
                 s.snow_forma_grano, s.snow_granulometria, s.snow_caratteristiche,
                 p.base_prodotto_id, p.sciolina_prodotto_id, p.copertura_prodotto_id
             FROM test_tenuta_preparazioni p
             JOIN sessioni s ON s.id = p.sessione_id
-            WHERE p.posizione = 1
+            JOIN (
+                SELECT sessione_id, COUNT(*) AS n_preparazioni
+                FROM test_tenuta_preparazioni
+                GROUP BY sessione_id
+            ) cnt ON cnt.sessione_id = p.sessione_id
+            WHERE p.posizione IN (1, 2)
         """)
         for rec in storico_test_df.to_dict("records"):
+            try:
+                posizione_evento = int(float(rec.get("posizione")))
+            except Exception:
+                continue
+            try:
+                n_preparazioni_evento = int(float(rec.get("n_preparazioni") or 0))
+            except Exception:
+                n_preparazioni_evento = 0
+            if posizione_evento == 2 and n_preparazioni_evento < 3:
+                continue
+            fattore_piazzamento = 1.00 if posizione_evento == 1 else 0.40
+
             fattori_evento = {}
             for campo_pid, fattore_ruolo in [
                 ("sciolina_prodotto_id", 1.00),
@@ -4984,7 +5025,9 @@ def pagina_trova_prodotto_migliore():
                     continue
                 fattori_evento[pid] = max(fattori_evento.get(pid, 0.0), fattore_ruolo)
             for pid, fattore_ruolo in fattori_evento.items():
-                evidenze_test.setdefault(pid, []).append((rec, fattore_ruolo))
+                evidenze_test.setdefault(pid, []).append(
+                    (rec, fattore_ruolo, fattore_piazzamento, posizione_evento)
+                )
 
     storico_gare_df = leggi_df("""
         SELECT
@@ -5017,17 +5060,26 @@ def pagina_trova_prodotto_migliore():
         try:
             pid = int(prodotto_id)
         except Exception:
-            return 0.0, 0.0, 0, 0, 0.0, 0.0
+            return 0.0, 0.0, 0, 0, 0.0, 0.0, 0, 0
 
         contributi_test = []
-        for rec, fattore_ruolo in evidenze_test.get(pid, []):
+        n_vittorie_simili = 0
+        n_secondi_simili = 0
+        similarita_test_effettive = []
+        for rec, fattore_ruolo, fattore_piazzamento, posizione_evento in evidenze_test.get(pid, []):
             sim = _similarita_evento(rec)
             if sim < SOGLIA_SIMILARITA_STORICO:
                 continue
-            # Una vittoria perfettamente sovrapponibile vale 4 punti se il
-            # prodotto era la variabile principale. Più vittorie hanno ritorni
-            # crescenti solo fino al tetto massimo.
-            contributi_test.append(4.0 * sim * float(fattore_ruolo))
+            # 1° posto = bonus pieno; 2° posto = 40% del bonus. Il secondo posto
+            # è già stato escluso a monte quando il test aveva meno di 3 preparazioni.
+            contributi_test.append(
+                4.0 * sim * float(fattore_ruolo) * float(fattore_piazzamento)
+            )
+            similarita_test_effettive.append(sim)
+            if int(posizione_evento) == 1:
+                n_vittorie_simili += 1
+            elif int(posizione_evento) == 2:
+                n_secondi_simili += 1
 
         contributi_gara = []
         for rec in evidenze_gara.get(pid, []):
@@ -5040,7 +5092,7 @@ def pagina_trova_prodotto_migliore():
 
         bonus_test = min(BONUS_TEST_MAX, sum(contributi_test))
         bonus_gara = min(BONUS_GARA_MAX, sum(contributi_gara))
-        sim_test_max = max([x / 4.0 for x in contributi_test], default=0.0)
+        sim_test_max = max(similarita_test_effettive, default=0.0)
         sim_gara_max = max([x / 3.5 for x in contributi_gara], default=0.0)
         return (
             bonus_test,
@@ -5049,6 +5101,8 @@ def pagina_trova_prodotto_migliore():
             len(contributi_gara),
             sim_test_max,
             sim_gara_max,
+            n_vittorie_simili,
+            n_secondi_simili,
         )
 
     def _intervallo_riga(riga):
@@ -5240,6 +5294,8 @@ def pagina_trova_prodotto_migliore():
                 n_gare_simili,
                 sim_test_max,
                 sim_gara_max,
+                n_vittorie_simili,
+                n_secondi_simili,
             ) = _bonus_storico_prodotto(riga.get("id"))
 
             # Il bonus storico influenza l'ordine ma non modifica la percentuale
@@ -5253,6 +5309,8 @@ def pagina_trova_prodotto_migliore():
                 "bonus_gara": round(bonus_gara, 2),
                 "n_test_simili": int(n_test_simili),
                 "n_gare_simili": int(n_gare_simili),
+                "n_vittorie_simili": int(n_vittorie_simili),
+                "n_secondi_simili": int(n_secondi_simili),
                 "sim_test_max": round(sim_test_max, 3),
                 "sim_gara_max": round(sim_gara_max, 3),
                 "compat_neve": compat_neve,
@@ -5293,8 +5351,20 @@ def pagina_trova_prodotto_migliore():
 
                     storico_parts = []
                     if float(prodotto.get("bonus_test") or 0) > 0:
+                        risultati_test_txt = []
+                        n_vittorie = int(prodotto.get("n_vittorie_simili") or 0)
+                        n_secondi = int(prodotto.get("n_secondi_simili") or 0)
+                        if n_vittorie:
+                            risultati_test_txt.append(
+                                f"{n_vittorie} vittori{'a' if n_vittorie == 1 else 'e'}"
+                            )
+                        if n_secondi:
+                            risultati_test_txt.append(
+                                f"{n_secondi} second{'o posto' if n_secondi == 1 else 'i posti'}"
+                            )
+                        dettaglio_test = " + ".join(risultati_test_txt) or f"{prodotto['n_test_simili']} risultati"
                         storico_parts.append(
-                            f"🏆 Test +{prodotto['bonus_test']:.1f} · {prodotto['n_test_simili']} test vincent{'e' if prodotto['n_test_simili'] == 1 else 'i'} simili"
+                            f"🏆🥈 Test +{prodotto['bonus_test']:.1f} · {dettaglio_test} in condizioni simili"
                         )
                     if float(prodotto.get("bonus_gara") or 0) > 0:
                         storico_parts.append(
@@ -5314,9 +5384,10 @@ def pagina_trova_prodotto_migliore():
                         st.caption("Match neve: " + " · ".join(prodotto["match"]))
 
     st.caption(
-        "Il ranking combina compatibilità teorica e storico reale. Le vittorie nei test e gli utilizzi in gara "
-        "incidono solo quando temperatura e condizioni neve sono sufficientemente simili a quelle cercate; "
-        "il bonus storico è limitato per non promuovere prodotti fuori contesto."
+        "Il ranking combina compatibilità teorica e storico reale. Le vittorie nei test danno il bonus pieno; "
+        "i secondi posti valgono il 40% e vengono considerati solo nei test con almeno 3 preparazioni. "
+        "Gli utilizzi in gara incidono solo quando temperatura e condizioni neve sono sufficientemente simili; "
+        "il bonus storico resta limitato per non promuovere prodotti fuori contesto."
     )
 
 
