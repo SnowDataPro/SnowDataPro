@@ -3542,6 +3542,409 @@ st.markdown(
 
 
 
+# ============================================================
+# SNOWDATAPRO — POLISH GRAFICO GLOBALE
+# Solo presentazione: non modifica logica, dati, immagini o hover.
+# ============================================================
+st.markdown(
+    """
+    <style>
+    :root {
+        --sdp-blue: #00a7e1;
+        --sdp-blue-dark: #087aa6;
+        --sdp-navy: #17324a;
+        --sdp-bg: #f5f7f9;
+        --sdp-surface: #ffffff;
+        --sdp-surface-soft: #f8fafb;
+        --sdp-input: #f6f8fa;
+        --sdp-border: #dbe2e7;
+        --sdp-border-strong: #c9d2d9;
+        --sdp-text: #202a33;
+        --sdp-muted: #6f7d87;
+        --sdp-subtle: #96a2ab;
+        --sdp-radius-sm: 8px;
+        --sdp-radius-md: 12px;
+        --sdp-radius-lg: 16px;
+        --sdp-shadow: 0 3px 12px rgba(31, 46, 58, 0.045);
+        --sdp-shadow-hover: 0 7px 20px rgba(31, 46, 58, 0.075);
+    }
+
+    /* ---------- Pagina e gerarchia ---------- */
+    .stApp,
+    [data-testid="stAppViewContainer"] {
+        background: var(--sdp-bg) !important;
+    }
+
+    .block-container {
+        max-width: 1420px !important;
+        padding-top: 1.55rem !important;
+        padding-bottom: 4.25rem !important;
+        padding-left: 2.6rem !important;
+        padding-right: 2.6rem !important;
+    }
+
+    div[class*="st-key-sector_page_content"] {
+        background: var(--sdp-bg) !important;
+    }
+
+    [data-testid="stMarkdownContainer"] h1 {
+        color: var(--sdp-text) !important;
+        font-size: clamp(2rem, 2.45vw, 2.75rem) !important;
+        font-weight: 700 !important;
+        letter-spacing: -0.035em !important;
+        line-height: 1.08 !important;
+        margin-bottom: 0.7rem !important;
+    }
+
+    [data-testid="stMarkdownContainer"] h2 {
+        color: var(--sdp-text) !important;
+        font-size: clamp(1.48rem, 1.7vw, 1.82rem) !important;
+        font-weight: 680 !important;
+        letter-spacing: -0.026em !important;
+        line-height: 1.14 !important;
+        margin-top: 1.55rem !important;
+        margin-bottom: 0.75rem !important;
+    }
+
+    [data-testid="stMarkdownContainer"] h3 {
+        color: var(--sdp-text) !important;
+        font-size: 1.16rem !important;
+        font-weight: 650 !important;
+        letter-spacing: -0.018em !important;
+        margin-top: 1.1rem !important;
+        margin-bottom: 0.6rem !important;
+    }
+
+    [data-testid="stMarkdownContainer"] p {
+        line-height: 1.52 !important;
+    }
+
+    /* ---------- Etichette ---------- */
+    [data-testid="stWidgetLabel"] p,
+    [data-testid="stWidgetLabel"] label,
+    [data-testid="stWidgetLabel"] span {
+        color: #5f6f7a !important;
+        font-size: 0.91rem !important;
+        font-weight: 520 !important;
+        letter-spacing: -0.005em !important;
+    }
+
+    /* ---------- Input coerenti ---------- */
+    [data-testid="stTextInput"] [data-baseweb="input"],
+    [data-testid="stNumberInput"] [data-baseweb="input"],
+    [data-testid="stDateInput"] [data-baseweb="input"],
+    [data-testid="stTimeInput"] [data-baseweb="input"],
+    [data-testid="stSelectbox"] [data-baseweb="select"] > div,
+    [data-testid="stMultiSelect"] [data-baseweb="select"] > div,
+    [data-testid="stTextArea"] textarea {
+        min-height: 48px !important;
+        background: var(--sdp-input) !important;
+        background-color: var(--sdp-input) !important;
+        border: 1px solid var(--sdp-border-strong) !important;
+        border-radius: 9px !important;
+        box-shadow: none !important;
+        transition: border-color .14s ease, box-shadow .14s ease, background-color .14s ease !important;
+    }
+
+    [data-testid="stTextArea"] textarea {
+        min-height: 92px !important;
+        padding-top: .72rem !important;
+    }
+
+    [data-testid="stTextInput"] [data-baseweb="input"]:focus-within,
+    [data-testid="stNumberInput"] [data-baseweb="input"]:focus-within,
+    [data-testid="stDateInput"] [data-baseweb="input"]:focus-within,
+    [data-testid="stTimeInput"] [data-baseweb="input"]:focus-within,
+    [data-testid="stSelectbox"] [data-baseweb="select"] > div:focus-within,
+    [data-testid="stMultiSelect"] [data-baseweb="select"] > div:focus-within,
+    [data-testid="stTextArea"] textarea:focus {
+        background: #ffffff !important;
+        border-color: var(--sdp-blue) !important;
+        box-shadow: 0 0 0 3px rgba(0, 167, 225, 0.11) !important;
+        outline: none !important;
+    }
+
+    [data-testid="stTextInput"] input,
+    [data-testid="stNumberInput"] input,
+    [data-testid="stDateInput"] input,
+    [data-testid="stTimeInput"] input,
+    [data-testid="stTextArea"] textarea,
+    [data-testid="stSelectbox"] span,
+    [data-testid="stMultiSelect"] span {
+        font-size: 0.94rem !important;
+    }
+
+    /* Multiselect: badge più compatti e coerenti col brand */
+    [data-testid="stMultiSelect"] [data-baseweb="tag"] {
+        min-height: 32px !important;
+        background: var(--sdp-blue) !important;
+        border: 1px solid var(--sdp-blue) !important;
+        border-radius: 7px !important;
+        box-shadow: none !important;
+        padding-left: .18rem !important;
+        padding-right: .18rem !important;
+    }
+
+    [data-testid="stMultiSelect"] [data-baseweb="tag"] *,
+    [data-testid="stMultiSelect"] [data-baseweb="tag"] svg {
+        color: #ffffff !important;
+        fill: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+    }
+
+    /* ---------- Select popup ---------- */
+    div[data-baseweb="popover"] > div,
+    div[role="listbox"] {
+        border: 1px solid var(--sdp-border) !important;
+        border-radius: 10px !important;
+        box-shadow: 0 12px 32px rgba(30, 44, 55, 0.13) !important;
+        overflow: hidden !important;
+    }
+
+    div[role="option"] {
+        min-height: 43px !important;
+        padding-top: .55rem !important;
+        padding-bottom: .55rem !important;
+    }
+
+    div[role="option"]:hover,
+    div[role="option"][aria-selected="true"] {
+        background: #eef7fb !important;
+    }
+
+    /* ---------- Pulsanti ---------- */
+    .stButton > button,
+    [data-testid="stDownloadButton"] > button {
+        min-height: 44px !important;
+        border-radius: 9px !important;
+        border: 1px solid var(--sdp-border-strong) !important;
+        background: #ffffff !important;
+        color: var(--sdp-text) !important;
+        font-weight: 590 !important;
+        letter-spacing: -0.005em !important;
+        box-shadow: 0 1px 2px rgba(20, 35, 46, 0.02) !important;
+        transition: transform .12s ease, border-color .12s ease, background-color .12s ease, box-shadow .12s ease !important;
+    }
+
+    .stButton > button:hover,
+    [data-testid="stDownloadButton"] > button:hover {
+        border-color: #9bcfe1 !important;
+        background: #f8fcfe !important;
+        color: #17465a !important;
+        box-shadow: 0 3px 10px rgba(20, 35, 46, 0.055) !important;
+        transform: translateY(-1px) !important;
+    }
+
+    .stButton > button[kind="primary"] {
+        background: var(--sdp-blue) !important;
+        border-color: var(--sdp-blue) !important;
+        color: #ffffff !important;
+        box-shadow: 0 4px 12px rgba(0, 167, 225, 0.18) !important;
+    }
+
+    .stButton > button[kind="primary"]:hover {
+        background: #0796cb !important;
+        border-color: #0796cb !important;
+        color: #ffffff !important;
+    }
+
+    /* ---------- Metriche native ---------- */
+    [data-testid="stMetric"] {
+        background: #ffffff !important;
+        border: 1px solid var(--sdp-border) !important;
+        border-radius: 12px !important;
+        padding: .95rem 1rem !important;
+        box-shadow: var(--sdp-shadow) !important;
+        min-height: 94px !important;
+    }
+
+    [data-testid="stMetricLabel"] {
+        color: var(--sdp-muted) !important;
+        font-size: .78rem !important;
+        font-weight: 620 !important;
+        letter-spacing: .025em !important;
+        text-transform: uppercase !important;
+    }
+
+    [data-testid="stMetricValue"] {
+        color: var(--sdp-text) !important;
+        font-size: 1.62rem !important;
+        font-weight: 680 !important;
+        letter-spacing: -.025em !important;
+    }
+
+    /* ---------- Metric card custom ---------- */
+    .metric-card {
+        border-radius: 12px !important;
+        border-color: var(--sdp-border) !important;
+        box-shadow: var(--sdp-shadow) !important;
+        min-height: 118px !important;
+    }
+
+    .metric-card:hover {
+        border-color: #c7d4dc !important;
+        box-shadow: var(--sdp-shadow-hover) !important;
+        transform: translateY(-1px) !important;
+    }
+
+    .metric-card::before {
+        height: 3px !important;
+        background: linear-gradient(90deg, var(--sdp-blue), #58c4ea) !important;
+    }
+
+    /* ---------- Expander fuori sidebar ---------- */
+    main [data-testid="stExpander"] > details {
+        background: #ffffff !important;
+        border: 1px solid var(--sdp-border) !important;
+        border-radius: 12px !important;
+        box-shadow: var(--sdp-shadow) !important;
+        overflow: hidden !important;
+    }
+
+    main [data-testid="stExpander"] summary {
+        min-height: 50px !important;
+        padding-left: .95rem !important;
+        padding-right: .95rem !important;
+    }
+
+    main [data-testid="stExpander"] summary:hover {
+        background: #f8fafb !important;
+    }
+
+    main [data-testid="stExpander"] summary p {
+        color: #42515c !important;
+        font-weight: 580 !important;
+    }
+
+    /* ---------- Tabelle ---------- */
+    div[data-testid="stDataFrame"] {
+        border: 1px solid var(--sdp-border) !important;
+        border-radius: 12px !important;
+        background: #ffffff !important;
+        box-shadow: var(--sdp-shadow) !important;
+    }
+
+    [data-testid="stDataFrame"] [role="columnheader"] {
+        background: #f1f4f6 !important;
+        color: #53616b !important;
+        font-weight: 640 !important;
+    }
+
+    [data-testid="stDataFrame"] [role="gridcell"] {
+        border-color: #e4e9ed !important;
+    }
+
+    /* ---------- Upload ---------- */
+    [data-testid="stFileUploaderDropzone"] {
+        border: 1px dashed #bccad3 !important;
+        border-radius: 10px !important;
+        background: #f7f9fa !important;
+        transition: border-color .14s ease, background-color .14s ease !important;
+    }
+
+    [data-testid="stFileUploaderDropzone"]:hover {
+        border-color: var(--sdp-blue) !important;
+        background: #f3fbfe !important;
+    }
+
+    /* ---------- Checkbox e toggle ---------- */
+    [data-testid="stCheckbox"] label,
+    [data-testid="stToggle"] label {
+        color: #53616b !important;
+        font-size: .92rem !important;
+    }
+
+    /* ---------- Separatori ---------- */
+    hr {
+        border-top-color: #dfe5e9 !important;
+        margin-top: 1.65rem !important;
+        margin-bottom: 1.65rem !important;
+    }
+
+    /* ---------- Box messaggi ---------- */
+    [data-testid="stAlert"] {
+        border-radius: 10px !important;
+        box-shadow: none !important;
+    }
+
+    .info-box,
+    .warning-box,
+    .success-box {
+        border-radius: 10px !important;
+        box-shadow: none !important;
+    }
+
+    /* ---------- Sidebar: rifinitura, struttura invariata ---------- */
+    section[data-testid="stSidebar"] {
+        background: #171b1e !important;
+        border-right: 1px solid #272d31 !important;
+    }
+
+    section[data-testid="stSidebar"] .stButton > button {
+        min-height: 45px !important;
+        border-radius: 7px !important;
+        margin-top: 1px !important;
+        margin-bottom: 1px !important;
+        color: #cdd4d8 !important;
+    }
+
+    section[data-testid="stSidebar"] .stButton > button:hover {
+        background: #23292d !important;
+        color: #ffffff !important;
+        transform: none !important;
+    }
+
+    section[data-testid="stSidebar"] .stButton > button[kind="primary"] {
+        background: #252b2f !important;
+        border-left: 3px solid var(--sdp-blue) !important;
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,.018) !important;
+        color: #ffffff !important;
+    }
+
+    section[data-testid="stSidebar"] [data-testid="stExpander"] summary {
+        border-radius: 7px !important;
+    }
+
+    section[data-testid="stSidebar"] [data-testid="stExpander"] summary:hover {
+        background: #23292d !important;
+    }
+
+    /* ---------- Scrollbar contenuto ---------- */
+    ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: #c5ced4;
+        border-radius: 999px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: #aeb9c1;
+    }
+
+    /* ---------- Responsive ---------- */
+    @media (max-width: 900px) {
+        .block-container {
+            padding-left: 1.25rem !important;
+            padding-right: 1.25rem !important;
+        }
+
+        [data-testid="stMarkdownContainer"] h1 {
+            font-size: 2rem !important;
+        }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 @st.cache_data(show_spinner=False, max_entries=8)
 def _file_base64_cached(path, mtime_ns):
     """Legge/codifica un file statico una sola volta finché non cambia sul disco."""
