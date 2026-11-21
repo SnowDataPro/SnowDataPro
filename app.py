@@ -23,7 +23,7 @@ st.set_page_config(
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "ski_material_lab.db")
-VERSIONE_DATABASE_APP = 20
+VERSIONE_DATABASE_APP = 21
 
 
 # ============================================================
@@ -251,6 +251,17 @@ def inizializza_database():
             base_prodotto_id INTEGER,
             sciolina_prodotto_id INTEGER,
             copertura_prodotto_id INTEGER,
+            base_mani INTEGER,
+            base_temp_app REAL,
+            base_macchinetta INTEGER DEFAULT 0,
+            sciolina_mani INTEGER,
+            sciolina_temp_app REAL,
+            sciolina_macchinetta INTEGER DEFAULT 0,
+            copertura_mani INTEGER,
+            copertura_temp_app REAL,
+            copertura_macchinetta INTEGER DEFAULT 0,
+            voto_tenuta INTEGER,
+            voto_scorrevolezza INTEGER,
             note TEXT,
             creato_il TEXT NOT NULL,
             FOREIGN KEY(sessione_id) REFERENCES sessioni(id),
@@ -267,6 +278,30 @@ def inizializza_database():
             FOREIGN KEY(sessione_id) REFERENCES sessioni(id)
         )
     """)
+
+    # Parametri tecnici di applicazione e voti dei test scioline di tenuta.
+    # Migrazione non distruttiva per i test già presenti nel database.
+    colonne_tenuta_prep = {
+        r[1] for r in conn.execute("PRAGMA table_info(test_tenuta_preparazioni)").fetchall()
+    }
+    nuove_colonne_tenuta_prep = {
+        "base_mani": "INTEGER",
+        "base_temp_app": "REAL",
+        "base_macchinetta": "INTEGER DEFAULT 0",
+        "sciolina_mani": "INTEGER",
+        "sciolina_temp_app": "REAL",
+        "sciolina_macchinetta": "INTEGER DEFAULT 0",
+        "copertura_mani": "INTEGER",
+        "copertura_temp_app": "REAL",
+        "copertura_macchinetta": "INTEGER DEFAULT 0",
+        "voto_tenuta": "INTEGER",
+        "voto_scorrevolezza": "INTEGER",
+    }
+    for nome_colonna, tipo_colonna in nuove_colonne_tenuta_prep.items():
+        if nome_colonna not in colonne_tenuta_prep:
+            conn.execute(
+                f"ALTER TABLE test_tenuta_preparazioni ADD COLUMN {nome_colonna} {tipo_colonna}"
+            )
 
     conn.execute("""
         CREATE TABLE IF NOT EXISTS catalogo_prodotti (
@@ -8261,7 +8296,10 @@ def render_form_test_tenuta():
 
         edit_prep = leggi_df(
             """SELECT id, posizione, numero_sci, base_prodotto_id, sciolina_prodotto_id,
-                      copertura_prodotto_id, note
+                      copertura_prodotto_id, base_mani, base_temp_app, base_macchinetta,
+                      sciolina_mani, sciolina_temp_app, sciolina_macchinetta,
+                      copertura_mani, copertura_temp_app, copertura_macchinetta,
+                      voto_tenuta, voto_scorrevolezza, note
                FROM test_tenuta_preparazioni
                WHERE sessione_id = ? ORDER BY id""",
             (int(edit_id),),
@@ -8489,8 +8527,19 @@ def render_form_test_tenuta():
                 "Posizione": None if pd.isna(pos) else int(pos),
                 "Numero sci": str(r.get("numero_sci") or ""),
                 "Base": prodotto_label_da_id.get(int(r["base_prodotto_id"])) if pd.notna(r.get("base_prodotto_id")) else "—",
+                "Mani Base": None if pd.isna(r.get("base_mani")) else int(r.get("base_mani")),
+                "T app Base (°C)": None if pd.isna(r.get("base_temp_app")) else float(r.get("base_temp_app")),
+                "Macch. Base": bool(int(r.get("base_macchinetta") or 0)),
                 "Sciolina": prodotto_label_da_id.get(int(r["sciolina_prodotto_id"])) if pd.notna(r.get("sciolina_prodotto_id")) else "—",
+                "Mani Sciolina": None if pd.isna(r.get("sciolina_mani")) else int(r.get("sciolina_mani")),
+                "T app Sciolina (°C)": None if pd.isna(r.get("sciolina_temp_app")) else float(r.get("sciolina_temp_app")),
+                "Macch. Sciolina": bool(int(r.get("sciolina_macchinetta") or 0)),
                 "Copertura": prodotto_label_da_id.get(int(r["copertura_prodotto_id"])) if pd.notna(r.get("copertura_prodotto_id")) else "—",
+                "Mani Copertura": None if pd.isna(r.get("copertura_mani")) else int(r.get("copertura_mani")),
+                "T app Copertura (°C)": None if pd.isna(r.get("copertura_temp_app")) else float(r.get("copertura_temp_app")),
+                "Macch. Copertura": bool(int(r.get("copertura_macchinetta") or 0)),
+                "Tenuta": None if pd.isna(r.get("voto_tenuta")) else int(r.get("voto_tenuta")),
+                "Scorrevolezza": None if pd.isna(r.get("voto_scorrevolezza")) else int(r.get("voto_scorrevolezza")),
                 "Note": str(r.get("note") or ""),
             })
         if righe_edit:
@@ -8508,8 +8557,19 @@ def render_form_test_tenuta():
             "Posizione": [None] * n,
             "Numero sci": [""] * n,
             "Base": ["—"] * n,
+            "Mani Base": [None] * n,
+            "T app Base (°C)": [None] * n,
+            "Macch. Base": [False] * n,
             "Sciolina": ["—"] * n,
+            "Mani Sciolina": [None] * n,
+            "T app Sciolina (°C)": [None] * n,
+            "Macch. Sciolina": [False] * n,
             "Copertura": ["—"] * n,
+            "Mani Copertura": [None] * n,
+            "T app Copertura (°C)": [None] * n,
+            "Macch. Copertura": [False] * n,
+            "Tenuta": [None] * n,
+            "Scorrevolezza": [None] * n,
             "Note": [""] * n,
         })
 
@@ -8528,7 +8588,13 @@ def render_form_test_tenuta():
             if "_ordine_inserimento" in precedente.columns:
                 precedente = precedente.sort_values("_ordine_inserimento", kind="stable").reset_index(drop=True)
             for idx in range(min(len(precedente), n_righe)):
-                for col in ["Posizione", "Numero sci", "Base", "Sciolina", "Copertura", "Note"]:
+                for col in [
+                    "Posizione", "Numero sci",
+                    "Base", "Mani Base", "T app Base (°C)", "Macch. Base",
+                    "Sciolina", "Mani Sciolina", "T app Sciolina (°C)", "Macch. Sciolina",
+                    "Copertura", "Mani Copertura", "T app Copertura (°C)", "Macch. Copertura",
+                    "Tenuta", "Scorrevolezza", "Note"
+                ]:
                     if col in precedente.columns:
                         nuova.at[idx, col] = precedente.at[idx, col]
         st.session_state[stato_tabella_key] = nuova
@@ -8538,12 +8604,23 @@ def render_form_test_tenuta():
     df_tenuta = st.session_state[stato_tabella_key].copy()
 
     # Le colonne non selezionate vengono realmente svuotate, così non rimangono
-    # prodotti nascosti se l'utente cambia struttura della preparazione.
+    # prodotti o parametri di applicazione nascosti.
+    campi_applicazione = {
+        "Base": ["Mani Base", "T app Base (°C)", "Macch. Base"],
+        "Sciolina": ["Mani Sciolina", "T app Sciolina (°C)", "Macch. Sciolina"],
+        "Copertura": ["Mani Copertura", "T app Copertura (°C)", "Macch. Copertura"],
+    }
     for col in colonne_disponibili:
         if col not in colonne_attive:
             df_tenuta[col] = "—"
+            for campo in campi_applicazione[col]:
+                df_tenuta[campo] = False if campo.startswith("Macch.") else None
 
-    colonne_editor = ["_ordine_inserimento", "Posizione", "Numero sci", *colonne_attive, "Note"]
+    colonne_editor = ["_ordine_inserimento", "Posizione", "Numero sci"]
+    for col in colonne_attive:
+        colonne_editor.append(col)
+        colonne_editor.extend(campi_applicazione[col])
+    colonne_editor.extend(["Tenuta", "Scorrevolezza", "Note"])
     df_visibile = df_tenuta[colonne_editor].copy()
 
     config_editor = {
@@ -8566,6 +8643,14 @@ def render_form_test_tenuta():
                 else "Inserisci il codice dello sci, ad esempio 10A o 10B."
             ),
         ),
+        "Tenuta": st.column_config.NumberColumn(
+            "Tenuta", min_value=1, max_value=10, step=1, format="%d", width="small",
+            help="Valutazione della tenuta da 1 a 10."
+        ),
+        "Scorrevolezza": st.column_config.NumberColumn(
+            "Scorrevolezza", min_value=1, max_value=10, step=1, format="%d", width="small",
+            help="Valutazione della scorrevolezza da 1 a 10."
+        ),
         "Note": st.column_config.TextColumn("Note", width="large"),
     }
     if "Base" in colonne_attive:
@@ -8579,6 +8664,20 @@ def render_form_test_tenuta():
     if "Copertura" in colonne_attive:
         config_editor["Copertura"] = st.column_config.SelectboxColumn(
             "Copertura", options=opzioni_sciolina, width="medium", required=False,
+        )
+
+    for strato in colonne_attive:
+        config_editor[f"Mani {strato}"] = st.column_config.NumberColumn(
+            f"Mani {strato.lower()}", min_value=1, max_value=20, step=1, format="%d", width="small",
+            help="Numero di mani/strati applicati."
+        )
+        config_editor[f"T app {strato} (°C)"] = st.column_config.NumberColumn(
+            f"T app. {strato.lower()} °C", min_value=0.0, max_value=200.0, step=1.0, format="%.0f", width="small",
+            help="Temperatura usata per l'applicazione dello strato."
+        )
+        config_editor[f"Macch. {strato}"] = st.column_config.CheckboxColumn(
+            f"Macch. {strato.lower()}", width="small",
+            help="Seleziona se lo strato è stato applicato con macchinetta."
         )
 
     firma_colonne = "_".join(c.lower() for c in colonne_attive) or "nessuna"
@@ -8598,6 +8697,8 @@ def render_form_test_tenuta():
     for col in colonne_disponibili:
         if col not in colonne_attive:
             completo[col] = "—"
+            for campo in campi_applicazione[col]:
+                completo[campo] = False if campo.startswith("Macch.") else None
     st.session_state[stato_tabella_key] = completo.copy()
 
     c_ordina, c_reset, _ = st.columns([1.4, 1.4, 4])
@@ -8642,6 +8743,24 @@ def render_form_test_tenuta():
             return
 
         tab_da_salvare = st.session_state[stato_tabella_key].copy()
+
+        def _num_opzionale(valore, intero=False):
+            if valore is None:
+                return None
+            try:
+                if pd.isna(valore):
+                    return None
+            except Exception:
+                pass
+            testo = str(valore).strip().replace(",", ".")
+            if not testo:
+                return None
+            try:
+                num = float(testo)
+                return int(round(num)) if intero else num
+            except Exception:
+                return None
+
         preparazioni = []
         for _, riga in tab_da_salvare.iterrows():
             numero_sci = str(riga.get("Numero sci") or "").strip()
@@ -8665,8 +8784,19 @@ def render_form_test_tenuta():
                 "posizione": posizione,
                 "numero_sci": numero_sci,
                 "base_id": prodotto_id_da_label.get(base_label),
+                "base_mani": _num_opzionale(riga.get("Mani Base"), intero=True),
+                "base_temp_app": _num_opzionale(riga.get("T app Base (°C)")),
+                "base_macchinetta": 1 if riga.get("Macch. Base") is True else 0,
                 "sciolina_id": prodotto_id_da_label.get(sciolina_label),
+                "sciolina_mani": _num_opzionale(riga.get("Mani Sciolina"), intero=True),
+                "sciolina_temp_app": _num_opzionale(riga.get("T app Sciolina (°C)")),
+                "sciolina_macchinetta": 1 if riga.get("Macch. Sciolina") is True else 0,
                 "copertura_id": prodotto_id_da_label.get(copertura_label),
+                "copertura_mani": _num_opzionale(riga.get("Mani Copertura"), intero=True),
+                "copertura_temp_app": _num_opzionale(riga.get("T app Copertura (°C)")),
+                "copertura_macchinetta": 1 if riga.get("Macch. Copertura") is True else 0,
+                "voto_tenuta": _num_opzionale(riga.get("Tenuta"), intero=True),
+                "voto_scorrevolezza": _num_opzionale(riga.get("Scorrevolezza"), intero=True),
                 "note": note_riga,
             })
 
@@ -8739,11 +8869,19 @@ def render_form_test_tenuta():
                 conn.execute(
                     """INSERT INTO test_tenuta_preparazioni (
                            sessione_id, posizione, numero_sci, base_prodotto_id,
-                           sciolina_prodotto_id, copertura_prodotto_id, note, creato_il
-                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                           sciolina_prodotto_id, copertura_prodotto_id,
+                           base_mani, base_temp_app, base_macchinetta,
+                           sciolina_mani, sciolina_temp_app, sciolina_macchinetta,
+                           copertura_mani, copertura_temp_app, copertura_macchinetta,
+                           voto_tenuta, voto_scorrevolezza, note, creato_il
+                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         sessione_id, prep["posizione"], prep["numero_sci"], prep["base_id"],
-                        prep["sciolina_id"], prep["copertura_id"], prep["note"],
+                        prep["sciolina_id"], prep["copertura_id"],
+                        prep["base_mani"], prep["base_temp_app"], prep["base_macchinetta"],
+                        prep["sciolina_mani"], prep["sciolina_temp_app"], prep["sciolina_macchinetta"],
+                        prep["copertura_mani"], prep["copertura_temp_app"], prep["copertura_macchinetta"],
+                        prep["voto_tenuta"], prep["voto_scorrevolezza"], prep["note"],
                         datetime.now().isoformat(timespec="seconds"),
                     ),
                 )
@@ -8876,7 +9014,7 @@ def _render_test_tenuta_podium(df_righe, colonne_attive=None):
 
 
 def _render_test_tenuta_detail_table(df_righe, colonne_attive=None):
-    """Tabella storico tenuta con hover immagine prodotto, coerente con i test scorrimento."""
+    """Tabella storico tenuta con hover immagine e parametri tecnici di applicazione."""
     if df_righe is None or df_righe.empty:
         return
 
@@ -8891,20 +9029,22 @@ def _render_test_tenuta_detail_table(df_righe, colonne_attive=None):
         "Sciolina": ("Sciolina", "sciolina_foto", "sciolina_mime"),
         "Copertura": ("Copertura", "copertura_foto", "copertura_mime"),
     }
-    larghezza_minima = 330 + 168 * len(colonne_attive)
+    larghezza_minima = 520 + 340 * len(colonne_attive)
 
     st.markdown(
         f"""
         <style>
         .tenuta-test-table-wrap{{overflow-x:auto;overflow-y:visible;border:1px solid #dbe1e6;border-radius:14px;background:#fff;margin-top:.45rem;position:relative;z-index:1;box-shadow:0 8px 24px rgba(31,41,51,.05)}}
-        table.tenuta-test-table{{width:100%;min-width:{larghezza_minima}px;border-collapse:separate;border-spacing:0;table-layout:fixed;color:#263238;font-size:.76rem;font-weight:500}}
-        .tenuta-test-table th{{background:#f3f6f8;color:#51606b;font-size:.73rem;font-weight:700;text-align:center;padding:.58rem .42rem;border-bottom:1px solid #dbe1e6;white-space:nowrap}}
-        .tenuta-test-table td{{padding:.56rem .42rem;border-bottom:1px solid #e7ebef;vertical-align:middle;overflow:visible;position:relative;text-align:center;color:#263238}}
+        table.tenuta-test-table{{width:100%;min-width:{larghezza_minima}px;border-collapse:separate;border-spacing:0;table-layout:fixed;color:#263238;font-size:.74rem;font-weight:500}}
+        .tenuta-test-table th{{background:#f3f6f8;color:#51606b;font-size:.70rem;font-weight:700;text-align:center;padding:.55rem .35rem;border-bottom:1px solid #dbe1e6;white-space:nowrap}}
+        .tenuta-test-table td{{padding:.54rem .36rem;border-bottom:1px solid #e7ebef;vertical-align:middle;overflow:visible;position:relative;text-align:center;color:#263238}}
         .tenuta-test-table tr:last-child td{{border-bottom:0}}
-        .tenuta-test-table th.col-pos,.tenuta-test-table td.col-pos{{width:70px}}
-        .tenuta-test-table th.col-sci,.tenuta-test-table td.col-sci{{width:95px}}
-        .tenuta-test-table th.col-prod,.tenuta-test-table td.col-prod{{width:168px}}
-        .tenuta-test-table th.col-note,.tenuta-test-table td.col-note{{width:175px}}
+        .tenuta-test-table th.col-pos,.tenuta-test-table td.col-pos{{width:68px}}
+        .tenuta-test-table th.col-sci,.tenuta-test-table td.col-sci{{width:86px}}
+        .tenuta-test-table th.col-prod,.tenuta-test-table td.col-prod{{width:165px}}
+        .tenuta-test-table th.col-small,.tenuta-test-table td.col-small{{width:78px}}
+        .tenuta-test-table th.col-score,.tenuta-test-table td.col-score{{width:92px}}
+        .tenuta-test-table th.col-note,.tenuta-test-table td.col-note{{width:220px}}
         .tenuta-test-table tbody tr:nth-child(even) td{{background:#fbfcfd}}
         .tenuta-test-table tbody tr.tenuta-winner td{{font-weight:750;background:#fdfefe}}
         .tenuta-test-table .test-product-cell{{min-height:24px;display:flex;align-items:center;justify-content:center;position:relative}}
@@ -8915,6 +9055,7 @@ def _render_test_tenuta_detail_table(df_righe, colonne_attive=None):
         .tenuta-test-table .test-product-name{{line-height:1.18;font-weight:500;font-size:.75rem;color:#263238;white-space:normal;overflow-wrap:anywhere;text-align:center;transition:color .12s ease}}
         .tenuta-test-table .test-product-hover-target:hover .test-product-name{{color:#007ea8}}
         .tenuta-test-table .test-product-empty{{color:#9aa7b2;text-align:center}}
+        .tenuta-score{{font-weight:800;font-size:.82rem}}
         </style>
         """,
         unsafe_allow_html=True,
@@ -8923,7 +9064,24 @@ def _render_test_tenuta_detail_table(df_righe, colonne_attive=None):
     headers = '<th class="col-pos">Posizione</th><th class="col-sci">Numero sci</th>'
     for c in colonne_attive:
         headers += f'<th class="col-prod">{html_escape(c)}</th>'
-    headers += '<th class="col-note">Note</th>'
+        headers += '<th class="col-small">Mani</th><th class="col-small">T app.</th><th class="col-small">Macch.</th>'
+    headers += '<th class="col-score">Tenuta</th><th class="col-score">Scorrevolezza</th><th class="col-note">Note</th>'
+
+    def _fmt_num(v, suffisso=""):
+        if v is None:
+            return "—"
+        try:
+            if pd.isna(v):
+                return "—"
+        except Exception:
+            pass
+        try:
+            f = float(v)
+            txt = str(int(round(f))) if abs(f - round(f)) < 1e-9 else f"{f:.1f}"
+            return html_escape(txt + suffisso)
+        except Exception:
+            t = str(v).strip()
+            return html_escape(t) if t else "—"
 
     rows = []
     for record in df_righe.to_dict("records"):
@@ -8943,9 +9101,22 @@ def _render_test_tenuta_detail_table(df_righe, colonne_attive=None):
         for c in colonne_attive:
             nome_key, foto_key, mime_key = campi[c]
             cells.append(f'<td class="col-prod">{_product_cell_html(record.get(nome_key), record.get(foto_key), record.get(mime_key))}</td>')
+            cells.append(f'<td class="col-small">{_fmt_num(record.get(f"Mani {c}"))}</td>')
+            cells.append(f'<td class="col-small">{_fmt_num(record.get(f"T app {c} (°C)"), " °C")}</td>')
+            mac = record.get(f"Macch. {c}")
+            try:
+                mac_on = int(float(mac or 0)) != 0
+            except Exception:
+                mac_on = bool(mac)
+            cells.append(f'<td class="col-small">{"Sì" if mac_on else "—"}</td>')
+        tenuta = _fmt_num(record.get("Tenuta"))
+        scorr = _fmt_num(record.get("Scorrevolezza"))
         rows.append(
             f'<tr{row_cls}><td class="col-pos">{html_escape(pos_txt)}</td><td class="col-sci">{sci}</td>'
-            + ''.join(cells) + f'<td class="col-note">{note}</td></tr>'
+            + ''.join(cells)
+            + f'<td class="col-score"><span class="tenuta-score">{tenuta}</span></td>'
+            + f'<td class="col-score"><span class="tenuta-score">{scorr}</span></td>'
+            + f'<td class="col-note">{note}</td></tr>'
         )
 
     st.markdown(
@@ -8953,6 +9124,7 @@ def _render_test_tenuta_detail_table(df_righe, colonne_attive=None):
         + headers + '</tr></thead><tbody>' + ''.join(rows) + '</tbody></table></div>',
         unsafe_allow_html=True,
     )
+
 
 def _reset_rig_test_form_state():
     """Pulisce solo lo stato del form Test rigature, preservando filtri/storico."""
@@ -10004,13 +10176,49 @@ def _crea_pdf_test_tenuta(test, df_righe):
     tn.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),colors.white),("BOX",(0,0),(-1,-1),0.5,colors.HexColor("#d8dde3")),("INNERGRID",(0,0),(-1,-1),0.35,colors.HexColor("#e3e7eb")),("VALIGN",(0,0),(-1,-1),"MIDDLE"),("LEFTPADDING",(0,0),(-1,-1),6),("RIGHTPADDING",(0,0),(-1,-1),6),("TOPPADDING",(0,0),(-1,-1),5),("BOTTOMPADDING",(0,0),(-1,-1),5)]))
     story += [tn, Spacer(1,3*mm), Paragraph("Scioline testate",section)]
 
-    cols=[c for c in ["Posizione","Numero sci","Base","Sciolina","Copertura","Note"] if c in df_righe.columns and (c in ["Posizione","Numero sci","Note"] or df_righe[c].astype(str).str.strip().replace("—","").ne("").any())]
+    ordine_pdf=[
+        "Posizione","Numero sci",
+        "Base","Mani Base","T app Base (°C)","Macch. Base",
+        "Sciolina","Mani Sciolina","T app Sciolina (°C)","Macch. Sciolina",
+        "Copertura","Mani Copertura","T app Copertura (°C)","Macch. Copertura",
+        "Tenuta","Scorrevolezza","Note"
+    ]
+    sempre=["Posizione","Numero sci","Tenuta","Scorrevolezza","Note"]
+    cols=[]
+    for c in ordine_pdf:
+        if c not in df_righe.columns:
+            continue
+        if c in sempre:
+            cols.append(c)
+            continue
+        serie=df_righe[c]
+        if c.startswith("Macch."):
+            if pd.to_numeric(serie, errors="coerce").fillna(0).astype(int).ne(0).any():
+                cols.append(c)
+        elif serie.astype(str).str.strip().replace({"—":"","None":"","nan":"","<NA>":""}).ne("").any():
+            cols.append(c)
     data=[[Paragraph(xml_escape(c),head) for c in cols]]
     for _,r in df_righe.iterrows():
-        data.append([para(r.get(c)) for c in cols])
+        riga_pdf=[]
+        for c in cols:
+            val=r.get(c)
+            if c.startswith("Macch."):
+                try:
+                    val="Sì" if int(float(val or 0)) else "—"
+                except Exception:
+                    val="—"
+            riga_pdf.append(para(val))
+        data.append(riga_pdf)
     widths=[]
     for c in cols:
-        widths.append(18*mm if c=="Posizione" else 25*mm if c=="Numero sci" else 52*mm if c in ["Base","Sciolina","Copertura"] else 50*mm)
+        if c=="Posizione": widths.append(16*mm)
+        elif c=="Numero sci": widths.append(22*mm)
+        elif c in ["Base","Sciolina","Copertura"]: widths.append(38*mm)
+        elif c.startswith("Mani "): widths.append(16*mm)
+        elif c.startswith("T app "): widths.append(22*mm)
+        elif c.startswith("Macch."): widths.append(18*mm)
+        elif c in ["Tenuta","Scorrevolezza"]: widths.append(20*mm)
+        else: widths.append(42*mm)
     tt=Table(data,colWidths=widths,repeatRows=1,hAlign="LEFT")
     tt.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),colors.HexColor("#eef1f4")),("BOX",(0,0),(-1,-1),0.55,colors.HexColor("#cfd6dc")),("INNERGRID",(0,0),(-1,-1),0.35,colors.HexColor("#dfe4e8")),("VALIGN",(0,0),(-1,-1),"MIDDLE"),("ALIGN",(0,0),(-1,0),"CENTER"),("LEFTPADDING",(0,0),(-1,-1),5),("RIGHTPADDING",(0,0),(-1,-1),5),("TOPPADDING",(0,0),(-1,-1),5),("BOTTOMPADDING",(0,0),(-1,-1),5)]))
     story.append(tt)
@@ -12938,6 +13146,13 @@ with st.container(key="sector_page_content"):
                                sw.foto_data AS sciolina_foto, sw.foto_mime AS sciolina_mime,
                                CASE WHEN c.id IS NULL THEN '—' ELSE TRIM(COALESCE(c.marca,'') || CASE WHEN TRIM(COALESCE(c.marca,''))<>'' THEN ' - ' ELSE '' END || COALESCE(c.nome,'')) END AS "Copertura",
                                c.foto_data AS copertura_foto, c.foto_mime AS copertura_mime,
+                               t.base_mani AS "Mani Base", t.base_temp_app AS "T app Base (°C)",
+                               t.base_macchinetta AS "Macch. Base",
+                               t.sciolina_mani AS "Mani Sciolina", t.sciolina_temp_app AS "T app Sciolina (°C)",
+                               t.sciolina_macchinetta AS "Macch. Sciolina",
+                               t.copertura_mani AS "Mani Copertura", t.copertura_temp_app AS "T app Copertura (°C)",
+                               t.copertura_macchinetta AS "Macch. Copertura",
+                               t.voto_tenuta AS "Tenuta", t.voto_scorrevolezza AS "Scorrevolezza",
                                COALESCE(t.note,'') AS "Note"
                         FROM test_tenuta_preparazioni t
                         LEFT JOIN catalogo_prodotti b ON b.id=t.base_prodotto_id
@@ -12952,7 +13167,11 @@ with st.container(key="sector_page_content"):
                     if not df_cfg.empty:
                         try: cols_attive=json.loads(str(df_cfg.iloc[0].get("colonne_attive") or "[]"))
                         except Exception: cols_attive=[]
-                    visible=["Posizione","Numero sci"]+[c for c in ["Base","Sciolina","Copertura"] if c in cols_attive]+["Note"]
+                    visible=["Posizione","Numero sci"]
+                    for _strato in ["Base","Sciolina","Copertura"]:
+                        if _strato in cols_attive:
+                            visible.extend([_strato, f"Mani {_strato}", f"T app {_strato} (°C)", f"Macch. {_strato}"])
+                    visible.extend(["Tenuta","Scorrevolezza","Note"])
                     visible=[c for c in visible if c in df_det.columns]
                     if not df_det.empty:
                         st.markdown("##### Podio test")
