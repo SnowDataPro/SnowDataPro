@@ -23,7 +23,7 @@ st.set_page_config(
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "ski_material_lab.db")
-VERSIONE_DATABASE_APP = 21
+VERSIONE_DATABASE_APP = 22
 
 
 # ============================================================
@@ -467,6 +467,12 @@ def inizializza_database():
         "categoria_test_scorrimento": "TEXT",
         "zero_riferimento_id": "INTEGER",
         "note_clima": "TEXT",
+        "foto_pista_data": "TEXT",
+        "foto_pista_mime": "TEXT",
+        "foto_pista_nome": "TEXT",
+        "foto_neve_data": "TEXT",
+        "foto_neve_mime": "TEXT",
+        "foto_neve_nome": "TEXT",
     }
     for nome_colonna, tipo_colonna in nuove_colonne_sessioni.items():
         if nome_colonna not in colonne_sessioni:
@@ -4668,6 +4674,197 @@ def _mostra_foto_db(foto_data, use_container_width=True, width=None):
         return False
 
 
+
+MAX_FOTO_TEST_INPUT_MB = 15
+TARGET_FOTO_TEST_KB = 550
+
+
+def _prepara_foto_test_upload(file_caricato):
+    """Comprimi una foto pista/neve prima di salvarla nel DB."""
+    if file_caricato is None:
+        return None
+
+    mime_in = str(getattr(file_caricato, "type", "") or "").lower()
+    nome_in = str(getattr(file_caricato, "name", "") or "foto_test").strip()
+    dati_in = file_caricato.getvalue()
+    if mime_in not in MIME_FOTO_AMMESSI:
+        raise ValueError("Formato foto non supportato. Usa JPG, PNG oppure WEBP.")
+    if len(dati_in) > MAX_FOTO_TEST_INPUT_MB * 1024 * 1024:
+        raise ValueError(
+            f"La foto è troppo grande. Dimensione massima in ingresso: {MAX_FOTO_TEST_INPUT_MB} MB."
+        )
+
+    # Pillow è già disponibile nell'ambiente Streamlit. In caso di problema,
+    # manteniamo comunque una fallback sicura sull'originale se è già leggera.
+    try:
+        from io import BytesIO
+        from PIL import Image, ImageOps
+
+        img = Image.open(BytesIO(dati_in))
+        img = ImageOps.exif_transpose(img)
+        if img.mode not in ("RGB", "L"):
+            if "A" in img.getbands():
+                fondo = Image.new("RGB", img.size, "white")
+                alpha = img.getchannel("A")
+                fondo.paste(img.convert("RGB"), mask=alpha)
+                img = fondo
+            else:
+                img = img.convert("RGB")
+        elif img.mode == "L":
+            img = img.convert("RGB")
+
+        max_dim = 1600
+        img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+        target = TARGET_FOTO_TEST_KB * 1024
+        dati_out = b""
+        for quality in (84, 80, 76, 72, 68, 64, 60):
+            buf = BytesIO()
+            img.save(buf, format="JPEG", quality=quality, optimize=True, progressive=True)
+            dati_out = buf.getvalue()
+            if len(dati_out) <= target:
+                break
+
+        # Se la foto resta pesante, riduciamo ancora leggermente la risoluzione.
+        if len(dati_out) > target and max(img.size) > 1350:
+            img.thumbnail((1350, 1350), Image.Resampling.LANCZOS)
+            buf = BytesIO()
+            img.save(buf, format="JPEG", quality=68, optimize=True, progressive=True)
+            dati_out = buf.getvalue()
+
+        nome_base = re.sub(r"\.[^.]+$", "", nome_in) or "foto_test"
+        return base64.b64encode(dati_out).decode("ascii"), "image/jpeg", f"{nome_base}.jpg"
+    except Exception:
+        if len(dati_in) > 1200 * 1024:
+            raise ValueError("Non riesco a comprimere questa foto. Prova con un JPG o PNG più leggero.")
+        return base64.b64encode(dati_in).decode("ascii"), mime_in, nome_in
+
+
+def _foto_test_correnti(sessione_id):
+    if sessione_id is None:
+        return {}
+    df = leggi_df(
+        """SELECT foto_pista_data, foto_pista_mime, foto_pista_nome,
+                  foto_neve_data, foto_neve_mime, foto_neve_nome
+           FROM sessioni WHERE id = ?""",
+        (int(sessione_id),),
+    )
+    return {} if df.empty else df.iloc[0].to_dict()
+
+
+def _render_foto_test_form(prefix, sessione_id=None):
+    """Due uploader opzionali: pista generale e dettaglio neve."""
+    correnti = _foto_test_correnti(sessione_id)
+    st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
+    st.markdown("#### Foto pista / neve")
+    st.caption(
+        "Facoltative. Le immagini vengono compresse automaticamente prima del salvataggio. "
+        "Consiglio: una foto generale della pista e una ravvicinata della neve."
+    )
+    c1, c2 = st.columns(2)
+    with c1:
+        if str(correnti.get("foto_pista_data") or "").strip():
+            st.caption("Foto pista attuale")
+            _mostra_foto_db(correnti.get("foto_pista_data"), width=230)
+        foto_pista_upload = st.file_uploader(
+            "Foto pista",
+            type=["jpg", "jpeg", "png", "webp"],
+            key=f"{prefix}_foto_pista_upload",
+            help="Foto generale della pista/superficie. Se sei in modifica e non carichi nulla, la foto attuale resta invariata.",
+        )
+        if foto_pista_upload is not None:
+            st.image(foto_pista_upload, width=230)
+    with c2:
+        if str(correnti.get("foto_neve_data") or "").strip():
+            st.caption("Dettaglio neve attuale")
+            _mostra_foto_db(correnti.get("foto_neve_data"), width=230)
+        foto_neve_upload = st.file_uploader(
+            "Foto dettaglio neve",
+            type=["jpg", "jpeg", "png", "webp"],
+            key=f"{prefix}_foto_neve_upload",
+            help="Foto ravvicinata del grano e della superficie. Se sei in modifica e non carichi nulla, la foto attuale resta invariata.",
+        )
+        if foto_neve_upload is not None:
+            st.image(foto_neve_upload, width=230)
+    return foto_pista_upload, foto_neve_upload
+
+
+def _prepara_foto_test_doppia(foto_pista_upload, foto_neve_upload):
+    return (
+        _prepara_foto_test_upload(foto_pista_upload),
+        _prepara_foto_test_upload(foto_neve_upload),
+    )
+
+
+def _aggiorna_foto_test_conn(conn, sessione_id, foto_pista_preparata, foto_neve_preparata):
+    aggiornamenti = []
+    valori = []
+    if foto_pista_preparata is not None:
+        aggiornamenti += ["foto_pista_data = ?", "foto_pista_mime = ?", "foto_pista_nome = ?"]
+        valori.extend(foto_pista_preparata)
+    if foto_neve_preparata is not None:
+        aggiornamenti += ["foto_neve_data = ?", "foto_neve_mime = ?", "foto_neve_nome = ?"]
+        valori.extend(foto_neve_preparata)
+    if aggiornamenti:
+        valori.append(int(sessione_id))
+        conn.execute(
+            f"UPDATE sessioni SET {', '.join(aggiornamenti)} WHERE id = ?",
+            tuple(valori),
+        )
+
+
+def _aggiorna_foto_test_sessione(sessione_id, foto_pista_preparata, foto_neve_preparata):
+    if foto_pista_preparata is None and foto_neve_preparata is None:
+        return
+    conn = apri_connessione_database()
+    try:
+        _aggiorna_foto_test_conn(conn, sessione_id, foto_pista_preparata, foto_neve_preparata)
+        conn.commit()
+    finally:
+        conn.close()
+    _invalida_cache_dati()
+
+
+def _render_foto_test_storico(sessione_id):
+    foto = _foto_test_correnti(sessione_id)
+    items = []
+    for titolo, data_key, mime_key in [
+        ("Foto pista", "foto_pista_data", "foto_pista_mime"),
+        ("Dettaglio neve", "foto_neve_data", "foto_neve_mime"),
+    ]:
+        valore = str(foto.get(data_key) or "").strip()
+        if not valore:
+            continue
+        mime = str(foto.get(mime_key) or "image/jpeg").strip() or "image/jpeg"
+        src = f"data:{html_escape(mime)};base64,{valore}"
+        items.append(
+            '<div class="test-photo-item">'
+            f'<div class="test-photo-label">{html_escape(titolo)}</div>'
+            '<div class="test-photo-hover">'
+            f'<img class="test-photo-thumb" src="{src}" alt="{html_escape(titolo)}">'
+            f'<div class="test-photo-preview"><img src="{src}" alt="{html_escape(titolo)}"></div>'
+            '</div></div>'
+        )
+    if not items:
+        return
+    st.markdown(
+        """
+        <style>
+        .test-photo-gallery{display:flex;gap:1rem;flex-wrap:wrap;margin:.35rem 0 1rem}
+        .test-photo-item{width:240px}
+        .test-photo-label{font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.045em;color:#7a8a96;margin-bottom:.3rem}
+        .test-photo-hover{position:relative;display:inline-block;cursor:zoom-in}
+        .test-photo-thumb{width:240px;height:145px;object-fit:cover;border-radius:12px;border:1px solid #d8dde3;background:#f7f9fa;display:block}
+        .test-photo-preview{position:fixed;top:110px;right:30px;width:min(720px,55vw);height:min(620px,72vh);padding:12px;background:#fff;border:1px solid #cfd8df;border-radius:16px;box-shadow:0 24px 70px rgba(25,39,52,.34);opacity:0;visibility:hidden;transform:translateY(8px) scale(.985);transition:.14s ease;pointer-events:none;z-index:2147483647}
+        .test-photo-preview img{width:100%;height:100%;object-fit:contain;display:block}
+        .test-photo-hover:hover .test-photo-preview{opacity:1;visibility:visible;transform:translateY(0) scale(1)}
+        @media(max-width:900px){.test-photo-preview{right:10px;top:90px;width:calc(100vw - 20px);height:65vh}.test-photo-item,.test-photo-thumb{width:100%;max-width:320px}}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown('<div class="test-photo-gallery">' + ''.join(items) + '</div>', unsafe_allow_html=True)
+
+
 def _foto_catalogo_ids(categoria, ids):
     """Recupera/decodifica solo le foto necessarie e le conserva nella sessione."""
     ids_puliti = []
@@ -8322,6 +8519,11 @@ def render_form_test_scorrimento():
             key="scroll_weather",
         )
 
+    scroll_foto_pista_upload, scroll_foto_neve_upload = _render_foto_test_form(
+        f"scroll_test_{edit_scroll_session_id if edit_scroll_session_id is not None else 'new'}",
+        edit_scroll_session_id,
+    )
+
     # 3. CLASSIFICAZIONE NEVE - STESSO SISTEMA DELLO ZERO TEST
     st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
     st.markdown("#### Classificazione neve")
@@ -8755,6 +8957,13 @@ def render_form_test_scorrimento():
                 except Exception:
                     st.error("Controlla temperatura aria e temperatura neve. Usa valori come -3.0 o 0.0.")
                     return
+                try:
+                    scroll_foto_pista_preparata, scroll_foto_neve_preparata = _prepara_foto_test_doppia(
+                        scroll_foto_pista_upload, scroll_foto_neve_upload
+                    )
+                except ValueError as exc:
+                    st.error(str(exc))
+                    return
 
                 tab_da_salvare = st.session_state[stato_tabella_key].copy()
                 righe_asta = []
@@ -8874,6 +9083,11 @@ def render_form_test_scorrimento():
                                 ),
                             )
                             sessione_scroll_id = int(cur.lastrowid)
+
+                        _aggiorna_foto_test_conn(
+                            conn, sessione_scroll_id,
+                            scroll_foto_pista_preparata, scroll_foto_neve_preparata,
+                        )
 
                         for riga in righe_asta:
                             conn.execute(
@@ -9308,6 +9522,11 @@ def render_form_test_tenuta():
         height=90,
     )
 
+    tenuta_foto_pista_upload, tenuta_foto_neve_upload = _render_foto_test_form(
+        f"tenuta_test_{edit_id if edit_id is not None else 'new'}",
+        edit_id,
+    )
+
     st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
     st.markdown("#### Classificazione neve")
     st.caption("Usa la stessa classificazione indipendente adottata nel catalogo e negli altri test SnowDataPro.")
@@ -9641,6 +9860,13 @@ def render_form_test_tenuta():
         except Exception:
             st.error("Controlla temperatura aria e temperatura neve. Usa valori come -3.0 o 0.0.")
             return
+        try:
+            tenuta_foto_pista_preparata, tenuta_foto_neve_preparata = _prepara_foto_test_doppia(
+                tenuta_foto_pista_upload, tenuta_foto_neve_upload
+            )
+        except ValueError as exc:
+            st.error(str(exc))
+            return
 
         tab_da_salvare = st.session_state[stato_tabella_key].copy()
 
@@ -9761,6 +9987,11 @@ def render_form_test_tenuta():
                     ),
                 )
                 sessione_id = int(cur.lastrowid)
+
+            _aggiorna_foto_test_conn(
+                conn, sessione_id,
+                tenuta_foto_pista_preparata, tenuta_foto_neve_preparata,
+            )
 
             conn.execute(
                 "INSERT INTO test_tenuta_config (sessione_id, colonne_attive) VALUES (?, ?)",
@@ -10364,6 +10595,11 @@ def render_form_test_rigature():
         height=90,
     )
 
+    rig_foto_pista_upload, rig_foto_neve_upload = _render_foto_test_form(
+        f"rig_test_{edit_id if edit_id is not None else 'new'}",
+        edit_id,
+    )
+
     st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
     st.markdown("#### Classificazione neve")
     st.caption("Usa la stessa classificazione indipendente adottata nel catalogo e nei test di scorrimento.")
@@ -10734,6 +10970,13 @@ def render_form_test_rigature():
     except Exception:
         st.error("Controlla temperatura aria e temperatura neve. Usa valori come -3.0 o 0.0.")
         return
+    try:
+        rig_foto_pista_preparata, rig_foto_neve_preparata = _prepara_foto_test_doppia(
+            rig_foto_pista_upload, rig_foto_neve_upload
+        )
+    except ValueError as exc:
+        st.error(str(exc))
+        return
 
     righe_salva = []
     for _, r in st.session_state[state_key].iterrows():
@@ -10813,6 +11056,11 @@ def render_form_test_rigature():
                  int(zero_ref_id) if zero_ref_id is not None else None, str(note_clima or "").strip(), datetime.now().isoformat(timespec="seconds"))
             )
             sid = int(cur.lastrowid)
+        _aggiorna_foto_test_conn(
+            conn, sid,
+            rig_foto_pista_preparata, rig_foto_neve_preparata,
+        )
+
         for rr in righe_salva:
             cur = conn.execute(
                 "INSERT INTO test_rigature_aste (sessione_id, posizione, numero_sci, note, creato_il) VALUES (?, ?, ?, ?, ?)",
@@ -11460,6 +11708,11 @@ def render_form_zero_test():
         height=80,
     )
 
+    zero_foto_pista_upload, zero_foto_neve_upload = _render_foto_test_form(
+        f"zero_test_{suffix_zero}",
+        edit_zero_session_id,
+    )
+
     # ------------------------------------------------------------
     # 3. CLASSIFICAZIONE NEVE
     # ------------------------------------------------------------
@@ -11733,6 +11986,13 @@ def render_form_zero_test():
         if not zero_luogo.strip():
             st.error("Inserisci il luogo dello Zero test.")
         else:
+            try:
+                zero_foto_pista_preparata, zero_foto_neve_preparata = _prepara_foto_test_doppia(
+                    zero_foto_pista_upload, zero_foto_neve_upload
+                )
+            except ValueError as exc:
+                st.error(str(exc))
+                return
             righe_da_salvare = []
             for _, riga in editor_zero.sort_values("Paio").iterrows():
                 paio_num = int(riga["Paio"])
@@ -11814,6 +12074,10 @@ def render_form_zero_test():
                     "zero_batteria": zero_batteria,
                 }
                 salva_zero_test_matrice(sessione_id, righe_da_salvare, classificazione)
+                _aggiorna_foto_test_sessione(
+                    sessione_id,
+                    zero_foto_pista_preparata, zero_foto_neve_preparata,
+                )
                 st.session_state.pop("zero_edit_session_id", None)
                 st.session_state.pop("zero_insert_open", None)
                 st.session_state["zero_history_notice"] = (
@@ -13379,6 +13643,7 @@ with st.container(key="sector_page_content"):
                             )
                         class_html += '</div>'
                         st.markdown(class_html, unsafe_allow_html=True)
+                        _render_foto_test_storico(sessione_id_zero)
 
                         st.markdown("##### Dettaglio zero test")
                         st.dataframe(
@@ -13640,6 +13905,7 @@ with st.container(key="sector_page_content"):
                         )
                     class_html_scroll += '</div>'
                     st.markdown(class_html_scroll, unsafe_allow_html=True)
+                    _render_foto_test_storico(sid)
 
                     if not df_righe.empty:
                         st.markdown("##### Podio test")
@@ -13950,6 +14216,7 @@ with st.container(key="sector_page_content"):
                     for idx,(lab,val) in enumerate(classif):
                         with cc[idx%4]:
                             st.caption(lab.upper()); st.write(str(val or "—"))
+                    _render_foto_test_storico(sid)
 
                     if not df_rows.empty:
                         st.markdown("##### Podio test")
@@ -14091,6 +14358,7 @@ with st.container(key="sector_page_content"):
                         f"Granulometria: **{str(test.get('snow_granulometria') or '—')}** · "
                         f"Caratteristiche: **{str(test.get('snow_caratteristiche') or '—')}**"
                     )
+                    _render_foto_test_storico(sid)
 
                     df_det = leggi_df(
                         """
