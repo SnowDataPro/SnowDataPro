@@ -9727,11 +9727,14 @@ def render_form_test_tenuta():
         + (" · ".join(colonne_attive) if colonne_attive else "nessuna colonna prodotto selezionata")
     )
     if colonne_attive:
-        st.caption("In Base, Sciolina e Copertura puoi selezionare più prodotti nella stessa casella.")
+        st.caption(
+            "In Base, Sciolina e Copertura puoi selezionare più prodotti nella stessa casella, "
+            "senza vincoli di categoria: ogni strato può contenere qualsiasi prodotto del catalogo tenuta."
+        )
 
-    # Catalogo tenuta: Base usa soltanto i prodotti base; Sciolina e Copertura
-    # usano Kick wax e Klister. La colonna indica il ruolo nello sci, mentre il
-    # prodotto resta quello reale del catalogo SnowDataPro.
+    # Catalogo tenuta: Base, Sciolina e Copertura descrivono il ruolo dello strato,
+    # non la categoria commerciale del prodotto. In ciascuna casella è quindi
+    # possibile scegliere qualsiasi prodotto del catalogo tenuta e combinarlo con altri.
     df_catalogo_tenuta = leggi_df(
         """
         SELECT id, nome, marca, tipo
@@ -9746,8 +9749,7 @@ def render_form_test_tenuta():
         nome = str(prod.get("nome") or "").strip()
         return f"{marca} - {nome}" if marca else nome
 
-    opzioni_base = []
-    opzioni_sciolina = []
+    opzioni_tenuta_tutte = []
     prodotto_id_da_label = {}
     prodotto_label_da_id = {}
     if not df_catalogo_tenuta.empty:
@@ -9758,11 +9760,8 @@ def render_form_test_tenuta():
             pid = int(prod["id"])
             prodotto_id_da_label[label] = pid
             prodotto_label_da_id[pid] = label
-            tipo = str(prod.get("tipo") or "").strip()
-            if tipo in {"Base kick wax", "Base klister", "Base spray"} and label not in opzioni_base:
-                opzioni_base.append(label)
-            if tipo in {"Kick wax", "Klister"} and label not in opzioni_sciolina:
-                opzioni_sciolina.append(label)
+            if label not in opzioni_tenuta_tutte:
+                opzioni_tenuta_tutte.append(label)
 
     # Completa il caricamento della tabella in modalità modifica dopo aver creato
     # la mappa ID -> nome prodotto del catalogo.
@@ -9805,7 +9804,7 @@ def render_form_test_tenuta():
             "_ordine_inserimento": list(range(n)),
             "Posizione": [None] * n,
             "Numero sci": [""] * n,
-            "Base": ["—"] * n,
+            "Base": [[] for _ in range(n)],
             "Mani Base": [None] * n,
             "T app Base (°C)": [None] * n,
             "Macch. Base": [False] * n,
@@ -9909,18 +9908,18 @@ def render_form_test_tenuta():
     }
     if "Base" in colonne_attive:
         config_editor["Base"] = st.column_config.MultiselectColumn(
-            "Base", options=opzioni_base, width="large", required=False, default=[],
-            help="Puoi selezionare più basi nella stessa preparazione; l'ordine selezionato viene mantenuto.",
+            "Base", options=opzioni_tenuta_tutte, width="large", required=False, default=[],
+            help="Puoi selezionare qualsiasi prodotto di tenuta, anche kick wax o klister, e combinarne più di uno nello strato Base.",
         )
     if "Sciolina" in colonne_attive:
         config_editor["Sciolina"] = st.column_config.MultiselectColumn(
-            "Sciolina", options=opzioni_sciolina, width="large", required=False, default=[],
-            help="Puoi selezionare più scioline/klister nella stessa casella.",
+            "Sciolina", options=opzioni_tenuta_tutte, width="large", required=False, default=[],
+            help="Puoi selezionare qualsiasi prodotto di tenuta, comprese basi, kick wax e klister, e combinarne più di uno.",
         )
     if "Copertura" in colonne_attive:
         config_editor["Copertura"] = st.column_config.MultiselectColumn(
-            "Copertura", options=opzioni_sciolina, width="large", required=False, default=[],
-            help="Puoi selezionare più prodotti di copertura nella stessa casella.",
+            "Copertura", options=opzioni_tenuta_tutte, width="large", required=False, default=[],
+            help="Puoi selezionare qualsiasi prodotto di tenuta e combinarne più di uno nello strato Copertura.",
         )
 
     for strato in colonne_attive:
