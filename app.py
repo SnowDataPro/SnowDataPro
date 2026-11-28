@@ -23,7 +23,7 @@ st.set_page_config(
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "ski_material_lab.db")
-VERSIONE_DATABASE_APP = 22
+VERSIONE_DATABASE_APP = 23
 
 
 # ============================================================
@@ -288,6 +288,9 @@ def inizializza_database():
             base_prodotto_id INTEGER,
             sciolina_prodotto_id INTEGER,
             copertura_prodotto_id INTEGER,
+            base_prodotti_ids TEXT,
+            sciolina_prodotti_ids TEXT,
+            copertura_prodotti_ids TEXT,
             base_mani INTEGER,
             base_temp_app REAL,
             base_macchinetta INTEGER DEFAULT 0,
@@ -323,6 +326,9 @@ def inizializza_database():
         r[1] for r in conn.execute("PRAGMA table_info(test_tenuta_preparazioni)").fetchall()
     }
     nuove_colonne_tenuta_prep = {
+        "base_prodotti_ids": "TEXT",
+        "sciolina_prodotti_ids": "TEXT",
+        "copertura_prodotti_ids": "TEXT",
         "base_mani": "INTEGER",
         "base_temp_app": "REAL",
         "base_macchinetta": "INTEGER DEFAULT 0",
@@ -4679,6 +4685,73 @@ MAX_FOTO_TEST_INPUT_MB = 15
 TARGET_FOTO_TEST_KB = 550
 
 
+def _normalizza_orientamento_foto_test(dati_in, max_dim=None, quality=88):
+    """Restituisce JPEG con orientamento EXIF applicato fisicamente ai pixel."""
+    from io import BytesIO
+    from PIL import Image, ImageOps
+
+    img = Image.open(BytesIO(dati_in))
+    img.load()
+
+    # Alcuni telefoni memorizzano la rotazione solo nel tag EXIF Orientation.
+    # exif_transpose applica quella rotazione ai pixel e rimuove il tag, evitando
+    # che browser/Streamlit mostrino la foto ruotata o la ruotino una seconda volta.
+    try:
+        img = ImageOps.exif_transpose(img)
+    except Exception:
+        # Fallback manuale per file con EXIF parzialmente corrotti.
+        try:
+            orientation = int(img.getexif().get(274, 1) or 1)
+            if orientation == 2:
+                img = ImageOps.mirror(img)
+            elif orientation == 3:
+                img = img.rotate(180, expand=True)
+            elif orientation == 4:
+                img = ImageOps.flip(img)
+            elif orientation == 5:
+                img = ImageOps.mirror(img.rotate(-90, expand=True))
+            elif orientation == 6:
+                img = img.rotate(-90, expand=True)
+            elif orientation == 7:
+                img = ImageOps.mirror(img.rotate(90, expand=True))
+            elif orientation == 8:
+                img = img.rotate(90, expand=True)
+        except Exception:
+            pass
+
+    if img.mode not in ("RGB", "L"):
+        if "A" in img.getbands():
+            fondo = Image.new("RGB", img.size, "white")
+            alpha = img.getchannel("A")
+            fondo.paste(img.convert("RGB"), mask=alpha)
+            img = fondo
+        else:
+            img = img.convert("RGB")
+    elif img.mode == "L":
+        img = img.convert("RGB")
+
+    if max_dim:
+        img.thumbnail((int(max_dim), int(max_dim)), Image.Resampling.LANCZOS)
+
+    buf = BytesIO()
+    img.save(buf, format="JPEG", quality=int(quality), optimize=True, progressive=True)
+    return buf.getvalue(), img.size
+
+
+def _anteprima_foto_test_upload(file_caricato, width=230):
+    """Anteprima con orientamento normalizzato, coerente con il file che verrà salvato."""
+    if file_caricato is None:
+        return
+    try:
+        dati = file_caricato.getvalue()
+        dati_preview, _ = _normalizza_orientamento_foto_test(dati, max_dim=900, quality=86)
+        st.image(dati_preview, width=width)
+    except Exception:
+        # Fallback: se Pillow non riesce a leggere il file, lascia a Streamlit
+        # la visualizzazione originale invece di bloccare il form.
+        st.image(file_caricato, width=width)
+
+
 def _prepara_foto_test_upload(file_caricato):
     """Comprimi una foto pista/neve prima di salvarla nel DB."""
     if file_caricato is None:
@@ -4694,42 +4767,27 @@ def _prepara_foto_test_upload(file_caricato):
             f"La foto è troppo grande. Dimensione massima in ingresso: {MAX_FOTO_TEST_INPUT_MB} MB."
         )
 
-    # Pillow è già disponibile nell'ambiente Streamlit. In caso di problema,
-    # manteniamo comunque una fallback sicura sull'originale se è già leggera.
+    # Normalizziamo SEMPRE l'orientamento prima della compressione. In questo modo
+    # il file salvato non dipende più dal tag EXIF Orientation del telefono.
     try:
-        from io import BytesIO
-        from PIL import Image, ImageOps
-
-        img = Image.open(BytesIO(dati_in))
-        img = ImageOps.exif_transpose(img)
-        if img.mode not in ("RGB", "L"):
-            if "A" in img.getbands():
-                fondo = Image.new("RGB", img.size, "white")
-                alpha = img.getchannel("A")
-                fondo.paste(img.convert("RGB"), mask=alpha)
-                img = fondo
-            else:
-                img = img.convert("RGB")
-        elif img.mode == "L":
-            img = img.convert("RGB")
-
-        max_dim = 1600
-        img.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+        dati_out, dimensioni = _normalizza_orientamento_foto_test(
+            dati_in, max_dim=1600, quality=84
+        )
         target = TARGET_FOTO_TEST_KB * 1024
-        dati_out = b""
-        for quality in (84, 80, 76, 72, 68, 64, 60):
-            buf = BytesIO()
-            img.save(buf, format="JPEG", quality=quality, optimize=True, progressive=True)
-            dati_out = buf.getvalue()
-            if len(dati_out) <= target:
-                break
 
-        # Se la foto resta pesante, riduciamo ancora leggermente la risoluzione.
-        if len(dati_out) > target and max(img.size) > 1350:
-            img.thumbnail((1350, 1350), Image.Resampling.LANCZOS)
-            buf = BytesIO()
-            img.save(buf, format="JPEG", quality=68, optimize=True, progressive=True)
-            dati_out = buf.getvalue()
+        if len(dati_out) > target:
+            for quality in (80, 76, 72, 68, 64, 60):
+                dati_out, dimensioni = _normalizza_orientamento_foto_test(
+                    dati_in, max_dim=1600, quality=quality
+                )
+                if len(dati_out) <= target:
+                    break
+
+        # Se resta pesante, riduciamo ulteriormente la risoluzione.
+        if len(dati_out) > target and max(dimensioni) > 1350:
+            dati_out, _ = _normalizza_orientamento_foto_test(
+                dati_in, max_dim=1350, quality=68
+            )
 
         nome_base = re.sub(r"\.[^.]+$", "", nome_in) or "foto_test"
         return base64.b64encode(dati_out).decode("ascii"), "image/jpeg", f"{nome_base}.jpg"
@@ -4772,7 +4830,7 @@ def _render_foto_test_form(prefix, sessione_id=None):
             help="Foto generale della pista/superficie. Se sei in modifica e non carichi nulla, la foto attuale resta invariata.",
         )
         if foto_pista_upload is not None:
-            st.image(foto_pista_upload, width=230)
+            _anteprima_foto_test_upload(foto_pista_upload, width=230)
     with c2:
         if str(correnti.get("foto_neve_data") or "").strip():
             st.caption("Dettaglio neve attuale")
@@ -4784,7 +4842,7 @@ def _render_foto_test_form(prefix, sessione_id=None):
             help="Foto ravvicinata del grano e della superficie. Se sei in modifica e non carichi nulla, la foto attuale resta invariata.",
         )
         if foto_neve_upload is not None:
-            st.image(foto_neve_upload, width=230)
+            _anteprima_foto_test_upload(foto_neve_upload, width=230)
     return foto_pista_upload, foto_neve_upload
 
 
@@ -5184,7 +5242,8 @@ def pagina_trova_prodotto_migliore():
                 s.temperatura_aria, s.temperatura_neve,
                 s.snow_origine, s.snow_consistenza, s.snow_fondo, s.snow_umidita,
                 s.snow_forma_grano, s.snow_granulometria, s.snow_caratteristiche,
-                p.base_prodotto_id, p.sciolina_prodotto_id, p.copertura_prodotto_id
+                p.base_prodotto_id, p.sciolina_prodotto_id, p.copertura_prodotto_id,
+                p.base_prodotti_ids, p.sciolina_prodotti_ids, p.copertura_prodotti_ids
             FROM test_tenuta_preparazioni p
             JOIN sessioni s ON s.id = p.sessione_id
             JOIN (
@@ -5208,19 +5267,13 @@ def pagina_trova_prodotto_migliore():
             fattore_piazzamento = 1.00 if posizione_evento == 1 else 0.40
 
             fattori_evento = {}
-            for campo_pid, fattore_ruolo in [
-                ("sciolina_prodotto_id", 1.00),
-                ("copertura_prodotto_id", 0.75),
-                ("base_prodotto_id", 0.35),
+            for campo_pid, campo_ids, fattore_ruolo in [
+                ("sciolina_prodotto_id", "sciolina_prodotti_ids", 1.00),
+                ("copertura_prodotto_id", "copertura_prodotti_ids", 0.75),
+                ("base_prodotto_id", "base_prodotti_ids", 0.35),
             ]:
-                pid = rec.get(campo_pid)
-                try:
-                    if pid is None or pd.isna(pid):
-                        continue
-                    pid = int(pid)
-                except Exception:
-                    continue
-                fattori_evento[pid] = max(fattori_evento.get(pid, 0.0), fattore_ruolo)
+                for pid in _tenuta_ids_da_json(rec.get(campo_ids), rec.get(campo_pid)):
+                    fattori_evento[pid] = max(fattori_evento.get(pid, 0.0), fattore_ruolo)
             for pid, fattore_ruolo in fattori_evento.items():
                 evidenze_test.setdefault(pid, []).append(
                     (rec, fattore_ruolo, fattore_piazzamento, posizione_evento)
@@ -8108,7 +8161,7 @@ def pagina_gare():
                             snow_origine, snow_consistenza, snow_fondo, snow_umidita,
                             snow_forma_grano, snow_granulometria, snow_caratteristiche,
                             note_clima, note, creato_il
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                         (
                             data_gara.isoformat(), ora_gara.strftime("%H:%M"), str(luogo).strip(), tecnica, tipologia,
                             str(modello_sci or "").strip(), float(temp_aria), float(temp_neve), int(umidita), _meteo_storage(meteo),
@@ -8768,7 +8821,7 @@ def render_form_test_scorrimento():
                 "_ordine_inserimento": list(range(n)),
                 "Posizione": [None] * n,
                 "Numero sci": [""] * n,
-                "Base": ["—"] * n,
+                "Base": [[] for _ in range(n)],
                 "Paraffina": ["—"] * n,
                 "Top coating": ["—"] * n,
                 "Liquido": ["—"] * n,
@@ -9338,6 +9391,86 @@ def _mantieni_aperto_form_tenuta():
     st.session_state["tenuta_test_form_keep_open"] = True
 
 
+
+def _tenuta_lista_cella(valore):
+    """Normalizza una cella multiselezione in lista di etichette prodotto."""
+    if valore is None:
+        return []
+    try:
+        if pd.isna(valore):
+            return []
+    except Exception:
+        pass
+    if isinstance(valore, (list, tuple, set)):
+        valori = list(valore)
+    else:
+        testo = str(valore).strip()
+        if not testo or testo in {"—", "None", "nan", "<NA>"}:
+            return []
+        if testo.startswith("[") and testo.endswith("]"):
+            try:
+                parsed = json.loads(testo)
+                valori = parsed if isinstance(parsed, list) else [testo]
+            except Exception:
+                valori = [testo]
+        else:
+            valori = [testo]
+    risultato = []
+    for item in valori:
+        t = str(item or "").strip()
+        if t and t not in {"—", "None", "nan", "<NA>"} and t not in risultato:
+            risultato.append(t)
+    return risultato
+
+
+def _tenuta_ids_da_json(valore_json, fallback_id=None):
+    """Restituisce gli ID prodotto ordinati, con fallback ai vecchi campi singoli."""
+    ids = []
+    if valore_json is not None:
+        try:
+            if not pd.isna(valore_json):
+                raw = str(valore_json).strip()
+                if raw:
+                    parsed = json.loads(raw)
+                    if isinstance(parsed, list):
+                        for pid in parsed:
+                            try:
+                                pid_i = int(pid)
+                            except Exception:
+                                continue
+                            if pid_i not in ids:
+                                ids.append(pid_i)
+        except Exception:
+            pass
+    if not ids and fallback_id is not None:
+        try:
+            if not pd.isna(fallback_id):
+                ids.append(int(fallback_id))
+        except Exception:
+            pass
+    return ids
+
+
+def _tenuta_info_prodotti_da_ids(ids_prodotti, catalogo_map):
+    """Crea i dati visuali ordinati dei prodotti selezionati nello stesso strato."""
+    risultati = []
+    for pid in ids_prodotti or []:
+        try:
+            pid = int(pid)
+        except Exception:
+            continue
+        rec = catalogo_map.get(pid)
+        if not rec:
+            continue
+        risultati.append({
+            "id": pid,
+            "nome": str(rec.get("nome_label") or "").strip(),
+            "foto_data": rec.get("foto_data"),
+            "foto_mime": rec.get("foto_mime"),
+        })
+    return risultati
+
+
 @st.fragment
 def render_form_test_tenuta():
     """Inserimento/modifica Test scioline di tenuta, coerente con le altre pagine test."""
@@ -9403,7 +9536,8 @@ def render_form_test_tenuta():
 
         edit_prep = leggi_df(
             """SELECT id, posizione, numero_sci, base_prodotto_id, sciolina_prodotto_id,
-                      copertura_prodotto_id, base_mani, base_temp_app, base_macchinetta, base_ferro,
+                      copertura_prodotto_id, base_prodotti_ids, sciolina_prodotti_ids, copertura_prodotti_ids,
+                      base_mani, base_temp_app, base_macchinetta, base_ferro,
                       sciolina_mani, sciolina_temp_app, sciolina_macchinetta,
                       copertura_mani, copertura_temp_app, copertura_macchinetta,
                       voto_tenuta, voto_scorrevolezza, note
@@ -9420,9 +9554,9 @@ def render_form_test_tenuta():
             except Exception:
                 cols_edit = []
         if not cols_edit and not edit_prep.empty:
-            if edit_prep["base_prodotto_id"].notna().any(): cols_edit.append("Base")
-            if edit_prep["sciolina_prodotto_id"].notna().any(): cols_edit.append("Sciolina")
-            if edit_prep["copertura_prodotto_id"].notna().any(): cols_edit.append("Copertura")
+            if edit_prep["base_prodotto_id"].notna().any() or edit_prep["base_prodotti_ids"].fillna("").astype(str).str.strip().ne("").any(): cols_edit.append("Base")
+            if edit_prep["sciolina_prodotto_id"].notna().any() or edit_prep["sciolina_prodotti_ids"].fillna("").astype(str).str.strip().ne("").any(): cols_edit.append("Sciolina")
+            if edit_prep["copertura_prodotto_id"].notna().any() or edit_prep["copertura_prodotti_ids"].fillna("").astype(str).str.strip().ne("").any(): cols_edit.append("Copertura")
         st.session_state["tenuta_test_product_columns"] = cols_edit or ["Sciolina"]
 
     st.markdown('<div class="insert-test-divider"></div>', unsafe_allow_html=True)
@@ -9592,6 +9726,8 @@ def render_form_test_tenuta():
         "Colonne visualizzate: "
         + (" · ".join(colonne_attive) if colonne_attive else "nessuna colonna prodotto selezionata")
     )
+    if colonne_attive:
+        st.caption("In Base, Sciolina e Copertura puoi selezionare più prodotti nella stessa casella.")
 
     # Catalogo tenuta: Base usa soltanto i prodotti base; Sciolina e Copertura
     # usano Kick wax e Klister. La colonna indica il ruolo nello sci, mentre il
@@ -9610,9 +9746,9 @@ def render_form_test_tenuta():
         nome = str(prod.get("nome") or "").strip()
         return f"{marca} - {nome}" if marca else nome
 
-    opzioni_base = ["—"]
-    opzioni_sciolina = ["—"]
-    prodotto_id_da_label = {"—": None}
+    opzioni_base = []
+    opzioni_sciolina = []
+    prodotto_id_da_label = {}
     prodotto_label_da_id = {}
     if not df_catalogo_tenuta.empty:
         for _, prod in df_catalogo_tenuta.iterrows():
@@ -9638,16 +9774,16 @@ def render_form_test_tenuta():
                 "_ordine_inserimento": idx,
                 "Posizione": None if pd.isna(pos) else int(pos),
                 "Numero sci": str(r.get("numero_sci") or ""),
-                "Base": prodotto_label_da_id.get(int(r["base_prodotto_id"])) if pd.notna(r.get("base_prodotto_id")) else "—",
+                "Base": [prodotto_label_da_id[pid] for pid in _tenuta_ids_da_json(r.get("base_prodotti_ids"), r.get("base_prodotto_id")) if pid in prodotto_label_da_id],
                 "Mani Base": None if pd.isna(r.get("base_mani")) else int(r.get("base_mani")),
                 "T app Base (°C)": None if pd.isna(r.get("base_temp_app")) else float(r.get("base_temp_app")),
                 "Macch. Base": bool(int(r.get("base_macchinetta") or 0)),
                 "Ferro Base": bool(int(r.get("base_ferro") or 0)),
-                "Sciolina": prodotto_label_da_id.get(int(r["sciolina_prodotto_id"])) if pd.notna(r.get("sciolina_prodotto_id")) else "—",
+                "Sciolina": [prodotto_label_da_id[pid] for pid in _tenuta_ids_da_json(r.get("sciolina_prodotti_ids"), r.get("sciolina_prodotto_id")) if pid in prodotto_label_da_id],
                 "Mani Sciolina": None if pd.isna(r.get("sciolina_mani")) else int(r.get("sciolina_mani")),
                 "T app Sciolina (°C)": None if pd.isna(r.get("sciolina_temp_app")) else float(r.get("sciolina_temp_app")),
                 "Macch. Sciolina": bool(int(r.get("sciolina_macchinetta") or 0)),
-                "Copertura": prodotto_label_da_id.get(int(r["copertura_prodotto_id"])) if pd.notna(r.get("copertura_prodotto_id")) else "—",
+                "Copertura": [prodotto_label_da_id[pid] for pid in _tenuta_ids_da_json(r.get("copertura_prodotti_ids"), r.get("copertura_prodotto_id")) if pid in prodotto_label_da_id],
                 "Mani Copertura": None if pd.isna(r.get("copertura_mani")) else int(r.get("copertura_mani")),
                 "T app Copertura (°C)": None if pd.isna(r.get("copertura_temp_app")) else float(r.get("copertura_temp_app")),
                 "Macch. Copertura": bool(int(r.get("copertura_macchinetta") or 0)),
@@ -9674,11 +9810,11 @@ def render_form_test_tenuta():
             "T app Base (°C)": [None] * n,
             "Macch. Base": [False] * n,
             "Ferro Base": [False] * n,
-            "Sciolina": ["—"] * n,
+            "Sciolina": [[] for _ in range(n)],
             "Mani Sciolina": [None] * n,
             "T app Sciolina (°C)": [None] * n,
             "Macch. Sciolina": [False] * n,
-            "Copertura": ["—"] * n,
+            "Copertura": [[] for _ in range(n)],
             "Mani Copertura": [None] * n,
             "T app Copertura (°C)": [None] * n,
             "Macch. Copertura": [False] * n,
@@ -9726,9 +9862,13 @@ def render_form_test_tenuta():
     }
     for col in colonne_disponibili:
         if col not in colonne_attive:
-            df_tenuta[col] = "—"
+            df_tenuta[col] = [[] for _ in range(len(df_tenuta))]
             for campo in campi_applicazione[col]:
                 df_tenuta[campo] = False if (campo.startswith("Macch.") or campo.startswith("Ferro")) else None
+
+    # Le tre colonne prodotto sono vere celle multiselezione: ogni valore resta una lista ordinata.
+    for col in colonne_attive:
+        df_tenuta[col] = df_tenuta[col].apply(_tenuta_lista_cella)
 
     colonne_editor = ["_ordine_inserimento", "Posizione", "Numero sci"]
     for col in colonne_attive:
@@ -9768,16 +9908,19 @@ def render_form_test_tenuta():
         "Note": st.column_config.TextColumn("Note", width="large"),
     }
     if "Base" in colonne_attive:
-        config_editor["Base"] = st.column_config.SelectboxColumn(
-            "Base", options=opzioni_base, width="medium", required=False,
+        config_editor["Base"] = st.column_config.MultiselectColumn(
+            "Base", options=opzioni_base, width="large", required=False, default=[],
+            help="Puoi selezionare più basi nella stessa preparazione; l'ordine selezionato viene mantenuto.",
         )
     if "Sciolina" in colonne_attive:
-        config_editor["Sciolina"] = st.column_config.SelectboxColumn(
-            "Sciolina", options=opzioni_sciolina, width="medium", required=False,
+        config_editor["Sciolina"] = st.column_config.MultiselectColumn(
+            "Sciolina", options=opzioni_sciolina, width="large", required=False, default=[],
+            help="Puoi selezionare più scioline/klister nella stessa casella.",
         )
     if "Copertura" in colonne_attive:
-        config_editor["Copertura"] = st.column_config.SelectboxColumn(
-            "Copertura", options=opzioni_sciolina, width="medium", required=False,
+        config_editor["Copertura"] = st.column_config.MultiselectColumn(
+            "Copertura", options=opzioni_sciolina, width="large", required=False, default=[],
+            help="Puoi selezionare più prodotti di copertura nella stessa casella.",
         )
 
     for strato in colonne_attive:
@@ -9815,7 +9958,7 @@ def render_form_test_tenuta():
         completo[col] = edited[col].values
     for col in colonne_disponibili:
         if col not in colonne_attive:
-            completo[col] = "—"
+            completo[col] = [[] for _ in range(len(completo))]
             for campo in campi_applicazione[col]:
                 completo[campo] = False if (campo.startswith("Macch.") or campo.startswith("Ferro")) else None
     st.session_state[stato_tabella_key] = completo.copy()
@@ -9890,9 +10033,12 @@ def render_form_test_tenuta():
         preparazioni = []
         for _, riga in tab_da_salvare.iterrows():
             numero_sci = str(riga.get("Numero sci") or "").strip()
-            base_label = str(riga.get("Base") or "—").strip()
-            sciolina_label = str(riga.get("Sciolina") or "—").strip()
-            copertura_label = str(riga.get("Copertura") or "—").strip()
+            base_labels = _tenuta_lista_cella(riga.get("Base"))
+            sciolina_labels = _tenuta_lista_cella(riga.get("Sciolina"))
+            copertura_labels = _tenuta_lista_cella(riga.get("Copertura"))
+            base_ids = [prodotto_id_da_label[x] for x in base_labels if x in prodotto_id_da_label]
+            sciolina_ids = [prodotto_id_da_label[x] for x in sciolina_labels if x in prodotto_id_da_label]
+            copertura_ids = [prodotto_id_da_label[x] for x in copertura_labels if x in prodotto_id_da_label]
             note_riga = str(riga.get("Note") or "").strip()
             posizione_raw = riga.get("Posizione")
             posizione = None
@@ -9900,25 +10046,28 @@ def render_form_test_tenuta():
                 posizione = int(float(posizione_raw))
             if (
                 not numero_sci
-                and base_label in ("", "—", "None")
-                and sciolina_label in ("", "—", "None")
-                and copertura_label in ("", "—", "None")
+                and not base_ids
+                and not sciolina_ids
+                and not copertura_ids
                 and not note_riga
             ):
                 continue
             preparazioni.append({
                 "posizione": posizione,
                 "numero_sci": numero_sci,
-                "base_id": prodotto_id_da_label.get(base_label),
+                "base_id": base_ids[0] if base_ids else None,
+                "base_ids": base_ids,
                 "base_mani": _num_opzionale(riga.get("Mani Base"), intero=True),
                 "base_temp_app": _num_opzionale(riga.get("T app Base (°C)")),
                 "base_macchinetta": 1 if riga.get("Macch. Base") is True else 0,
                 "base_ferro": 1 if riga.get("Ferro Base") is True else 0,
-                "sciolina_id": prodotto_id_da_label.get(sciolina_label),
+                "sciolina_id": sciolina_ids[0] if sciolina_ids else None,
+                "sciolina_ids": sciolina_ids,
                 "sciolina_mani": _num_opzionale(riga.get("Mani Sciolina"), intero=True),
                 "sciolina_temp_app": _num_opzionale(riga.get("T app Sciolina (°C)")),
                 "sciolina_macchinetta": 1 if riga.get("Macch. Sciolina") is True else 0,
-                "copertura_id": prodotto_id_da_label.get(copertura_label),
+                "copertura_id": copertura_ids[0] if copertura_ids else None,
+                "copertura_ids": copertura_ids,
                 "copertura_mani": _num_opzionale(riga.get("Mani Copertura"), intero=True),
                 "copertura_temp_app": _num_opzionale(riga.get("T app Copertura (°C)")),
                 "copertura_macchinetta": 1 if riga.get("Macch. Copertura") is True else 0,
@@ -10002,14 +10151,16 @@ def render_form_test_tenuta():
                     """INSERT INTO test_tenuta_preparazioni (
                            sessione_id, posizione, numero_sci, base_prodotto_id,
                            sciolina_prodotto_id, copertura_prodotto_id,
+                           base_prodotti_ids, sciolina_prodotti_ids, copertura_prodotti_ids,
                            base_mani, base_temp_app, base_macchinetta, base_ferro,
                            sciolina_mani, sciolina_temp_app, sciolina_macchinetta,
                            copertura_mani, copertura_temp_app, copertura_macchinetta,
                            voto_tenuta, voto_scorrevolezza, note, creato_il
-                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (
                         sessione_id, prep["posizione"], prep["numero_sci"], prep["base_id"],
                         prep["sciolina_id"], prep["copertura_id"],
+                        json.dumps(prep["base_ids"]), json.dumps(prep["sciolina_ids"]), json.dumps(prep["copertura_ids"]),
                         prep["base_mani"], prep["base_temp_app"], prep["base_macchinetta"], prep["base_ferro"],
                         prep["sciolina_mani"], prep["sciolina_temp_app"], prep["sciolina_macchinetta"],
                         prep["copertura_mani"], prep["copertura_temp_app"], prep["copertura_macchinetta"],
@@ -10112,8 +10263,26 @@ def _render_test_tenuta_podium(df_righe, colonne_attive=None):
 
     def _prodotti_record(record):
         prodotti = []
+        prefissi = {"Base": "base", "Sciolina": "sciolina", "Copertura": "copertura"}
         for categoria in colonne_attive:
             cfg = config[categoria]
+            pref = prefissi[categoria]
+            info_multi = record.get(f"{pref}_prodotti_info")
+            if isinstance(info_multi, list) and info_multi:
+                for info in info_multi:
+                    nome = str(info.get("nome") or "").strip()
+                    if not nome:
+                        continue
+                    prodotti.append({
+                        "categoria": categoria,
+                        "nome": nome,
+                        "src": _foto_src(info.get("foto_data"), info.get("foto_mime")),
+                        "mani": record.get(cfg["mani"]),
+                        "temp": record.get(cfg["temp"]),
+                        "macchinetta": _bool_db(record.get(cfg["macch"])),
+                        "ferro": _bool_db(record.get(cfg.get("ferro"))) if cfg.get("ferro") else False,
+                    })
+                continue
             nome = str(record.get(cfg["nome"]) or "").strip()
             if not nome or nome in {"—", "None", "nan", "<NA>"}:
                 continue
@@ -10223,6 +10392,7 @@ def _render_test_tenuta_podium(df_righe, colonne_attive=None):
         .tenuta-podium-grid{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.72rem;align-items:start}
         .tenuta-podium-grid.count-1{grid-template-columns:1fr}
         .tenuta-podium-grid.count-3{grid-template-columns:repeat(3,minmax(0,1fr));gap:.42rem}
+        .tenuta-podium-grid.count-4{grid-template-columns:repeat(2,minmax(0,1fr));gap:.42rem}
         .tenuta-podium-product{text-align:center;min-width:0;position:relative}
         .tenuta-podium-img,.tenuta-podium-placeholder{width:100%;height:108px;object-fit:contain;display:flex;align-items:center;justify-content:center;background:transparent;border:0;box-shadow:none;margin:0 auto .42rem;padding:0}
         .tenuta-podium-img.tenuta-podium-single,.tenuta-podium-placeholder.tenuta-podium-single{width:154px;height:154px;max-width:94%}
@@ -10270,9 +10440,9 @@ def _render_test_tenuta_detail_table(df_righe, colonne_attive=None):
                 colonne_attive.append(c)
 
     campi = {
-        "Base": ("Base", "base_foto", "base_mime"),
-        "Sciolina": ("Sciolina", "sciolina_foto", "sciolina_mime"),
-        "Copertura": ("Copertura", "copertura_foto", "copertura_mime"),
+        "Base": ("Base", "base_foto", "base_mime", "base_prodotti_info"),
+        "Sciolina": ("Sciolina", "sciolina_foto", "sciolina_mime", "sciolina_prodotti_info"),
+        "Copertura": ("Copertura", "copertura_foto", "copertura_mime", "copertura_prodotti_info"),
     }
     larghezza_minima = 520 + 340 * len(colonne_attive)
 
@@ -10296,6 +10466,10 @@ def _render_test_tenuta_detail_table(df_righe, colonne_attive=None):
         .tenuta-test-table .test-product-hover-target{{position:relative;display:inline-block;max-width:100%;cursor:zoom-in}}
         .tenuta-test-table .test-product-hover-preview{{position:fixed;top:138px;right:32px;left:auto;bottom:auto;transform:translateY(8px) scale(.97);opacity:0;visibility:hidden;width:min(410px,30vw);height:min(410px,52vh);padding:14px;background:#fff;border:1px solid #c8d0d7;border-radius:15px;box-shadow:0 24px 64px rgba(31,41,51,.34);pointer-events:none;z-index:2147483647!important;transition:opacity .12s ease,transform .12s ease,visibility .12s ease}}
         .tenuta-test-table .test-product-hover-preview img{{width:100%;height:100%;object-fit:contain;display:block}}
+        .tenuta-multi-preview-grid{{width:100%;height:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;overflow:auto}}
+        .tenuta-multi-preview-item{{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:145px;border:1px solid #edf0f2;border-radius:10px;padding:8px;background:#fff}}
+        .tenuta-multi-preview-item img{{width:100%!important;height:110px!important;object-fit:contain!important}}
+        .tenuta-multi-preview-item span{{font-size:.72rem;font-weight:650;color:#263238;text-align:center;line-height:1.15;margin-top:5px}}
         .tenuta-test-table .test-product-hover-target:hover .test-product-hover-preview{{opacity:1;visibility:visible;transform:translateY(0) scale(1)}}
         .tenuta-test-table .test-product-name{{line-height:1.18;font-weight:500;font-size:.75rem;color:#263238;white-space:normal;overflow-wrap:anywhere;text-align:center;transition:color .12s ease}}
         .tenuta-test-table .test-product-hover-target:hover .test-product-name{{color:#007ea8}}
@@ -10330,6 +10504,36 @@ def _render_test_tenuta_detail_table(df_righe, colonne_attive=None):
             t = str(v).strip()
             return html_escape(t) if t else "—"
 
+    def _multi_product_cell(record, c):
+        nome_key, foto_key, mime_key, info_key = campi[c]
+        infos = record.get(info_key)
+        if isinstance(infos, list) and infos:
+            nomi = [str(x.get("nome") or "").strip() for x in infos if str(x.get("nome") or "").strip()]
+            if not nomi:
+                return '<div class="test-product-empty">—</div>'
+            preview_items = []
+            for info in infos:
+                nome = str(info.get("nome") or "").strip()
+                foto = str(info.get("foto_data") or "").strip()
+                mime = str(info.get("foto_mime") or "image/png").strip() or "image/png"
+                if foto:
+                    src = f"data:{html_escape(mime)};base64,{foto}"
+                    preview_items.append(
+                        '<div class="tenuta-multi-preview-item">'
+                        f'<img src="{src}" alt="{html_escape(nome)}">'
+                        f'<span>{html_escape(nome)}</span></div>'
+                    )
+            preview = (
+                '<div class="test-product-hover-preview"><div class="tenuta-multi-preview-grid">'
+                + ''.join(preview_items) + '</div></div>'
+            ) if preview_items else ''
+            return (
+                '<div class="test-product-cell"><div class="test-product-hover-target">'
+                f'<div class="test-product-name">{html_escape(" / ".join(nomi))}</div>'
+                f'{preview}</div></div>'
+            )
+        return _product_cell_html(record.get(nome_key), record.get(foto_key), record.get(mime_key))
+
     rows = []
     for record in df_righe.to_dict("records"):
         pos = record.get("Posizione")
@@ -10346,8 +10550,7 @@ def _render_test_tenuta_detail_table(df_righe, colonne_attive=None):
         note = html_escape(str(record.get("Note") or "—"))
         cells = []
         for c in colonne_attive:
-            nome_key, foto_key, mime_key = campi[c]
-            cells.append(f'<td class="col-prod">{_product_cell_html(record.get(nome_key), record.get(foto_key), record.get(mime_key))}</td>')
+            cells.append(f'<td class="col-prod">{_multi_product_cell(record, c)}</td>')
             cells.append(f'<td class="col-small">{_fmt_num(record.get(f"Mani {c}"))}</td>')
             cells.append(f'<td class="col-small">{_fmt_num(record.get(f"T app {c} (°C)"), " °C")}</td>')
             mac = record.get(f"Macch. {c}")
@@ -14363,6 +14566,8 @@ with st.container(key="sector_page_content"):
                     df_det = leggi_df(
                         """
                         SELECT t.posizione AS "Posizione", t.numero_sci AS "Numero sci",
+                               t.base_prodotto_id, t.sciolina_prodotto_id, t.copertura_prodotto_id,
+                               t.base_prodotti_ids, t.sciolina_prodotti_ids, t.copertura_prodotti_ids,
                                CASE WHEN b.id IS NULL THEN '—' ELSE TRIM(COALESCE(b.marca,'') || CASE WHEN TRIM(COALESCE(b.marca,''))<>'' THEN ' - ' ELSE '' END || COALESCE(b.nome,'')) END AS "Base",
                                b.foto_data AS base_foto, b.foto_mime AS base_mime,
                                CASE WHEN sw.id IS NULL THEN '—' ELSE TRIM(COALESCE(sw.marca,'') || CASE WHEN TRIM(COALESCE(sw.marca,''))<>'' THEN ' - ' ELSE '' END || COALESCE(sw.nome,'')) END AS "Sciolina",
@@ -14385,6 +14590,37 @@ with st.container(key="sector_page_content"):
                         ORDER BY CASE WHEN t.posizione IS NULL THEN 999999 ELSE t.posizione END, t.id
                         """, (sid,)
                     )
+                    # Ricostruisce tutte le scioline presenti in ciascuna singola casella.
+                    if not df_det.empty:
+                        df_cat_tenuta_det = leggi_df(
+                            """SELECT id, nome, marca, foto_data, foto_mime
+                               FROM catalogo_prodotti WHERE categoria='tenuta'"""
+                        )
+                        catalogo_tenuta_map = {}
+                        for _col_info in ["base_prodotti_info", "sciolina_prodotti_info", "copertura_prodotti_info"]:
+                            df_det[_col_info] = pd.Series([None] * len(df_det), index=df_det.index, dtype="object")
+                        for _, _p in df_cat_tenuta_det.iterrows():
+                            _pid = int(_p["id"])
+                            _marca = str(_p.get("marca") or "").strip()
+                            _nome = str(_p.get("nome") or "").strip()
+                            catalogo_tenuta_map[_pid] = {
+                                "nome_label": f"{_marca} - {_nome}" if _marca else _nome,
+                                "foto_data": _p.get("foto_data"),
+                                "foto_mime": _p.get("foto_mime"),
+                            }
+                        for _idx, _r in df_det.iterrows():
+                            for _strato, _pref in [("Base", "base"), ("Sciolina", "sciolina"), ("Copertura", "copertura")]:
+                                _ids = _tenuta_ids_da_json(
+                                    _r.get(f"{_pref}_prodotti_ids"),
+                                    _r.get(f"{_pref}_prodotto_id"),
+                                )
+                                _info = _tenuta_info_prodotti_da_ids(_ids, catalogo_tenuta_map)
+                                if _info:
+                                    df_det.at[_idx, _strato] = " / ".join(x["nome"] for x in _info)
+                                    df_det.at[_idx, f"{_pref}_foto"] = _info[0].get("foto_data")
+                                    df_det.at[_idx, f"{_pref}_mime"] = _info[0].get("foto_mime")
+                                df_det.at[_idx, f"{_pref}_prodotti_info"] = _info
+
                     df_cfg = leggi_df("SELECT colonne_attive FROM test_tenuta_config WHERE sessione_id=?", (sid,))
                     cols_attive=[]
                     if not df_cfg.empty:
