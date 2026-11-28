@@ -10280,6 +10280,9 @@ def _render_test_tenuta_podium(df_righe, colonne_attive=None):
                         "temp": record.get(cfg["temp"]),
                         "macchinetta": _bool_db(record.get(cfg["macch"])),
                         "ferro": _bool_db(record.get(cfg.get("ferro"))) if cfg.get("ferro") else False,
+                        # Il + sul podio compare solo tra prodotti appartenenti
+                        # alla stessa casella/strato (es. due Base insieme).
+                        "plus_before": len([p for p in prodotti if p.get("categoria") == categoria]) > 0,
                     })
                 continue
             nome = str(record.get(cfg["nome"]) or "").strip()
@@ -10293,6 +10296,7 @@ def _render_test_tenuta_podium(df_righe, colonne_attive=None):
                 "temp": record.get(cfg["temp"]),
                 "macchinetta": _bool_db(record.get(cfg["macch"])),
                 "ferro": _bool_db(record.get(cfg.get("ferro"))) if cfg.get("ferro") else False,
+                "plus_before": False,
             })
         return prodotti
 
@@ -10350,8 +10354,9 @@ def _render_test_tenuta_podium(df_righe, colonne_attive=None):
             visual = f'<img class="tenuta-podium-img{img_cls}" src="{src}" alt="{nome}">'
         else:
             visual = f'<div class="tenuta-podium-placeholder{img_cls}"><span>IMG</span></div>'
+        plus_cls = " tenuta-podium-plus-before" if prodotto.get("plus_before") else ""
         return (
-            '<div class="tenuta-podium-product">'
+            f'<div class="tenuta-podium-product{plus_cls}">'
             f'{visual}'
             f'<div class="tenuta-podium-cat">{categoria}</div>'
             '<div class="tenuta-podium-hover-wrap">'
@@ -10374,7 +10379,7 @@ def _render_test_tenuta_podium(df_righe, colonne_attive=None):
         return (
             f'<div class="tenuta-podium-entry tenuta-podium-{cls}">'
             '<div class="tenuta-podium-card">'
-            f'<div class="tenuta-podium-grid count-{min(max(len(prodotti),1),3)}">{prodotti_html}</div>'
+            f'<div class="tenuta-podium-grid count-{min(max(len(prodotti),1),4)}">{prodotti_html}</div>'
             '</div>'
             f'<div class="tenuta-podium-step tenuta-podium-step-{cls}"><span>{pos}°</span></div>'
             '</div>'
@@ -10393,6 +10398,7 @@ def _render_test_tenuta_podium(df_righe, colonne_attive=None):
         .tenuta-podium-grid.count-3{grid-template-columns:repeat(3,minmax(0,1fr));gap:.42rem}
         .tenuta-podium-grid.count-4{grid-template-columns:repeat(2,minmax(0,1fr));gap:.42rem}
         .tenuta-podium-product{text-align:center;min-width:0;position:relative}
+        .tenuta-podium-product.tenuta-podium-plus-before::before{content:"+";position:absolute;left:-.36rem;top:54px;transform:translate(-50%,-50%);z-index:5;color:#51606b;font-size:1.28rem;line-height:1;font-weight:850;background:#fff;border-radius:999px;padding:.05rem .18rem;box-shadow:0 0 0 3px #fff}
         .tenuta-podium-img,.tenuta-podium-placeholder{width:100%;height:108px;object-fit:contain;display:flex;align-items:center;justify-content:center;background:transparent;border:0;box-shadow:none;margin:0 auto .42rem;padding:0}
         .tenuta-podium-img.tenuta-podium-single,.tenuta-podium-placeholder.tenuta-podium-single{width:154px;height:154px;max-width:94%}
         .tenuta-podium-placeholder span{color:#a5b0b8;font-size:.62rem;font-weight:800;letter-spacing:.08em}
@@ -10466,6 +10472,9 @@ def _render_test_tenuta_detail_table(df_righe, colonne_attive=None):
         .tenuta-test-table .test-product-hover-preview{{position:fixed;top:138px;right:32px;left:auto;bottom:auto;transform:translateY(8px) scale(.97);opacity:0;visibility:hidden;width:min(410px,30vw);height:min(410px,52vh);padding:14px;background:#fff;border:1px solid #c8d0d7;border-radius:15px;box-shadow:0 24px 64px rgba(31,41,51,.34);pointer-events:none;z-index:2147483647!important;transition:opacity .12s ease,transform .12s ease,visibility .12s ease}}
         .tenuta-test-table .test-product-hover-preview img{{width:100%;height:100%;object-fit:contain;display:block}}
         .tenuta-multi-preview-grid{{width:100%;height:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;overflow:auto}}
+        .tenuta-multi-preview-grid.single{{grid-template-columns:1fr;place-items:center;overflow:hidden}}
+        .tenuta-multi-preview-grid.single .tenuta-multi-preview-item{{width:min(230px,88%);min-height:260px}}
+        .tenuta-multi-preview-grid.single .tenuta-multi-preview-item img{{height:205px!important}}
         .tenuta-multi-preview-item{{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:145px;border:1px solid #edf0f2;border-radius:10px;padding:8px;background:#fff}}
         .tenuta-multi-preview-item img{{width:100%!important;height:110px!important;object-fit:contain!important}}
         .tenuta-multi-preview-item span{{font-size:.72rem;font-weight:650;color:#263238;text-align:center;line-height:1.15;margin-top:5px}}
@@ -10522,8 +10531,9 @@ def _render_test_tenuta_detail_table(df_righe, colonne_attive=None):
                         f'<img src="{src}" alt="{html_escape(nome)}">'
                         f'<span>{html_escape(nome)}</span></div>'
                     )
+            preview_grid_cls = "tenuta-multi-preview-grid single" if len(preview_items) == 1 else "tenuta-multi-preview-grid"
             preview = (
-                '<div class="test-product-hover-preview"><div class="tenuta-multi-preview-grid">'
+                f'<div class="test-product-hover-preview"><div class="{preview_grid_cls}">'
                 + ''.join(preview_items) + '</div></div>'
             ) if preview_items else ''
             return (
